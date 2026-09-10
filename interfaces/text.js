@@ -1,15 +1,9 @@
-/* Text box — the workhorse: values, terms, short explanations.
+/* Text box — values, terms, short explanations. The workhorse.
    config.multiline : single line vs a few rows
    config.size      : "short" | "medium" | "long"  (box width)
-   Symbol bar for chemistry: subscripts, superscripts, arrows.
-   Stores exactly what's typed (marker normalises H2SO4 -> H₂SO₄).
-   Saves { text } or null. */
+   Stores { text } or null. */
 
 (function () {
-
-  const SYMBOLS = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉',
-                   '⁺','⁻','²','³','→','⇌','°','·','½','·'];
-
   Ned.register('text',
     {
       name: 'Text box',
@@ -40,23 +34,8 @@
         const t = input.value;
         onChange(t.trim() === '' ? null : { text: t });
       };
-
-      const insert = (s) => {
-        const start = input.selectionStart ?? input.value.length;
-        const end   = input.selectionEnd ?? input.value.length;
-        input.value = input.value.slice(0, start) + s + input.value.slice(end);
-        const pos = start + s.length;
-        input.focus();
-        try { input.setSelectionRange(pos, pos); } catch (e) {}
-        emit();
-      };
-
-      const bar = Ned.el('div', { class: 'ned-symbolbar' },
-        SYMBOLS.map(s => Ned.el('button', { type: 'button', onclick: () => insert(s) }, [s])));
-
       input.addEventListener('input', emit);
 
-      container.appendChild(bar);
       container.appendChild(input);
 
       return {
@@ -65,5 +44,4 @@
         destroy: () => { container.innerHTML = ''; },
       };
     });
-
-})();
+})(); 
