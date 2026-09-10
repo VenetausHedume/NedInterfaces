@@ -1,13 +1,12 @@
-/* Math input (MathLive) + a self-built floating keyboard widget.
-   The keyboard is OUR OWN panel (not MathLive's docked bar): a small box on
-   every page, draggable by its header, +/- to scale, ✕ to close. Each key
-   drives the focused math field via executeCommand/insert.
+/* Math input (MathLive) + a self-built, draggable floating keyboard.
+   Movement modelled on the uploaded virtual-keyboard.js: a small draggable
+   widget that opens a draggable, scalable panel with three views
+   (math / abc / functions). Keys drive the MathLive field via .insert().
    Requires MathLive in index.html. Saves { latex } or null. */
 
 (function () {
 
-  // ---------- keyboard layout data ----------
-  // key def: { t:label, ins:'latex' }  or  { t, cmd:'selector' }  or  { t, layer:'id' }
+  // ---------- keyboard layout ----------
   const D  = (t, ins) => ({ t: t, ins: ins });
   const C  = (t, cmd) => ({ t: t, cmd: cmd });
   const FN = (name, t) => ({ t: t || name, ins: '\\' + name + '\\left(\\placeholder{}\\right)' });
@@ -51,7 +50,6 @@
     ],
   };
 
-  // ---------- the global floating keyboard widget (built once) ----------
   function buildWidget() {
     if (window.__nedKbWidget) return;
 
@@ -61,10 +59,26 @@
     });
     const field = () => activeField || document.querySelector('math-field');
 
+    // send a keypress to the math field  (THIS is the fix: use .insert())
+    function typeInto(def) {
+      const f = field();
+      if (!f) return;
+      f.focus();
+      try {
+        if (def.cmd) { f.executeCommand(def.cmd); return; }
+        if (def.ins == null) return;
+        if (typeof f.insert === 'function') f.insert(def.ins, { focus: true, feedback: false });
+        else f.executeCommand(['insert', def.ins]);
+      } catch (e) {
+        try { f.executeCommand(['insert', def.ins]); } catch (e2) {}
+      }
+    }
+
+    // ----- panel -----
     const panel = document.createElement('div');
     panel.id = 'ned-kb-panel';
     panel.style.cssText =
-      'position:fixed;left:auto;right:24px;top:auto;bottom:90px;width:auto;display:none;' +
+      'position:fixed;left:auto;right:24px;top:auto;bottom:90px;display:none;' +
       'background:#fff;border:1px solid #d8cfb8;border-radius:10px;overflow:hidden;' +
       'box-shadow:0 10px 34px rgba(0,0,0,.30);z-index:10000;transform-origin:top left;';
 
@@ -83,17 +97,6 @@
     panel.append(header, body);
     document.body.appendChild(panel);
 
-    // render a layer of keys
-    function press(def) {
-      if (def.layer) { render(def.layer); return; }
-      const f = field();
-      if (!f) return;
-      f.focus();
-      try {
-        if (def.cmd) f.executeCommand(def.cmd);
-        else if (def.ins != null) f.executeCommand(['insert', def.ins]);
-      } catch (e) {}
-    }
     function render(layerId) {
       body.innerHTML = '';
       LAYERS[layerId].forEach(rowDefs => {
@@ -106,7 +109,11 @@
             'min-width:38px;height:38px;padding:0 8px;border:1px solid #d8cfb8;border-radius:6px;' +
             'background:#fffdf7;cursor:pointer;font:16px system-ui,sans-serif;flex:1;' +
             (def.layer ? 'background:#eaf1f8;border-color:#4682b4;font-size:13px;' : '');
-          b.addEventListener('mousedown', (e) => { e.preventDefault(); press(def); });
+          b.addEventListener('mousedown', (e) => {
+            e.preventDefault();                      // keep field focused
+            if (def.layer) render(def.layer);
+            else typeInto(def);
+          });
           row.appendChild(b);
         });
         body.appendChild(row);
@@ -114,44 +121,51 @@
     }
     render('math');
 
-    // scale
+    // ----- scale -----
     let scale = 1;
     const applyScale = () => { panel.style.transform = 'scale(' + scale + ')'; };
     bigger.onclick  = (e) => { e.stopPropagation(); scale = Math.min(2, scale + 0.1); applyScale(); };
     smaller.onclick = (e) => { e.stopPropagation(); scale = Math.max(0.6, scale - 0.1); applyScale(); };
 
-    // drag (mouse events on document = reliable)
-    let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
-    const onMove = (e) => {
-      if (!dragging) return;
-      panel.style.left = (ox + e.clientX - sx) + 'px';
-      panel.style.top  = (oy + e.clientY - sy) + 'px';
-    };
-    const onUp = () => { dragging = false; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    header.addEventListener('mousedown', (e) => {
-      if (e.target.tagName === 'BUTTON') return;
-      const r = panel.getBoundingClientRect();
-      ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
-      panel.style.right = 'auto'; panel.style.bottom = 'auto';
-      panel.style.left = ox + 'px'; panel.style.top = oy + 'px';
-      dragging = true;
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      e.preventDefault();
-    });
+    // ----- drag panel by header -----
+    function dragify(handle, target) {
+      let on = false, sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
+      const move = (e) => {
+        if (!on) return;
+        if (Math.abs(e.clientX - sx) > 3 || Math.abs(e.clientY - sy) > 3) moved = true;
+        target.style.left = (ox + e.clientX - sx) + 'px';
+        target.style.top  = (oy + e.clientY - sy) + 'px';
+      };
+      let upCb = null;
+      const up = () => { on = false; document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); if (upCb) upCb(moved); };
+      handle.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        const r = target.getBoundingClientRect();
+        ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY; moved = false; on = true;
+        target.style.right = 'auto'; target.style.bottom = 'auto';
+        target.style.left = ox + 'px'; target.style.top = oy + 'px';
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+        e.preventDefault();
+      });
+      return { setUp: (cb) => { upCb = cb; } };
+    }
+    dragify(header, panel);
 
-    // FAB
+    // ----- FAB (draggable + click to toggle) -----
     const fab = document.createElement('button'); fab.id = 'ned-kb-fab'; fab.type = 'button';
     fab.textContent = '\u2328'; fab.title = 'Keyboard';
     fab.style.cssText =
       'position:fixed;right:24px;bottom:24px;width:54px;height:54px;border-radius:50%;border:none;' +
       'background:#4682b4;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:10000;';
-    fab.onclick = () => {
+    const toggle = () => {
       if (panel.style.display === 'none') { panel.style.display = 'block'; const f = field(); if (f) f.focus(); }
       else { panel.style.display = 'none'; }
     };
-    closeB.onclick = (e) => { e.stopPropagation(); panel.style.display = 'none'; };
+    const fabDrag = dragify(fab, fab);
+    fabDrag.setUp((moved) => { if (!moved) toggle(); });   // click (no drag) = toggle
     document.body.appendChild(fab);
+
+    closeB.onclick = (e) => { e.stopPropagation(); panel.style.display = 'none'; };
 
     window.__nedKbWidget = { panel, fab };
   }
@@ -181,7 +195,7 @@
       mf.style.cssText =
         'display:block;width:100%;max-width:640px;font-size:1.4rem;padding:10px;' +
         'border:1px solid var(--line);border-radius:6px;background:#fffdf7;';
-      mf.mathVirtualKeyboardPolicy = 'manual';       // never MathLive's own bar
+      mf.mathVirtualKeyboardPolicy = 'manual';
       if (value && value.latex) mf.value = value.latex;
 
       const emit = () => { const l = mf.value.trim(); onChange(l === '' ? null : { latex: l }); };
@@ -192,7 +206,7 @@
       try { mf.mathModeSpace = '\\;'; } catch (e) {}
 
       container.appendChild(Ned.el('p', { class: 'ned-note' },
-        ['Type here (renders live), or use the floating \u2328 keyboard (bottom-right) \u2014 drag its header, +/\u2212 scales it.']));
+        ['Type here (renders live), or use the floating \u2328 keyboard \u2014 drag it, +/\u2212 scales it.']));
 
       return {
         update:  (v) => { mf.value = (v && v.latex) || ''; },
