@@ -2,20 +2,15 @@
    Powered by MathLive. Requires it in index.html:
      <script src="https://cdn.jsdelivr.net/npm/mathlive"></script>
 
-   The keyboard has three layers matching the Desmos layout:
-     - math  : variables, powers, brackets, comparisons, numpad, operators
-     - abc   : letters + a couple of Greek
-     - fn     : CALCUL (exp/ln/log/…, ∫ ∑ ∏), trig, inverse trig, hyperbolic
-   In-keyboard buttons switch between them (ABC / functions / 123-back).
-
-   Real-math behaviour (not Unicode):
-     ÷ makes a fraction · √ a radical · powers stack · ∫ ∑ ∏ get bounds.
+   Three keyboard layers (math / abc / functions) with in-keyboard switching.
+   Real-math behaviour: ÷ makes a fraction · √ a radical · powers stack ·
+   ∫ ∑ ∏ get bounds. Symbols come ONLY from the keys (no auto word→symbol).
+   The on-screen keyboard opens from a floating widget (bottom-right).
    Saves { latex } or null. */
 
 (function () {
 
-  // ---- keycap helpers ---------------------------------------------------
-  // #@ = current selection / char before cursor ; #? = an editable placeholder
+  // #@ = selection / char before cursor ; #? = an editable placeholder
   const fn   = (name, disp) => ({ latex: disp || '\\' + name, insert: '\\' + name + '\\left(#?\\right)' });
   const op   = (name, disp) => ({ latex: disp, insert: '\\operatorname{' + name + '}\\left(#?\\right)' });
   const inv  = (base, disp) => ({ latex: disp, insert: '\\' + base + '^{-1}\\left(#?\\right)' });
@@ -35,19 +30,16 @@
           key('7'), key('8'), key('9'),
           { latex: '\\div', insert: '\\frac{#@}{#?}' },
           sw('functions', 'ned-fn') ],
-
         [ key('('), key(')'), key('<'), key('>'),
           key('4'), key('5'), key('6'),
           { latex: '\\times' },
           act('\u232b', ['performWithFeedback', 'deleteBackward']) ],
-
         [ { latex: '|a|', insert: '\\left|#@\\right|' },
           key(','), { latex: '\\le' }, { latex: '\\ge' },
           key('1'), key('2'), key('3'),
           { latex: '-' },
           act('\u2190', ['performWithFeedback', 'moveToPreviousChar']),
           act('\u2192', ['performWithFeedback', 'moveToNextChar']) ],
-
         [ { latex: '\\sqrt{#?}' },
           { latex: '\\pi' },
           sw('ABC', 'ned-abc'),
@@ -66,6 +58,7 @@
           key('('), key(')'),
           act('\u232b', ['performWithFeedback', 'deleteBackward']) ],
         [ sw('123', 'ned-math'), { latex: '\\pi' }, key(','), key('='),
+          { label: 'space', class: 'action', command: ['insert', '\\;'] },
           act('\u2190', ['performWithFeedback', 'moveToPreviousChar']),
           act('\u2192', ['performWithFeedback', 'moveToNextChar']),
           act('\u21b5', ['performWithFeedback', 'commit']) ],
@@ -97,7 +90,6 @@
     window.__nedKbInstalled = true;
   }
 
-  // ---- the interface ----------------------------------------------------
   Ned.register('math',
     {
       name: 'Math input',
@@ -126,6 +118,8 @@
         'display:block;width:100%;max-width:640px;font-size:1.4rem;padding:10px;' +
         'border:1px solid var(--line);border-radius:6px;background:#fffdf7;';
       mf.mathVirtualKeyboardPolicy = 'manual';
+      mf.inlineShortcuts = {};        // symbols only from keys, no word->symbol
+      mf.mathModeSpace = '\\;';       // spacebar inserts a space
       if (value && value.latex) mf.value = value.latex;
 
       const emit = () => {
@@ -134,23 +128,35 @@
       };
       mf.addEventListener('input', emit);
 
-      const kbBtn = Ned.el('button', { type: 'button', class: 'ned-mode',
-        onclick: () => {
-          const vk = window.mathVirtualKeyboard;
-          if (vk.visible) { vk.hide(); }
-          else { mf.focus(); vk.show(); }
-        } }, ['\u2328 keyboard']);
+      // floating keyboard widget (bottom-right) — click to open/close
+      const old = document.getElementById('ned-kb-fab');
+      if (old) old.remove();
+      const fab = Ned.el('button', { type: 'button', title: 'Math keyboard' }, ['\u2328']);
+      fab.id = 'ned-kb-fab';
+      fab.style.cssText =
+        'position:fixed;right:24px;bottom:24px;width:54px;height:54px;border-radius:50%;' +
+        'border:none;background:#4682b4;color:#fff;font-size:22px;cursor:pointer;' +
+        'box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:9999;transition:bottom .15s;';
+      const openKb  = () => { mf.focus(); window.mathVirtualKeyboard.show();
+                              fab.textContent = '\u2715'; fab.style.bottom = '316px'; };
+      const closeKb = () => { window.mathVirtualKeyboard.hide();
+                              fab.textContent = '\u2328'; fab.style.bottom = '24px'; };
+      fab.addEventListener('click', () => {
+        window.mathVirtualKeyboard.visible ? closeKb() : openKb();
+      });
+      document.body.appendChild(fab);
 
-      container.appendChild(Ned.el('div', { class: 'ned-modebar' }, [kbBtn]));
       container.appendChild(mf);
       container.appendChild(Ned.el('p', { class: 'ned-note' },
-        ['Type on your keyboard (renders live), or tap \u2328 for the on-screen keys \u2014 ABC / functions switch views.']));
+        ['Type on your keyboard (renders live), or tap the floating \u2328 (bottom-right) for the on-screen keys.']));
 
       return {
         update: (v) => { mf.value = (v && v.latex) || ''; },
         clear:  () => { mf.value = ''; emit(); mf.focus(); },
         destroy: () => {
           try { window.mathVirtualKeyboard.hide(); } catch (e) {}
+          const f = document.getElementById('ned-kb-fab');
+          if (f) f.remove();
           container.innerHTML = '';
         },
       };
