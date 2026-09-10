@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ned Interfaces — Preview</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <strong>Ned Interfaces</strong> <span>· build & test lab</span>
+  </header>
+
+  <div class="layout">
+    <nav id="list" aria-label="Interfaces"></nav>
+
+    <main>
+      <div class="bar">
+        <label>Sample: <select id="samples"></select></label>
+        <button id="clear" type="button">Clear</button>
+      </div>
+      <p id="qtext" class="qtext"></p>
+      <div id="mount" class="mount"></div>
+    </main>
+
+    <aside>
+      <div class="aside-head">Saved value</div>
+      <pre id="json"></pre>
+    </aside>
+  </div>
+
+  <!-- load order: contract first, then each interface, then the app -->
+  <script src="interfaces/_contract.js"></script>
+  <script src="interfaces/text.js"></script>
+  <script src="interfaces/prose.js"></script>
+  <script src="interfaces/table.js"></script>
+  <script src="interfaces/formula.js"></script>
+  <script src="interfaces/graph.js"></script>
+  <script src="interfaces/circuit.js"></script>
+  <script src="interfaces/econ.js"></script>
+  <script src="interfaces/photo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
