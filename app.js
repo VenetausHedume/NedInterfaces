@@ -35,7 +35,9 @@
     sidebar.querySelectorAll('.nav').forEach(b => b.classList.toggle('active', b.dataset.id === id));
 
     const entry = Ned.registry[id];
-    const samples = entry.meta.samples || [{ label: 'Default', question: { text: '', config: {} } }];
+    const samples = (entry.meta.samples && entry.meta.samples.length)
+      ? entry.meta.samples
+      : [{ label: 'Default', question: { text: '', config: {} } }];
 
     // sample dropdown
     sampleSel.innerHTML = '';
