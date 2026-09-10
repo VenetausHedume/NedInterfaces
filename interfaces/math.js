@@ -15,6 +15,8 @@
   const BS = C('\u232b', 'deleteBackward');
   const LT = C('\u2190', 'moveToPreviousChar');
   const RT = C('\u2192', 'moveToNextChar');
+  const UP = C('\u2191', 'moveUp');
+  const DN = C('\u2193', 'moveDown');
 
   const LAYERS = {
     math: [
@@ -24,7 +26,7 @@
       [ D('(','('), D(')',')'), D('<','<'), D('>','>'),
         D('4','4'), D('5','5'), D('6','6'), D('\u00d7','\\times'), BS ],
       [ D('|a|','\\left|\\placeholder{}\\right|'), D(',',','), D('\u2264','\\le'), D('\u2265','\\ge'),
-        D('1','1'), D('2','2'), D('3','3'), D('\u2212','-'), LT, RT ],
+        D('1','1'), D('2','2'), D('3','3'), D('\u2212','-'), LT, UP, DN, RT ],
       [ D('\u221a','\\sqrt{\\placeholder{}}'), D('\u03c0','\\pi'), { t: 'ABC', layer: 'abc' },
         D('0','0'), D('.','.'), D('=','='), D('+','+') ],
     ],
@@ -33,7 +35,7 @@
       'asdfghjkl'.split('').map(c => D(c, c)).concat([ D('\u03b8','\\theta') ]),
       'zxcvbnm'.split('').map(c => D(c, c)).concat([ D('(','('), D(')',')'), BS ]),
       [ { t: '123', layer: 'math' }, D('\u03c0','\\pi'), D(',',','), D('=','='),
-        D('space','\\;'), LT, RT ],
+        D('space','\\;'), LT, DN, RT ],
     ],
     fn: [
       [ { t: '\u2190 123', layer: 'math' } ],
@@ -128,7 +130,7 @@
     smaller.onclick = (e) => { e.stopPropagation(); scale = Math.max(0.6, scale - 0.1); applyScale(); };
 
     // ----- drag panel by header -----
-    function dragify(handle, target) {
+    function dragify(handle, target, skipButtons) {
       let on = false, sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
       const move = (e) => {
         if (!on) return;
@@ -139,7 +141,7 @@
       let upCb = null;
       const up = () => { on = false; document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); if (upCb) upCb(moved); };
       handle.addEventListener('mousedown', (e) => {
-        if (e.target.tagName === 'BUTTON') return;
+        if (skipButtons && e.target.tagName === 'BUTTON') return;
         const r = target.getBoundingClientRect();
         ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY; moved = false; on = true;
         target.style.right = 'auto'; target.style.bottom = 'auto';
@@ -149,7 +151,7 @@
       });
       return { setUp: (cb) => { upCb = cb; } };
     }
-    dragify(header, panel);
+    dragify(header, panel, true);
 
     // ----- FAB (draggable + click to toggle) -----
     const fab = document.createElement('button'); fab.id = 'ned-kb-fab'; fab.type = 'button';
@@ -161,7 +163,7 @@
       if (panel.style.display === 'none') { panel.style.display = 'block'; const f = field(); if (f) f.focus(); }
       else { panel.style.display = 'none'; }
     };
-    const fabDrag = dragify(fab, fab);
+    const fabDrag = dragify(fab, fab, false);
     fabDrag.setUp((moved) => { if (!moved) toggle(); });   // click (no drag) = toggle
     document.body.appendChild(fab);
 
