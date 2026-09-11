@@ -1,27 +1,32 @@
-/* Structured prose — plain-text blocks with INLINE math chips.
-   A block is normal text (system keyboard, words stay words). The "fx" button
-   drops a math chip at the cursor: a small MathLive field the ∑ widget drives,
-   rendering real math inline. No mode-fighting, clean saved data.
-   Block value = ordered parts: strings (text) and { math:"<latex>" } chips.
-   Saves { blocks:[{ type:"rich", parts:[...] }], conclusion } or null.
-   graph/diagram slot in later as their own block types. */
+/* Structured prose — the SAME text-box field, repeated as an array of points.
+   Each point is one MathLive field (identical to the text box): type words,
+   use the ∑ widget for math. Add / remove / reorder points. Optional
+   conclusion (config.conclusion). Saves { points:[latex...], conclusion } or null. */
 
 (function () {
 
   const hasMath = () => window.customElements && customElements.get('math-field');
 
-  function mathChip(latex, onChange) {
-    const mf = document.createElement('math-field');
-    mf.style.cssText =
-      'display:inline-block;vertical-align:middle;min-width:2.2rem;margin:0 3px;padding:1px 5px;' +
-      'border:1px solid #bcd2e6;border-radius:5px;background:#eef4fa;font-size:1.05em;';
-    mf.mathVirtualKeyboardPolicy = 'manual';
-    try { mf.menuItems = []; } catch (e) {}
-    try { mf.style.setProperty('--keyboard-toggle-display','none'); } catch (e) {}
-    try { mf.inlineShortcuts = {}; } catch (e) {}
-    if (latex) mf.value = latex;
-    mf.addEventListener('input', () => onChange(mf.value));
-    return mf;
+  function makeField(initial, onInput) {
+    if (hasMath()) {
+      const mf = document.createElement('math-field');
+      mf.style.cssText =
+        'display:block;width:100%;font-size:1.25rem;padding:8px 10px;min-height:2.6rem;' +
+        'border:1px solid var(--line);border-radius:6px;background:#fffdf7;';
+      mf.mathVirtualKeyboardPolicy = 'manual';
+      try { mf.menuItems = []; } catch (e) {}
+      try { mf.style.setProperty('--keyboard-toggle-display','none'); } catch (e) {}
+      try { mf.inlineShortcuts = {}; } catch (e) {}
+      try { mf.mathModeSpace = '\\;'; } catch (e) {}
+      if (initial) mf.value = initial;
+      mf.addEventListener('input', () => onInput(mf.value));
+      return mf;
+    }
+    const ta = document.createElement('textarea');
+    ta.rows = 2; ta.className = 'ned-input'; ta.style.cssText = 'width:100%;resize:vertical;';
+    ta.value = initial || '';
+    ta.addEventListener('input', () => onInput(ta.value));
+    return ta;
   }
 
   Ned.register('prose',
@@ -41,85 +46,40 @@
       const cfg = (question && question.config) || {};
       const wantConclusion = !!cfg.conclusion;
 
-      function normalize(v) {
-        if (v && v.blocks && v.blocks.length) {
-          return v.blocks.map(b => ({ parts: (b.parts && b.parts.length) ? b.parts.slice() : [''] }));
-        }
-        return [{ parts: [''] }];
-      }
-      let blocks = normalize(value);
+      let points = (value && value.points && value.points.length) ? value.points.slice() : [''];
       let conclusion = (value && value.conclusion) || '';
 
       const list = Ned.el('div', {});
       const concWrap = Ned.el('div', {});
 
-      function cleanParts(parts) {
-        const out = [];
-        parts.forEach(p => {
-          if (typeof p === 'string') { if (p.trim() !== '') out.push(p); }
-          else if (p && p.math && p.math.trim() !== '') out.push({ math: p.math });
-        });
-        return out;
-      }
       function emit() {
-        const cleaned = blocks
-          .map(b => ({ type: 'rich', parts: cleanParts(b.parts) }))
-          .filter(b => b.parts.length);
+        const cleaned = points.map(p => (p || '').trim()).filter(p => p !== '');
         const out = {};
-        if (cleaned.length) out.blocks = cleaned;
+        if (cleaned.length) out.points = cleaned;
         const c = (conclusion || '').trim();
         if (wantConclusion && c) out.conclusion = c;
         onChange(Object.keys(out).length ? out : null);
       }
 
-      function renderBlock(block, host) {
-        host.innerHTML = '';
-        host.style.cssText = 'flex:1;border:1px solid var(--line);border-radius:6px;background:#fffdf7;' +
-          'padding:6px 8px;min-height:2.4rem;display:flex;flex-wrap:wrap;align-items:center;gap:2px;';
-
-        block.parts.forEach((part, idx) => {
-          if (typeof part === 'string') {
-            const ta = document.createElement('textarea');
-            ta.rows = 1; ta.value = part;
-            ta.style.cssText = 'border:none;outline:none;resize:none;background:transparent;font:inherit;' +
-              'min-width:3rem;flex:1 1 6rem;overflow:hidden;';
-            const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
-            ta.addEventListener('input', () => { block.parts[idx] = ta.value; grow(); emit(); });
-            setTimeout(grow, 0);
-            host.appendChild(ta);
-          } else {
-            const chip = mathChip(part.math, (v) => { block.parts[idx].math = v; emit(); });
-            host.appendChild(chip);
-          }
-        });
-      }
-
       function render() {
         list.innerHTML = '';
-        blocks.forEach((block, i) => {
+        points.forEach((val, i) => {
           const row = Ned.el('div', { style: 'display:flex;gap:6px;align-items:flex-start;margin-bottom:8px;' });
-          const host = document.createElement('div');
-          renderBlock(block, host);
+
+          const fieldWrap = Ned.el('div', { style: 'flex:1;' });
+          fieldWrap.appendChild(makeField(val, (v) => { points[i] = v; emit(); }));
 
           const ctrls = Ned.el('div', { style: 'flex:0 0 auto;display:flex;flex-direction:column;gap:3px;' });
           const mk = (label, title, fn) => Ned.el('button', { type:'button', title:title,
-            style:'width:30px;height:24px;border:1px solid var(--line);border-radius:4px;background:var(--paper);cursor:pointer;font-size:12px;line-height:1;',
+            style:'width:26px;height:22px;border:1px solid var(--line);border-radius:4px;background:var(--paper);cursor:pointer;font-size:12px;line-height:1;',
             onclick: fn }, [label]);
           ctrls.append(
-            mk('fx','Insert math here', () => {
-              block.parts.push({ math: '' }, '');
-              render();
-              const chips = host.querySelectorAll('math-field');
-              const last = chips[chips.length - 1];
-              if (last) last.focus();
-              emit();
-            }),
-            mk('\u2191','Move up',   () => { if (i>0){ [blocks[i-1],blocks[i]]=[blocks[i],blocks[i-1]]; render(); emit(); } }),
-            mk('\u2193','Move down', () => { if (i<blocks.length-1){ [blocks[i+1],blocks[i]]=[blocks[i],blocks[i+1]]; render(); emit(); } }),
-            mk('\u2715','Delete',    () => { blocks.splice(i,1); if(!blocks.length) blocks.push({parts:['']}); render(); emit(); })
+            mk('\u2191','Move up',   () => { if (i>0){ [points[i-1],points[i]]=[points[i],points[i-1]]; render(); emit(); } }),
+            mk('\u2193','Move down', () => { if (i<points.length-1){ [points[i+1],points[i]]=[points[i],points[i+1]]; render(); emit(); } }),
+            mk('\u2715','Delete',    () => { points.splice(i,1); if(!points.length) points.push(''); render(); emit(); })
           );
 
-          row.append(host, ctrls);
+          row.append(fieldWrap, ctrls);
           list.appendChild(row);
         });
       }
@@ -134,7 +94,7 @@
         return b;
       };
       addBar.append(
-        addBtn('+ Add block', () => { blocks.push({ parts: [''] }); render(); }),
+        addBtn('+ Add point', () => { points.push(''); render(); }),
         addBtn('+ Graph (soon)', null, true),
         addBtn('+ Diagram (soon)', null, true),
       );
@@ -144,20 +104,16 @@
 
       if (wantConclusion) {
         concWrap.appendChild(Ned.el('div', { style:'font-size:12px;color:var(--muted);margin:6px 0 4px;' }, ['Conclusion']));
-        const cta = Ned.el('textarea', { rows: 2, class:'ned-input', style:'width:100%;resize:vertical;' });
-        cta.value = conclusion;
-        cta.addEventListener('input', () => { conclusion = cta.value; emit(); });
-        concWrap.appendChild(cta);
+        const cEd = makeField(conclusion, (v) => { conclusion = v; emit(); });
+        concWrap.appendChild(cEd);
         container.appendChild(concWrap);
       }
 
       render();
 
       return {
-        update: (v) => { blocks = normalize(v); conclusion = (v && v.conclusion) || ''; render();
-                         const cta = concWrap.querySelector('textarea'); if (cta) cta.value = conclusion; },
-        clear:  () => { blocks = [{ parts: [''] }]; conclusion=''; render();
-                        const cta = concWrap.querySelector('textarea'); if (cta) cta.value=''; emit(); },
+        update: (v) => { points = (v && v.points && v.points.length) ? v.points.slice() : ['']; conclusion = (v && v.conclusion) || ''; render(); },
+        clear:  () => { points = ['']; conclusion = ''; render(); emit(); },
         destroy:() => { container.innerHTML = ''; },
       };
     });
