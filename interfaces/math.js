@@ -132,7 +132,7 @@
           if (typeof el.insert === 'function') el.insert(ins, { focus: true, feedback: false, selectionMode: 'placeholder' });
           else el.executeCommand(['insert', ins]);
           // collapse any lingering selection so nothing stays highlighted
-          try { el.executeCommand('moveToNextChar'); el.executeCommand('moveToPreviousChar'); } catch (e3) {}
+          try { el.executeCommand('moveToMathfieldEnd'); } catch (e3) {}
         } catch (e) {}
       } else {
         if (def.cmd) inputCmd(el, def.cmd);
@@ -178,7 +178,10 @@
       if (!moved) {
         if (panel.style.display === 'none') {
           panel.style.display = 'block';
-          if (!currentField()) { const f = firstEditable(); if (f) { f.focus(); target = f; } }
+          // only grab a field if the user isn't already in one
+          const active = document.activeElement;
+          const inField = active && (active.tagName === 'MATH-FIELD' || active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && !dock.contains(active);
+          if (!inField && !currentField()) { const f = firstEditable(); if (f) { f.focus(); target = f; } }
         } else panel.style.display = 'none';
       }
     };
