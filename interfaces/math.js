@@ -1,9 +1,8 @@
-/* Universal virtual keyboard — one draggable unit (widget + keyboard together).
-   Global floating widget on every page. Click the widget to open the keyboard
-   BELOW it; drag the widget and the keyboard moves with it (not separately
-   draggable). Types into whatever field is focused: normal <input>/<textarea>
-   (inserts the character, fires 'input' so the interface saves it) or a
-   MathLive <math-field> (inserts LaTeX). No interface registered here. */
+/* Universal MATH keyboard — one draggable unit (widget + keyboard together).
+   Math-only: no letters, no spacebar. Your system keyboard types text; this
+   widget inserts math (LaTeX) into a MathLive <math-field>: fractions, powers,
+   super/subscripts, roots, integrals, trig, comparisons, brackets, digits.
+   Global floating widget on every page. No interface registered here. */
 
 (function () {
 
@@ -20,25 +19,19 @@
 
   const LAYERS = {
     math: [
-      [ D('x','x'), D('y','y'), D('x\u00b2','^{2}'), D('x\u02b8','^{\\placeholder{}}'),
+      [ D('x\u00b2','^{2}'), D('x\u02b8','^{\\placeholder{}}'), D('x\u2093','_{\\placeholder{}}'),
+        D('\u221a','\\sqrt{\\placeholder{}}'),
         D('7','7'), D('8','8'), D('9','9'), D('\u00f7','\\frac{\\placeholder{}}{\\placeholder{}}'),
-        { t: 'functions', layer: 'fn' } ],
+        { t: 'f(x)', layer: 'fn' } ],
       [ D('(','('), D(')',')'), D('<','<'), D('>','>'),
         D('4','4'), D('5','5'), D('6','6'), D('\u00d7','\\times'), BS ],
       [ D('|a|','\\left|\\placeholder{}\\right|'), D(',',','), D('\u2264','\\le'), D('\u2265','\\ge'),
         D('1','1'), D('2','2'), D('3','3'), D('\u2212','-'), LT, UP, DN, RT ],
-      [ D('\u221a','\\sqrt{\\placeholder{}}'), D('\u03c0','\\pi'), { t: 'ABC', layer: 'abc' },
+      [ D('\u03c0','\\pi'), D('\u03b8','\\theta'), D('\u2192','\\to'), D('\u21cc','\\rightleftharpoons'),
         D('0','0'), D('.','.'), D('=','='), D('+','+') ],
     ],
-    abc: [
-      'qwertyuiop'.split('').map(c => D(c, c)),
-      'asdfghjkl'.split('').map(c => D(c, c)).concat([ D('\u03b8','\\theta') ]),
-      'zxcvbnm'.split('').map(c => D(c, c)).concat([ D('(','('), D(')',')'), BS ]),
-      [ { t: '123', layer: 'math' }, D('\u03c0','\\pi'), D(',',','), D('=','='),
-        D('space',' '), LT, DN, RT ],
-    ],
     fn: [
-      [ { t: '\u2190 123', layer: 'math' } ],
+      [ { t: '\u2190 back', layer: 'math' } ],
       [ D('exp','e^{\\placeholder{}}'), FN('ln'), FN('log'),
         D('log\u2090','\\log_{\\placeholder{}}\\left(\\placeholder{}\\right)'),
         D('d/dx','\\frac{d}{dx}'), D("f'","'") ],
@@ -55,20 +48,17 @@
   function buildWidget() {
     if (window.__nedKbWidget) return;
 
-    // ---- one dock holds the widget + keyboard; the dock is what moves ----
     const dock = document.createElement('div');
     dock.id = 'ned-kb-dock';
     dock.style.cssText =
       'position:fixed;top:90px;right:24px;display:flex;flex-direction:column;align-items:flex-end;' +
       'gap:8px;z-index:10000;';
 
-    // the widget button (drag handle + open/close)
-    const fab = document.createElement('button'); fab.type = 'button'; fab.textContent = '\u2328'; fab.title = 'Keyboard';
+    const fab = document.createElement('button'); fab.type = 'button'; fab.textContent = '\u2211'; fab.title = 'Math keyboard';
     fab.style.cssText =
       'width:54px;height:54px;border-radius:50%;border:none;background:#4682b4;color:#fff;' +
-      'font-size:22px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);';
+      'font-size:24px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);';
 
-    // the keyboard panel (below the widget)
     const panel = document.createElement('div');
     panel.style.cssText =
       'display:none;background:#fff;border:1px solid #d8cfb8;border-radius:10px;overflow:hidden;' +
@@ -78,7 +68,7 @@
     header.style.cssText =
       'display:flex;align-items:center;gap:6px;padding:6px 10px;background:#4682b4;color:#fff;' +
       'user-select:none;font:14px system-ui,sans-serif;';
-    const title = document.createElement('span'); title.textContent = 'Keyboard'; title.style.flex = '1';
+    const title = document.createElement('span'); title.textContent = 'Math'; title.style.flex = '1';
     const mkBtn = (t) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = t;
       b.style.cssText = 'width:26px;height:24px;border:none;border-radius:5px;background:rgba(255,255,255,.25);color:#fff;cursor:pointer;font-size:15px;line-height:1;'; return b; };
     const smaller = mkBtn('\u2212'), bigger = mkBtn('+');
@@ -91,7 +81,6 @@
     dock.append(fab, panel);
     document.body.appendChild(dock);
 
-    // ---- target field resolution ----
     let target = null;
     document.addEventListener('focusin', (e) => {
       const el = e.target; if (!el) return;
@@ -163,13 +152,11 @@
     }
     render('math');
 
-    // scale (keyboard only)
     let scale = 1;
     const applyScale = () => { panel.style.transform = 'scale(' + scale + ')'; };
     bigger.onmousedown  = (e) => { e.stopPropagation(); e.preventDefault(); scale = Math.min(2, scale + 0.1); applyScale(); };
     smaller.onmousedown = (e) => { e.stopPropagation(); e.preventDefault(); scale = Math.max(0.6, scale - 0.1); applyScale(); };
 
-    // ---- drag the whole dock via the fab; click (no drag) toggles ----
     let on = false, sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
     const move = (e) => {
       if (!on) return;
