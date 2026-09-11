@@ -1,8 +1,7 @@
 /* Universal MATH keyboard — one draggable unit (widget + keyboard together).
    Math-only: no letters, no spacebar. Your system keyboard types text; this
-   widget inserts math (LaTeX) into a MathLive <math-field>: fractions, powers,
-   super/subscripts, roots, integrals, trig, comparisons, brackets, digits.
-   Global floating widget on every page. No interface registered here. */
+   widget inserts math (LaTeX) into a MathLive <math-field>. In a text-mode
+   field, math is embedded as $...$ so prose stays prose. No interface here. */
 
 (function () {
 
@@ -123,8 +122,13 @@
       el.focus();
       if (el.tagName === 'MATH-FIELD') {
         try {
-          if (def.cmd) el.executeCommand(def.cmd);
-          else if (def.ins != null) { (typeof el.insert === 'function') ? el.insert(def.ins, { focus: true, feedback: false }) : el.executeCommand(['insert', def.ins]); }
+          if (def.cmd) { el.executeCommand(def.cmd); return; }
+          if (def.ins == null) return;
+          // if the field is in text mode, embed math as $...$ so prose stays prose
+          let ins = def.ins, mode = 'math';
+          try { mode = el.mode || (el.model && el.model.mode) || 'math'; } catch (e2) {}
+          if (mode === 'text') ins = '$' + def.ins + '$';
+          (typeof el.insert === 'function') ? el.insert(ins, { focus: true, feedback: false }) : el.executeCommand(['insert', ins]);
         } catch (e) {}
       } else {
         if (def.cmd) inputCmd(el, def.cmd);
