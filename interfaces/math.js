@@ -1,8 +1,8 @@
 /* Universal MATH keyboard — one draggable unit (widget + keyboard together).
-   Math-only: no letters, no spacebar. Your system keyboard types text; this
-   widget inserts math (LaTeX) into a MathLive <math-field>: fractions, powers,
-   super/subscripts, roots, integrals, trig, comparisons, brackets, digits.
-   Global floating widget on every page. No interface registered here. */
+   Math-only: no letters, no spacebar. System keyboard types TEXT; this widget
+   inserts MATH. Fields are in text mode, so words stay words; each math key is
+   wrapped as a $...$ island. The "math" key opens an empty island to type a
+   whole expression inside, then step out with it again or →. No interface here. */
 
 (function () {
 
@@ -19,7 +19,8 @@
 
   const LAYERS = {
     math: [
-      [ D('x\u00b2','^{2}'), D('x\u02b8','^{\\placeholder{}}'), D('x\u2093','_{\\placeholder{}}'),
+      [ { t: 'math', island: true },
+        D('x\u00b2','^{2}'), D('x\u02b8','^{\\placeholder{}}'), D('x\u2093','_{\\placeholder{}}'),
         D('\u221a','\\sqrt{\\placeholder{}}'),
         D('7','7'), D('8','8'), D('9','9'), D('\u00f7','\\frac{\\placeholder{}}{\\placeholder{}}'),
         { t: 'f(x)', layer: 'fn' } ],
@@ -123,16 +124,21 @@
       el.focus();
       if (el.tagName === 'MATH-FIELD') {
         try {
+          const modeOf = () => { try { return el.mode || (el.model && el.model.mode) || 'math'; } catch (e2) { return 'math'; } };
+          if (def.island) {
+            if (modeOf() === 'text') {
+              if (typeof el.insert === 'function') el.insert('$\\placeholder{}$', { focus: true, feedback: false, selectionMode: 'placeholder' });
+              else el.executeCommand(['insert', '$\\placeholder{}$']);
+            } else {
+              try { el.executeCommand('moveToNextChar'); } catch (e4) {}
+            }
+            return;
+          }
           if (def.cmd) { el.executeCommand(def.cmd); return; }
           if (def.ins == null) return;
-          // if the field is in text mode, embed math as $...$ so prose stays prose
-          let ins = def.ins, mode = 'math';
-          try { mode = el.mode || (el.model && el.model.mode) || 'math'; } catch (e2) {}
-          if (mode === 'text') ins = '$' + def.ins + '$';
+          let ins = (modeOf() === 'text') ? ('$' + def.ins + '$') : def.ins;
           if (typeof el.insert === 'function') el.insert(ins, { focus: true, feedback: false, selectionMode: 'placeholder' });
           else el.executeCommand(['insert', ins]);
-          // collapse any lingering selection so nothing stays highlighted
-          try { el.executeCommand('moveToMathfieldEnd'); } catch (e3) {}
         } catch (e) {}
       } else {
         if (def.cmd) inputCmd(el, def.cmd);
@@ -151,7 +157,8 @@
           b.style.cssText =
             'min-width:38px;height:38px;padding:0 8px;border:1px solid #d8cfb8;border-radius:6px;' +
             'background:#fffdf7;cursor:pointer;font:16px system-ui,sans-serif;flex:1;' +
-            (def.layer ? 'background:#eaf1f8;border-color:#4682b4;font-size:13px;' : '');
+            (def.layer ? 'background:#eaf1f8;border-color:#4682b4;font-size:13px;' : '') +
+            (def.island ? 'background:#dcecfa;border-color:#4682b4;font-weight:600;' : '');
           b.addEventListener('mousedown', (e) => { e.preventDefault(); press(def); });
           row.appendChild(b);
         });
@@ -178,7 +185,6 @@
       if (!moved) {
         if (panel.style.display === 'none') {
           panel.style.display = 'block';
-          // only grab a field if the user isn't already in one
           const active = document.activeElement;
           const inField = active && (active.tagName === 'MATH-FIELD' || active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && !dock.contains(active);
           if (!inField && !currentField()) { const f = firstEditable(); if (f) { f.focus(); target = f; } }
