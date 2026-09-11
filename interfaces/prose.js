@@ -20,7 +20,7 @@
       try { mf.style.setProperty('--keyboard-toggle-display','none'); } catch (e) {}
       try { mf.inlineShortcuts = {}; } catch (e) {}
       try { mf.mathModeSpace = '\\;'; } catch (e) {}
-      try { mf.defaultMode = 'text'; } catch (e) {}     // typed words = prose, not variables
+
       if (initial) mf.value = initial;
       mf.addEventListener('input', () => onInput(mf.value));
       return mf;

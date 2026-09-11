@@ -68,3 +68,7 @@ aside { border-left: 1px solid var(--line); background: var(--paper); padding: 1
 /* hide MathLive's built-in menu + keyboard-toggle (we use our own widget) */
 math-field::part(virtual-keyboard-toggle),
 math-field::part(menu-toggle) { display: none !important; }
+
+/* kill MathLive's blue text-run / selection wash while typing */
+math-field::part(content) { background: transparent !important; }
+math-field { --selection-background-color: transparent; --contains-highlight-background-color: transparent; }
