@@ -44,6 +44,8 @@
         'min-height:' + (cfg.multiline ? '5rem' : '2.6rem') + ';' +
         'border:1px solid var(--line);border-radius:6px;background:#fffdf7;';
       mf.mathVirtualKeyboardPolicy = 'manual';           // our widget handles the on-screen keys
+      try { mf.menuItems = []; } catch (e) {}               // remove the built-in ≡ menu
+      try { mf.style.setProperty('--keyboard-toggle-display','none'); } catch (e) {}
       if (value && value.latex) mf.value = value.latex;
 
       const emit = () => { const l = mf.value.trim(); onChange(l === '' ? null : { latex: l }); };
