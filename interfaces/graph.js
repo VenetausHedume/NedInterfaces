@@ -269,7 +269,7 @@
       bSnap.style.background = '#e6f4ea';
       const bDel = tb('Delete', () => { if (selected) { selected.el.g.remove(); objs = objs.filter(o => o !== selected); select(null); emitClean(); } });
       const bClr = tb('Clear', () => { objs.forEach(o => o.el.g.remove()); objs = []; if (placing) { placing.g.remove(); placing = null; } select(null); emitClean(); });
-      toolbar.append(bSel, bLine, bCurve, bShade, bLabel, bDot, bSnap, bDel, bClr, editAxesBtn);
+      toolbar.append(bSel, bLine, bCurve, bShade, bLabel, bDot, bSnap, bDel, bClr);
 
       // ---- setup screen (choose axes first) then drawing screen ----
       const setupScreen = Ned.el('div', { style:'background:#efeadd;border:1px solid var(--line);border-radius:10px;padding:18px;max-width:520px;' });
@@ -289,6 +289,7 @@
 
       // small "Edit axes" button shown on the drawing screen
       const editAxesBtn = Ned.el('button',{type:'button',style:'padding:7px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);cursor:pointer;font-size:14px;'},['\u2190 Edit axes']);
+      toolbar.appendChild(editAxesBtn);
 
       function enterDrawing(a){
         setupScreen.style.display='none';
