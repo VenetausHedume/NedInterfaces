@@ -269,13 +269,47 @@
       bSnap.style.background = '#e6f4ea';
       const bDel = tb('Delete', () => { if (selected) { selected.el.g.remove(); objs = objs.filter(o => o !== selected); select(null); emitClean(); } });
       const bClr = tb('Clear', () => { objs.forEach(o => o.el.g.remove()); objs = []; if (placing) { placing.g.remove(); placing = null; } select(null); emitClean(); });
-      toolbar.append(bSel, bLine, bCurve, bShade, bLabel, bDot, bSnap, bDel, bClr);
+      toolbar.append(bSel, bLine, bCurve, bShade, bLabel, bDot, bSnap, bDel, bClr, editAxesBtn);
 
-      // ---- init (draw axes; load value) ----
-      requestAnimationFrame(() => {
-        fit(); drawAxes(A0);
-        if (value && value.objects && value.objects.length) loadValue(value);
+      // ---- setup screen (choose axes first) then drawing screen ----
+      const setupScreen = Ned.el('div', { style:'background:#efeadd;border:1px solid var(--line);border-radius:10px;padding:18px;max-width:520px;' });
+      setupScreen.appendChild(Ned.el('div', { style:'font-size:14px;margin-bottom:12px;color:var(--ink);' }, ['Set the axis ranges, then start drawing.']));
+      const mkNum = (lab, val) => { const w=Ned.el('label',{style:'display:inline-flex;align-items:center;gap:6px;margin:0 12px 10px 0;font-size:13px;color:var(--muted);'});
+        const inp=Ned.el('input',{type:'number',value:String(val),style:'width:72px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--paper);font:inherit;'});
+        w.append(document.createTextNode(lab+' '), inp); return {w, inp}; };
+      const fXmin=mkNum('x-min',A0.xmin), fXmax=mkNum('x-max',A0.xmax), fYmin=mkNum('y-min',A0.ymin), fYmax=mkNum('y-max',A0.ymax);
+      const rowa=Ned.el('div',{}); rowa.append(fXmin.w, fXmax.w);
+      const rowb=Ned.el('div',{}); rowb.append(fYmin.w, fYmax.w);
+      const startBtn=Ned.el('button',{type:'button',style:'margin-top:6px;padding:8px 16px;border:none;border-radius:7px;background:var(--accent);color:#fff;cursor:pointer;font-size:14px;'},['Start drawing \u2192']);
+      setupScreen.append(rowa, rowb, startBtn);
+
+      // the drawing UI (toolbar + wrap) is built above but not yet shown; hide until setup done
+      toolbar.style.display='none'; wrap.style.display='none';
+      container.insertBefore(setupScreen, toolbar);
+
+      // small "Edit axes" button shown on the drawing screen
+      const editAxesBtn = Ned.el('button',{type:'button',style:'padding:7px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);cursor:pointer;font-size:14px;'},['\u2190 Edit axes']);
+
+      function enterDrawing(a){
+        setupScreen.style.display='none';
+        toolbar.style.display='flex'; wrap.style.display='block';
+        fit(); drawAxes(a);
         setTool('select');
+        emitClean();
+      }
+      startBtn.onclick=()=>{
+        const a={ xmin:+fXmin.inp.value, xmax:+fXmax.inp.value, ymin:+fYmin.inp.value, ymax:+fYmax.inp.value };
+        if(!(a.xmax>a.xmin) || !(a.ymax>a.ymin)){ alert('max must be greater than min'); return; }
+        enterDrawing(a);
+      };
+      editAxesBtn.onclick=()=>{ setupScreen.style.display='block'; toolbar.style.display='none'; wrap.style.display='none'; };
+
+      // if we already have a saved value, skip setup and go straight to drawing
+      requestAnimationFrame(() => {
+        if (value && value.objects && value.objects.length) {
+          setupScreen.style.display='none'; toolbar.style.display='flex'; wrap.style.display='block';
+          fit(); loadValue(value); setTool('select');
+        }
       });
       function loadValue(v) {
         const a = v.axes || A0; drawAxes(a);
