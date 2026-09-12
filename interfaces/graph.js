@@ -42,6 +42,11 @@
       let W = 860, H = 540;
       function fit() { const r = board.getBoundingClientRect(); if (!r.width) return; W = Math.round(r.width); H = Math.round(r.height); board.setAttribute('viewBox', '0 0 ' + W + ' ' + H); }
 
+      // arrowhead marker for label leader lines
+      const defs = svg('defs', {});
+      const marker = svg('marker', { id:'ned-arrow', markerWidth:8, markerHeight:8, refX:7, refY:4, orient:'auto', markerUnits:'userSpaceOnUse' });
+      marker.appendChild(svg('path', { d:'M0,0 L8,4 L0,8 z', fill:'#c0392b' }));
+      defs.appendChild(marker); board.appendChild(defs);
       const gridG = svg('g', {}); board.appendChild(gridG);
       const objsG = svg('g', {}); board.appendChild(objsG);
       const snapG = svg('g', {}); board.appendChild(snapG);
@@ -113,17 +118,36 @@
             const p1 = S2D(O.x1, O.y1), p2 = S2D(O.x2, O.y2);
             const o = { type: O.curved ? 'curve' : 'line', p1: [round(p1.x), round(p1.y)], p2: [round(p2.x), round(p2.y)], dotted: !!O.dotted };
             if (O.curved && O.bx != null) { const b = S2D(O.bx, O.by); o.bend = [round(b.x), round(b.y)]; }
-            if (O.label) o.label = O.label;
+            if (O.label) { o.label = O.label; if (O.labelPos){ const lp=S2D(O.labelPos.x,O.labelPos.y); o.labelPos=[round(lp.x),round(lp.y)]; } }
             objects.push(o);
           } else {
             const o = { type: 'region', points: O.pts.map(p => { const d = S2D(p.x, p.y); return [round(d.x), round(d.y)]; }) };
-            if (O.label) o.label = O.label;
+            if (O.label) { o.label = O.label; if (O.labelPos){ const lp=S2D(O.labelPos.x,O.labelPos.y); o.labelPos=[round(lp.x),round(lp.y)]; } }
             objects.push(o);
           }
         });
         onChange(objects.length ? { axes: { xmin: axis.xmin, xmax: axis.xmax, ymin: axis.ymin, ymax: axis.ymax }, objects } : null);
       }
       const round = (n) => Math.round(n * 100) / 100;
+      function anchorOf(O){ if(O.kind==='line'){ const mx=(O.x1+O.x2)/2,my=(O.y1+O.y2)/2; return { x:(O.bx==null?mx:O.bx), y:(O.by==null?my:O.by) }; }
+        return { x:O.pts.reduce((s,p)=>s+p.x,0)/O.pts.length, y:O.pts.reduce((s,p)=>s+p.y,0)/O.pts.length }; }
+      function ensureLabelPos(O){ if(O.label && O.labelPos==null){ const a=anchorOf(O); O.labelPos={ x:a.x+70, y:a.y-40 }; } }
+      // draw the leader arrow + positioned label for any object
+      function drawLabel(O){ const e=O.el; ensureLabelPos(O);
+        if(O.label && O.labelPos){ const a=anchorOf(O);
+          e.lab.textContent=latexToPlain(O.label); e.lab.setAttribute('x',O.labelPos.x); e.lab.setAttribute('y',O.labelPos.y);
+          e.lead.setAttribute('x1',a.x); e.lead.setAttribute('y1',a.y);
+          // stop the arrow a little short of the text
+          const dx=O.labelPos.x-a.x, dy=O.labelPos.y-a.y, L=Math.hypot(dx,dy)||1; const back=14;
+          e.lead.setAttribute('x2',O.labelPos.x-dx/L*back); e.lead.setAttribute('y2',O.labelPos.y-dy/L*back);
+          e.lead.setAttribute('visibility','visible');
+          if(!e._labelWired){ e._labelWired=true; e.lab.addEventListener('pointerdown',(evt)=>{ evt.stopPropagation(); select(O);
+            const p0=pt(evt), o={x:O.labelPos.x,y:O.labelPos.y};
+            const mv=(ev)=>{ const p=pt(ev); O.labelPos={ x:o.x+(p.x-p0.x), y:o.y+(p.y-p0.y) }; drawLabel(O); };
+            const up=()=>{ emitClean(); window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up); };
+            window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up); }); }
+        } else { e.lab.textContent=''; e.lead.setAttribute('visibility','hidden'); }
+      }
 
       // ---- objects ----
       function addLineObj(cx, cy, curved) {
@@ -135,16 +159,19 @@
         const bend = svg('circle', { r: 7, fill: '#eaf1f8', stroke: 'var(--accent)', 'stroke-width': 2, cursor: 'grab' });
         const rotG = svg('g', {}), rotBg = svg('circle', { r: 13, fill: '#fff', stroke: 'var(--line)', 'stroke-width': 1.5, cursor: 'grab' });
         rotG.append(rotBg, svg('path', { d: 'M -5 -1 A 5 5 0 1 1 -3 4', fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2 }), svg('path', { d: 'M -3 4 l -3 -1 M -3 4 l 1 -3', fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2 }));
-        const lab = svg('text', { fill: '#c0392b', 'font-size': 15, 'font-weight': 600 });
-        g.append(hit, body, h1, h2, bend, rotG, lab); objsG.appendChild(g);
-        O.el = { g, body, hit, h1, h2, bend, rotG, rotBg, lab }; objs.push(O); wireLine(O); draw(O); select(O); return O;
+        const lead = svg('line', { stroke:'#c0392b', 'stroke-width':1.5, 'marker-end':'url(#ned-arrow)', visibility:'hidden' });
+        const lab = svg('text', { fill: '#c0392b', 'font-size': 15, 'font-weight': 600, cursor:'move' });
+        g.append(lead, hit, body, h1, h2, bend, rotG, lab); objsG.appendChild(g);
+        O.el = { g, body, hit, h1, h2, bend, rotG, rotBg, lab, lead }; objs.push(O); wireLine(O); draw(O); select(O); return O;
       }
       const pathFor = (O) => { const { x1, y1, x2, y2, bx, by } = O; if (bx == null) return 'M ' + x1 + ' ' + y1 + ' L ' + x2 + ' ' + y2; const cx = 2 * bx - 0.5 * (x1 + x2), cy = 2 * by - 0.5 * (y1 + y2); return 'M ' + x1 + ' ' + y1 + ' Q ' + cx + ' ' + cy + ' ' + x2 + ' ' + y2; };
 
       function addRegion(points) {
         const O = { id: uid++, kind: 'region', pts: points.map(p => ({ x: p.x, y: p.y })), label: '' };
-        const g = svg('g', {}), poly = svg('polygon', { fill: 'rgba(70,130,180,.28)', stroke: 'var(--accent)', 'stroke-width': 1.5, cursor: 'move' }), lab = svg('text', { fill: '#c0392b', 'font-size': 15, 'font-weight': 600, 'text-anchor': 'middle' });
-        g.append(poly, lab); objsG.appendChild(g); O.el = { g, poly, lab }; objs.push(O); wireRegion(O); draw(O); select(O); return O;
+        const g = svg('g', {}), poly = svg('polygon', { fill: 'rgba(70,130,180,.28)', stroke: 'var(--accent)', 'stroke-width': 1.5, cursor: 'move' });
+        const lead = svg('line', { stroke:'#c0392b', 'stroke-width':1.5, 'marker-end':'url(#ned-arrow)', visibility:'hidden' });
+        const lab = svg('text', { fill: '#c0392b', 'font-size': 15, 'font-weight': 600, 'text-anchor': 'middle', cursor:'move' });
+        g.append(poly, lead, lab); objsG.appendChild(g); O.el = { g, poly, lab, lead }; objs.push(O); wireRegion(O); draw(O); select(O); return O;
       }
 
       function draw(O) {
@@ -159,7 +186,7 @@
           const show = (selected === O && !rotating) ? 'visible' : 'hidden';
           [e.h1, e.h2, e.rotG].forEach(h => h.setAttribute('visibility', show));
           e.bend.setAttribute('visibility', (O.curved && show === 'visible') ? 'visible' : 'hidden');
-          e.lab.textContent = latexToPlain(O.label); e.lab.setAttribute('x', bpx + 10); e.lab.setAttribute('y', bpy - 10);
+          drawLabel(O);
           e.g.classList.toggle('sel', selected === O);
         } else {
           e.poly.setAttribute('points', O.pts.map(p => p.x + ',' + p.y).join(' '));
@@ -172,7 +199,7 @@
               window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); });
             e.g.appendChild(h); });
           const cx = O.pts.reduce((s, p) => s + p.x, 0) / O.pts.length, cy = O.pts.reduce((s, p) => s + p.y, 0) / O.pts.length;
-          e.lab.textContent = latexToPlain(O.label); e.lab.setAttribute('x', cx); e.lab.setAttribute('y', cy);
+          drawLabel(O);
           e.g.classList.toggle('sel', selected === O);
         }
       }
@@ -251,7 +278,7 @@
         const r = board.getBoundingClientRect(); let ax, ay;
         if (O.kind === 'line') { ax = (O.x1 + O.x2) / 2; ay = (O.y1 + O.y2) / 2; } else { ax = O.pts.reduce((s, p) => s + p.x, 0) / O.pts.length; ay = O.pts.reduce((s, p) => s + p.y, 0) / O.pts.length; }
         pop.style.left = (ax * (r.width / W)) + 'px'; pop.style.top = (ay * (r.height / H)) + 'px'; pop.style.display = 'block'; lf.focus(); }
-      saveB.onclick = () => { if (labelTarget) { labelTarget.label = lf.value.trim(); draw(labelTarget); emitClean(); } pop.style.display = 'none'; labelTarget = null; };
+      saveB.onclick = () => { if (labelTarget) { const had=!!labelTarget.label; labelTarget.label = lf.value.trim(); if(!had && labelTarget.label) labelTarget.labelPos=null; draw(labelTarget); emitClean(); } pop.style.display = 'none'; labelTarget = null; };
       cancB.onclick = () => { pop.style.display = 'none'; labelTarget = null; };
 
       // ---- toolbar ----
@@ -315,9 +342,10 @@
       function loadValue(v) {
         const a = v.axes || A0; drawAxes(a);
         (v.objects || []).forEach(o => {
-          if (o.type === 'region') { const O = addRegion(o.points.map(p => D2S(p[0], p[1]))); O.label = o.label || ''; draw(O); }
+          if (o.type === 'region') { const O = addRegion(o.points.map(p => D2S(p[0], p[1]))); O.label = o.label || ''; if(o.labelPos){ const s2=D2S(o.labelPos[0],o.labelPos[1]); O.labelPos={x:s2.x,y:s2.y}; } draw(O); }
           else { const s1 = D2S(o.p1[0], o.p1[1]), s2 = D2S(o.p2[0], o.p2[1]); const O = addLineObj((s1.x + s2.x) / 2, (s1.y + s2.y) / 2, o.type === 'curve');
             O.x1 = s1.x; O.y1 = s1.y; O.x2 = s2.x; O.y2 = s2.y; O.dotted = !!o.dotted; O.label = o.label || '';
+            if(o.labelPos){ const lp=D2S(o.labelPos[0],o.labelPos[1]); O.labelPos={x:lp.x,y:lp.y}; }
             if (o.type === 'curve' && o.bend) { const b = D2S(o.bend[0], o.bend[1]); O.bx = b.x; O.by = b.y; } draw(O); }
         });
         select(null);
