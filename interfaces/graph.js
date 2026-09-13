@@ -36,7 +36,8 @@
       board.style.cssText = 'width:100%;height:540px;background:#fffdf7;border:1px solid var(--line);border-radius:10px;touch-action:none;display:block;';
       const note = Ned.el('div', { style: 'position:absolute;left:12px;top:12px;background:#3a4653;color:#fff;font-size:12px;padding:6px 10px;border-radius:8px;display:none;' },
         ['Click to add points \u00b7 Enter or first point to shade \u00b7 Esc removes last']);
-      wrap.append(board, note);
+      const angleBadge = Ned.el('div', { style:'position:absolute;display:none;transform:translate(-50%,-50%);background:#3a4653;color:#fff;font-size:13px;font-weight:600;padding:5px 10px;border-radius:8px;pointer-events:none;z-index:5;' });
+      wrap.append(board, note, angleBadge);
       container.append(toolbar, wrap);
 
       let W = 860, H = 540;
@@ -48,6 +49,7 @@
 
       const PAD = 46;
       let axis = null, snapOn = true, tool = 'select', selected = null, rotating = false, uid = 1;
+      let step = 1;   // grid + snap increment (live)
       let objs = [];
 
       const pt = (evt) => { const r = board.getBoundingClientRect(); return { x: (evt.clientX - r.left) * (W / r.width), y: (evt.clientY - r.top) * (H / r.height) }; };
@@ -61,7 +63,11 @@
         const plotW = W - PAD * 2, plotH = H - PAD * 2;
         const sx = (x) => PAD + (x - a.xmin) / (a.xmax - a.xmin) * plotW;
         const sy = (y) => H - PAD - (y - a.ymin) / (a.ymax - a.ymin) * plotH;
-        const stepX = niceStep(a.xmax - a.xmin, 10), stepY = niceStep(a.ymax - a.ymin, 10);
+        // draw gridlines at the chosen step, but cap the count so tiny steps on
+        // a huge range don't create thousands of lines (fall back to niceStep then)
+        let stepX = step, stepY = step;
+        if ((a.xmax - a.xmin) / stepX > 60) stepX = niceStep(a.xmax - a.xmin, 10);
+        if ((a.ymax - a.ymin) / stepY > 60) stepY = niceStep(a.ymax - a.ymin, 10);
         for (let x = Math.ceil(a.xmin / stepX) * stepX; x <= a.xmax + 1e-9; x += stepX) { const X = sx(x);
           gridG.appendChild(svg('line', { x1: X, y1: PAD, x2: X, y2: H - PAD, stroke: '#e7dfca', 'stroke-width': 1 }));
           const t = svg('text', { x: X, y: H - PAD + 18, 'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 12 }); t.textContent = +x.toFixed(6); gridG.appendChild(t); }
@@ -79,10 +85,13 @@
       const S2D = (px, py) => axis.toData(px, py);
       function snapScreen(px, py) {
         if (!snapOn || !axis) return { x: px, y: py, snapped: false };
-        const d = axis.toData(px, py), rx = Math.round(d.x), ry = Math.round(d.y);
+        const d = axis.toData(px, py);
+        const rx = Math.round(d.x / step) * step, ry = Math.round(d.y / step) * step;
         if (rx < axis.xmin || rx > axis.xmax || ry < axis.ymin || ry > axis.ymax) return { x: px, y: py, snapped: false };
-        const s = D2S(rx, ry); return { x: s.x, y: s.y, snapped: true };
+        const sc = D2S(rx, ry); return { x: sc.x, y: sc.y, snapped: true };
       }
+      const showBadge = (px, py, txt) => { const r = board.getBoundingClientRect(); angleBadge.style.left = (px*(r.width/W))+'px'; angleBadge.style.top = (py*(r.height/H))+'px'; angleBadge.textContent = txt; angleBadge.style.display='block'; };
+      const hideBadge = () => { angleBadge.style.display='none'; };
       const showSnap = (px, py) => { snapG.innerHTML = ''; snapG.appendChild(svg('circle', { cx: px, cy: py, r: 8, fill: 'none', stroke: '#4caf50', 'stroke-width': 2 })); };
       const clearSnap = () => { snapG.innerHTML = ''; };
 
@@ -199,8 +208,8 @@
           const mv = (e) => { const p = pt(e); let ccw = Math.atan2(-(p.y - my), p.x - mx) * 180 / Math.PI; ccw = snapDeg(ccw);
             const rad = ccw * Math.PI / 180, dx = Math.cos(rad) * half, dy = -Math.sin(rad) * half; O.x1 = mx - dx; O.y1 = my - dy; O.x2 = mx + dx; O.y2 = my + dy;
             if (boff) { const dr = (ccw - base) * Math.PI / 180, cs = Math.cos(dr), sn = Math.sin(dr); O.bx = mx + (boff.dx * cs + boff.dy * sn); O.by = my + (-boff.dx * sn + boff.dy * cs); }
-            draw(O); };
-          const up = () => { rotating = false; draw(O); emitClean(); window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+            draw(O); showBadge(p.x, p.y - 26, Math.round(ccw) + '\u00b0'); };
+          const up = () => { hideBadge(); rotating = false; draw(O); emitClean(); window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
           window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); });
       }
       function wireRegion(O) {
@@ -264,9 +273,17 @@
       const bDot = tb('Dotted', () => { if (selected && selected.kind === 'line') { selected.dotted = !selected.dotted; draw(selected); emitClean(); } });
       const bSnap = tb('Snap: ON', function () { snapOn = !snapOn; this.textContent = 'Snap: ' + (snapOn ? 'ON' : 'OFF'); this.style.background = snapOn ? '#e6f4ea' : 'var(--paper)'; });
       bSnap.style.background = '#e6f4ea';
+      // live step control
+      const STEPS = [0.25, 0.5, 1, 2, 5, 10];
+      const stepWrap = Ned.el('div', { style:'display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:7px;background:var(--paper);padding:2px 4px;' });
+      const stepLbl = Ned.el('span', { style:'font-size:13px;min-width:64px;text-align:center;' }, ['Step: ' + step]);
+      const stepDn = Ned.el('button', { type:'button', style:'width:24px;height:24px;border:1px solid var(--line);border-radius:5px;background:var(--paper);cursor:pointer;', onclick:()=>changeStep(-1) }, ['\u2212']);
+      const stepUp = Ned.el('button', { type:'button', style:'width:24px;height:24px;border:1px solid var(--line);border-radius:5px;background:var(--paper);cursor:pointer;', onclick:()=>changeStep(1) }, ['+']);
+      stepWrap.append(stepDn, stepLbl, stepUp);
+      function changeStep(dir){ let i = STEPS.indexOf(step); if(i<0) i = STEPS.indexOf(1); i = Math.max(0, Math.min(STEPS.length-1, i+dir)); step = STEPS[i]; stepLbl.textContent = 'Step: ' + step; if (axis) drawAxes({ xmin:axis.xmin, xmax:axis.xmax, ymin:axis.ymin, ymax:axis.ymax }); }
       const bDel = tb('Delete', () => { if (selected) { selected.el.g.remove(); objs = objs.filter(o => o !== selected); select(null); emitClean(); } });
       const bClr = tb('Clear', () => { objs.forEach(o => o.el.g.remove()); objs = []; if (placing) { placing.g.remove(); placing = null; } select(null); emitClean(); });
-      toolbar.append(bSel, bLine, bCurve, bShade, bLabel, bDot, bSnap, bDel, bClr);
+      toolbar.append(bSel, bLine, bCurve, bShade, bLabel, bDot, bSnap, stepWrap, bDel, bClr);
 
       // ---- setup screen (choose axes first) then drawing screen ----
       const setupScreen = Ned.el('div', { style:'background:#efeadd;border:1px solid var(--line);border-radius:10px;padding:18px;max-width:520px;' });
