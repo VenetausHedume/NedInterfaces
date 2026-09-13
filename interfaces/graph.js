@@ -40,6 +40,63 @@
       wrap.append(board, note, angleBadge);
       container.append(toolbar, wrap);
 
+      // ---- mode toggle: Draw vs Upload photo (one answer, one source) ----
+      let mode = 'draw';
+      const modeBar = Ned.el('div', { style:'display:flex;gap:8px;margin-bottom:10px;' });
+      const mDraw  = Ned.el('button', { type:'button', style:'padding:7px 14px;border:1px solid var(--line);border-radius:7px;cursor:pointer;font-size:14px;' }, ['Draw']);
+      const mPhoto = Ned.el('button', { type:'button', style:'padding:7px 14px;border:1px solid var(--line);border-radius:7px;cursor:pointer;font-size:14px;' }, ['Upload photo']);
+      modeBar.append(mDraw, mPhoto);
+      container.insertBefore(modeBar, toolbar);
+
+      // photo panel
+      const photoWrap = Ned.el('div', { style:'display:none;max-width:520px;' });
+      const fileInput = Ned.el('input', { type:'file', accept:'image/*', style:'display:block;margin-bottom:10px;' });
+      const photoPreview = Ned.el('div', { style:'border:1px dashed var(--line);border-radius:10px;padding:14px;background:#fffdf7;text-align:center;color:var(--muted);min-height:120px;display:flex;align-items:center;justify-content:center;' }, ['No photo yet — draw your graph on paper and upload a clear photo.']);
+      const photoClear = Ned.el('button', { type:'button', style:'margin-top:10px;padding:6px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);cursor:pointer;display:none;' }, ['Remove photo']);
+      photoWrap.append(fileInput, photoPreview, photoClear);
+      container.appendChild(photoWrap);
+
+      let photoData = null;   // data-URL (lab); real upload -> Supabase storage in Phase 2
+      function renderPhoto() {
+        if (photoData) {
+          photoPreview.innerHTML = '';
+          const img = document.createElement('img'); img.src = photoData; img.style.cssText = 'max-width:100%;max-height:320px;border-radius:8px;';
+          photoPreview.appendChild(img); photoClear.style.display = 'inline-block';
+        } else {
+          photoPreview.innerHTML = 'No photo yet — draw your graph on paper and upload a clear photo.'; photoClear.style.display = 'none';
+        }
+      }
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files && fileInput.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => { photoData = reader.result; renderPhoto(); emitPhoto(); };
+        reader.readAsDataURL(file);
+      });
+      photoClear.onclick = () => { photoData = null; fileInput.value = ''; renderPhoto(); emitPhoto(); };
+      function emitPhoto() { onChange(photoData ? { mode:'photo', image: photoData } : null); }
+
+      function applyMode(m) {
+        mode = m;
+        mDraw.style.background  = (m==='draw')  ? '#eaf1f8' : 'var(--paper)';
+        mDraw.style.borderColor = (m==='draw')  ? 'var(--accent)' : 'var(--line)';
+        mPhoto.style.background = (m==='photo') ? '#eaf1f8' : 'var(--paper)';
+        mPhoto.style.borderColor= (m==='photo') ? 'var(--accent)' : 'var(--line)';
+        if (m === 'photo') {
+          // hide everything drawing-related
+          setupScreen.style.display='none'; toolbar.style.display='none'; wrap.style.display='none'; descWrap.style.display='none';
+          photoWrap.style.display='block';
+          emitPhoto();
+        } else {
+          photoWrap.style.display='none';
+          // restore draw UI: if axes not yet chosen, show setup; else show board
+          if (axis) { toolbar.style.display='flex'; wrap.style.display='block'; }
+          else { setupScreen.style.display='block'; }
+          emitClean();
+        }
+      }
+      mDraw.onclick  = () => applyMode('draw');
+      mPhoto.onclick = () => applyMode('photo');
+
       let W = 860, H = 540;
       function fit() { const r = board.getBoundingClientRect(); if (!r.width) return; W = Math.round(r.width); H = Math.round(r.height); board.setAttribute('viewBox', '0 0 ' + W + ' ' + H); }
 
@@ -130,7 +187,7 @@
             objects.push(o);
           }
         });
-        onChange(objects.length ? { axes: { xmin: axis.xmin, xmax: axis.xmax, ymin: axis.ymin, ymax: axis.ymax }, objects } : null);
+        onChange(objects.length ? { mode:'draw', axes: { xmin: axis.xmin, xmax: axis.xmax, ymin: axis.ymin, ymax: axis.ymax }, objects } : null);
       }
       const round = (n) => Math.round(n * 100) / 100;
 
@@ -321,6 +378,8 @@
 
       // if we already have a saved value, skip setup and go straight to drawing
       requestAnimationFrame(() => {
+        if (value && value.mode === 'photo') { photoData = value.image || null; renderPhoto(); applyMode('photo'); return; }
+        applyMode('draw');
         if (value && value.objects && value.objects.length) {
           setupScreen.style.display='none'; toolbar.style.display='flex'; wrap.style.display='block';
           fit(); loadValue(value); setTool('select');
@@ -340,7 +399,7 @@
 
       return {
         update: (v) => { objs.forEach(o => o.el.g.remove()); objs = []; if (v && v.objects) loadValue(v); else drawAxes(A0); },
-        clear: () => { objs.forEach(o => o.el.g.remove()); objs = []; select(null); drawAxes(A0); emitClean(); },
+        clear: () => { objs.forEach(o => o.el.g.remove()); objs = []; select(null); drawAxes(A0); photoData=null; if(typeof fileInput!=='undefined'){ try{fileInput.value='';}catch(e){} } if(mode==='photo'){ renderPhoto(); emitPhoto(); } else emitClean(); },
         destroy: () => { window.removeEventListener('keydown', keyHandler); container.innerHTML = ''; },
       };
     });
