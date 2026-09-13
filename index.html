@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ned Interfaces — Preview</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 </head>
 <body>
   <header>
@@ -29,8 +30,10 @@
     </aside>
   </div>
 
-  <!-- MathLive: powers the Math input interface (live math field + keyboard) -->
+  <!-- MathLive: powers math fields -->
   <script src="https://cdn.jsdelivr.net/npm/mathlive"></script>
+  <!-- CodeMirror: powers the code editor -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 
   <!-- load order: contract first, then each interface, then the app -->
   <script src="interfaces/_contract.js"></script>
@@ -39,6 +42,7 @@
   <script src="interfaces/table.js"></script>
   <script src="interfaces/formula.js"></script>
   <script src="interfaces/graph.js"></script>
+  <script src="interfaces/code.js"></script>
   <script src="interfaces/circuit.js"></script>
   <script src="interfaces/econ.js"></script>
   <script src="interfaces/photo.js"></script>

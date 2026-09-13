@@ -72,3 +72,7 @@ math-field::part(menu-toggle) { display: none !important; }
 /* kill MathLive's blue text-run / selection wash while typing */
 math-field::part(content) { background: transparent !important; }
 math-field { --selection-background-color: transparent; --contains-highlight-background-color: transparent; }
+
+/* kill MathLive's blue text-run / selection wash while typing */
+math-field { --selection-background-color: transparent; --contains-highlight-background-color: transparent; --highlight-text: inherit; }
+math-field::part(content) { background: transparent !important; }
