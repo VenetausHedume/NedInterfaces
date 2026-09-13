@@ -124,6 +124,56 @@
         onChange(objects.length ? { axes: { xmin: axis.xmin, xmax: axis.xmax, ymin: axis.ymin, ymax: axis.ymax }, objects } : null);
       }
       const round = (n) => Math.round(n * 100) / 100;
+
+      // ---- objects ----
+      function addLineObj(cx, cy, curved) {
+        const len = Math.min(180, axis ? axis.plotW / 3 : 180);
+        const O = { id: uid++, kind: 'line', curved: !!curved, x1: cx - len / 2, y1: cy, x2: cx + len / 2, y2: cy, bx: null, by: null, dotted: false, label: '' };
+        if (curved) { O.bx = cx; O.by = cy - 60; }
+        const g = svg('g', {}), hit = svg('path', { stroke: 'transparent', 'stroke-width': 18, fill: 'none', cursor: 'move' }), body = svg('path', { stroke: '#2b2b2b', 'stroke-width': 3, 'stroke-linecap': 'round', fill: 'none', cursor: 'move' });
+        const h1 = svg('circle', { r: 6, fill: '#fff', stroke: 'var(--accent)', 'stroke-width': 2, cursor: 'grab' }), h2 = svg('circle', { r: 6, fill: '#fff', stroke: 'var(--accent)', 'stroke-width': 2, cursor: 'grab' });
+        const bend = svg('circle', { r: 7, fill: '#eaf1f8', stroke: 'var(--accent)', 'stroke-width': 2, cursor: 'grab' });
+        const rotG = svg('g', {}), rotBg = svg('circle', { r: 13, fill: '#fff', stroke: 'var(--line)', 'stroke-width': 1.5, cursor: 'grab' });
+        rotG.append(rotBg, svg('path', { d: 'M -5 -1 A 5 5 0 1 1 -3 4', fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2 }), svg('path', { d: 'M -3 4 l -3 -1 M -3 4 l 1 -3', fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2 }));
+        g.append(hit, body, h1, h2, bend, rotG); objsG.appendChild(g);
+        O.el = { g, body, hit, h1, h2, bend, rotG, rotBg }; objs.push(O); wireLine(O); draw(O); select(O); return O;
+      }
+      const pathFor = (O) => { const { x1, y1, x2, y2, bx, by } = O; if (bx == null) return 'M ' + x1 + ' ' + y1 + ' L ' + x2 + ' ' + y2; const cx = 2 * bx - 0.5 * (x1 + x2), cy = 2 * by - 0.5 * (y1 + y2); return 'M ' + x1 + ' ' + y1 + ' Q ' + cx + ' ' + cy + ' ' + x2 + ' ' + y2; };
+
+      function addRegion(points) {
+        const O = { id: uid++, kind: 'region', pts: points.map(p => ({ x: p.x, y: p.y })), label: '' };
+        const g = svg('g', {}), poly = svg('polygon', { fill: 'rgba(70,130,180,.28)', stroke: 'var(--accent)', 'stroke-width': 1.5, cursor: 'move' });
+        g.append(poly); objsG.appendChild(g); O.el = { g, poly }; objs.push(O); wireRegion(O); draw(O); select(O); return O;
+      }
+
+      function draw(O) {
+        const e = O.el;
+        if (O.kind === 'line') {
+          const d = pathFor(O); e.body.setAttribute('d', d); e.hit.setAttribute('d', d);
+          e.body.setAttribute('stroke-dasharray', O.dotted ? '8 7' : 'none');
+          e.h1.setAttribute('cx', O.x1); e.h1.setAttribute('cy', O.y1); e.h2.setAttribute('cx', O.x2); e.h2.setAttribute('cy', O.y2);
+          const mx = (O.x1 + O.x2) / 2, my = (O.y1 + O.y2) / 2, bpx = O.bx == null ? mx : O.bx, bpy = O.by == null ? my : O.by;
+          e.bend.setAttribute('cx', bpx); e.bend.setAttribute('cy', bpy);
+          e.rotG.setAttribute('transform', 'translate(' + mx + ',' + (my + 40) + ')');
+          const show = (selected === O && !rotating) ? 'visible' : 'hidden';
+          [e.h1, e.h2, e.rotG].forEach(h => h.setAttribute('visibility', show));
+          e.bend.setAttribute('visibility', (O.curved && show === 'visible') ? 'visible' : 'hidden');
+          e.g.classList.toggle('sel', selected === O);
+        } else {
+          e.poly.setAttribute('points', O.pts.map(p => p.x + ',' + p.y).join(' '));
+          e.poly.setAttribute('stroke-width', selected === O ? 2.5 : 1.5);
+          e.g.querySelectorAll('.rhandle').forEach(h => h.remove());
+          if (selected === O) O.pts.forEach((p, i) => { const h = svg('circle', { class: 'rhandle', r: 6, cx: p.x, cy: p.y, fill: '#fff', stroke: 'var(--accent)', 'stroke-width': 2, cursor: 'grab' });
+            h.addEventListener('pointerdown', (evt) => { evt.stopPropagation(); select(O);
+              const mv = (e2) => { const q = pt(e2), sp = snapScreen(q.x, q.y); sp.snapped ? showSnap(sp.x, sp.y) : clearSnap(); O.pts[i].x = sp.x; O.pts[i].y = sp.y; draw(O); };
+              const up = () => { clearSnap(); emitClean(); window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+              window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); });
+            e.g.appendChild(h); });
+          e.g.classList.toggle('sel', selected === O);
+        }
+      }
+      function latexToPlain(s) { if (!s) return ''; return s.replace(/\\[a-zA-Z]+/g, '').replace(/[{}$]/g, ''); }
+
       function select(O) { selected = O; objs.forEach(draw); if (O) O.el.g.parentNode.appendChild(O.el.g); showDesc(O); }
 
       function wireLine(O) {
