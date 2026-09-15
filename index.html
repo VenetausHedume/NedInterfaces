@@ -1,3 +1,4 @@
+cat > index.html << 'EOF'
 <!doctype html>
 <html lang="en">
 <head>
@@ -5,7 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ned Interfaces — Preview</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 </head>
 <body>
@@ -33,7 +33,7 @@
 
   <!-- MathLive: powers math fields -->
   <script src="https://cdn.jsdelivr.net/npm/mathlive"></script>
-  <!-- CodeMirror: powers the code editor -->
+  <!-- CodeMirror: powers the code + SQL editors -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 
   <!-- load order: contract first, then each interface, then the app -->
@@ -44,6 +44,7 @@
   <script src="interfaces/formula.js"></script>
   <script src="interfaces/graph.js"></script>
   <script src="interfaces/code.js"></script>
+  <script src="interfaces/sql.js"></script>
   <script src="interfaces/circuit.js"></script>
   <script src="interfaces/econ.js"></script>
   <script src="interfaces/photo.js"></script>
@@ -51,3 +52,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+EOF
