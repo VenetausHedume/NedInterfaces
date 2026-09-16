@@ -27,9 +27,11 @@
       board.style.cssText = 'width:100%;height:560px;background:#fffdf7;border:1px solid var(--line);border-radius:10px;touch-action:none;display:block;';
       board.innerHTML = '<defs><marker id="fc-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,4.5 L0,9 z" fill="#2b2b2b"/></marker></defs>';
       const gEdges = svg('g', {}), gNodes = svg('g', {}); board.append(gEdges, gNodes);
-      const editbox = Ned.el('div', { style: 'position:absolute;display:none;z-index:6;' });
-      const editinput = Ned.el('input', { style: 'font:14px system-ui,sans-serif;border:1px solid var(--accent);border-radius:5px;padding:4px 6px;background:#fff;min-width:120px;text-align:center;' });
-      editbox.appendChild(editinput);
+      const editbox = Ned.el('div', { style: 'position:absolute;display:none;z-index:20;' });
+      const editta = document.createElement('textarea');
+      editta.rows = 2; editta.spellcheck = false;
+      editta.style.cssText = 'font:14px/1.4 ui-monospace,Menlo,Consolas,monospace;border:2px solid var(--accent);border-radius:6px;padding:6px 8px;background:#fff;min-width:180px;resize:both;box-shadow:0 4px 14px rgba(0,0,0,.25);';
+      editbox.appendChild(editta);
       wrap.append(board, editbox);
       container.append(toolbar, wrap);
       container.appendChild(Ned.el('p', { class: 'ned-note' }, ['Add shapes, double-click to type text, then Connect source \u2192 target. Decision branches ask Yes/No.']));
@@ -104,55 +106,57 @@
         });
         N.el.g.addEventListener('dblclick', (evt) => { evt.stopPropagation(); editNode(N); });
       }
+      // inline Yes/No picker for decision branches (no browser popup)
+      const branchPick = Ned.el('div', { style: 'position:absolute;display:none;z-index:21;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);gap:6px;' });
+      const byes = Ned.el('button', { type:'button', style:'padding:5px 12px;border:1px solid var(--line);border-radius:6px;background:#e6f4ea;cursor:pointer;margin-right:6px;' }, ['Yes']);
+      const bno  = Ned.el('button', { type:'button', style:'padding:5px 12px;border:1px solid var(--line);border-radius:6px;background:#fdecea;cursor:pointer;' }, ['No']);
+      branchPick.append(byes, bno); wrap.appendChild(branchPick);
+      let pendingEdge = null;
       function makeEdge(A, B) {
-        let label = '';
-        if (A.type === 'decision') label = window.confirm('Yes branch? (Cancel = No)') ? 'Yes' : 'No';
-        edges.push({ id: uid++, from: A.id, to: B.id, label }); drawEdges(); emit();
+        if (A.type === 'decision') {
+          pendingEdge = { A, B };
+          const r = board.getBoundingClientRect();
+          const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+          branchPick.style.left = (mx * (r.width / W) - 40) + 'px';
+          branchPick.style.top  = (my * (r.height / H) - 16) + 'px';
+          branchPick.style.display = 'flex';
+        } else {
+          edges.push({ id: uid++, from: A.id, to: B.id, label: '' }); drawEdges(); emit();
+        }
       }
-
-      // ensure the shared IGCSE pseudocode CodeMirror mode exists (same as code editor)
-      function ensurePseudoMode() {
-        if (!window.CodeMirror || window.__nedPseudoMode) return;
-        const KW = new Set(['DECLARE','CONSTANT','INPUT','OUTPUT','IF','THEN','ELSE','ENDIF','CASE','OF','OTHERWISE','ENDCASE','FOR','TO','STEP','NEXT','WHILE','DO','ENDWHILE','REPEAT','UNTIL','PROCEDURE','ENDPROCEDURE','FUNCTION','RETURNS','RETURN','ENDFUNCTION','CALL','ARRAY','AND','OR','NOT','MOD','DIV','TRUE','FALSE']);
-        const TY = new Set(['INTEGER','REAL','CHAR','STRING','BOOLEAN','DATE']);
-        try { window.CodeMirror.defineMode('igcse-pseudocode', function () { return { token: function (st) {
-          if (st.match('//')) { st.skipToEnd(); return 'comment'; }
-          if (st.match('<-') || st.match('\u2190')) return 'operator';
-          if (st.match(/^"(?:[^"\\]|\\.)*"?/)) return 'string';
-          if (st.match(/^[0-9]+(\.[0-9]+)?/)) return 'number';
-          if (st.match(/^[<>]=?|=|<>|[-+*/^&]/)) return 'operator';
-          const w = st.match(/^[A-Za-z_][A-Za-z0-9_]*/); if (w) { const u = w[0].toUpperCase(); if (KW.has(u)) return 'keyword'; if (TY.has(u)) return 'variable-2'; return 'variable'; }
-          st.next(); return null; } }; }); window.__nedPseudoMode = true; } catch (e) {}
+      function finishBranch(label) {
+        if (pendingEdge) { edges.push({ id: uid++, from: pendingEdge.A.id, to: pendingEdge.B.id, label }); drawEdges(); emit(); pendingEdge = null; }
+        branchPick.style.display = 'none';
       }
+      byes.onclick = () => finishBranch('Yes');
+      bno.onclick  = () => finishBranch('No');
 
-      let editing = null, editCM = null;
+      // ---- reliable in-shape text editor (plain textarea) ----
+      let editing = null;
       function editNode(N) {
         editing = N;
         const r = board.getBoundingClientRect();
-        editbox.style.left = (N.x * (r.width / W) - 80) + 'px';
-        editbox.style.top = (N.y * (r.height / H) - 16) + 'px';
+        editbox.style.left = Math.max(4, (N.x * (r.width / W) - 90)) + 'px';
+        editbox.style.top  = Math.max(4, (N.y * (r.height / H) - 20)) + 'px';
         editbox.style.display = 'block';
-        if (window.CodeMirror) {
-          ensurePseudoMode();
-          editinput.style.display = 'none';
-          if (!editCM) {
-            const holder = document.createElement('div');
-            holder.style.cssText = 'border:1px solid var(--accent);border-radius:5px;overflow:hidden;background:#fff;min-width:170px;';
-            editbox.appendChild(holder);
-            editCM = window.CodeMirror(holder, { value: N.text, mode: 'igcse-pseudocode', lineNumbers: false, lineWrapping: true });
-            editCM.setSize('100%', 'auto');
-            editCM.on('inputRead', (inst, ch) => { if (ch.text && ch.text[0] === '-') { const c = inst.getCursor(), ln = inst.getLine(c.line); if (ln.slice(c.ch - 2, c.ch) === '<-') inst.replaceRange('\u2190', { line: c.line, ch: c.ch - 2 }, { line: c.line, ch: c.ch }); } });
-            editCM.on('keydown', (inst, e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); } else if (e.key === 'Escape') { editbox.style.display = 'none'; editing = null; } });
-            editCM.on('blur', commitEdit);
-          } else { editCM.setValue(N.text); }
-          setTimeout(() => { editCM.refresh(); editCM.focus(); }, 0);
-        } else {
-          editinput.style.display = 'block'; editinput.value = N.text; editinput.focus(); editinput.select();
-        }
+        editta.value = N.text || '';
+        // focus reliably on next frame
+        setTimeout(() => { editta.focus(); editta.select(); }, 0);
       }
-      function commitEdit() { if (!editing) return; editing.text = window.CodeMirror && editCM ? editCM.getValue().replace(/\n+$/,'') : editinput.value; drawNode(editing); editbox.style.display = 'none'; editing = null; emit(); }
-      editinput.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') { editbox.style.display = 'none'; editing = null; } });
-      editinput.addEventListener('blur', commitEdit);
+      function commitEdit() { if (!editing) return; editing.text = editta.value.replace(/\s+$/,''); drawNode(editing); editbox.style.display = 'none'; editing = null; emit(); }
+      // "<-" -> the assignment arrow, live as you type
+      editta.addEventListener('input', () => {
+        const p = editta.selectionStart;
+        if (p >= 2 && editta.value.slice(p - 2, p) === '<-') {
+          editta.value = editta.value.slice(0, p - 2) + '\u2190' + editta.value.slice(p);
+          editta.selectionStart = editta.selectionEnd = p - 1;
+        }
+      });
+      editta.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); editbox.style.display = 'none'; editing = null; }
+      });
+      editta.addEventListener('blur', () => { if (editing) commitEdit(); });
 
       board.addEventListener('pointerdown', (evt) => { const p = pt(evt);
         if (['start', 'process', 'io', 'decision'].includes(tool)) { addNode(tool, p.x, p.y); setTool('select'); emit(); return; }
