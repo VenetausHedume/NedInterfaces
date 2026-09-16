@@ -41,7 +41,7 @@
       let nodes = [], edges = [], tool = 'select', selected = null, uid = 1, connectFrom = null;
 
       const SIZE = { start: { w: 120, h: 44 }, process: { w: 150, h: 54 }, io: { w: 160, h: 54 }, decision: { w: 140, h: 84 } };
-      const DEFTEXT = { start: 'Start', process: 'process', io: 'INPUT x', decision: 'condition?' };
+      const DEFTEXT = { start: '', process: '', io: '', decision: '' };
 
       function addNode(type, x, y, text) {
         const s = SIZE[type];
@@ -110,11 +110,47 @@
         edges.push({ id: uid++, from: A.id, to: B.id, label }); drawEdges(); emit();
       }
 
-      let editing = null;
-      function editNode(N) { editing = N; editinput.value = N.text;
-        const r = board.getBoundingClientRect(); editbox.style.left = (N.x * (r.width / W) - 60) + 'px'; editbox.style.top = (N.y * (r.height / H) - 14) + 'px';
-        editbox.style.display = 'block'; editinput.focus(); editinput.select(); }
-      function commitEdit() { if (!editing) return; editing.text = editinput.value; drawNode(editing); editbox.style.display = 'none'; editing = null; emit(); }
+      // ensure the shared IGCSE pseudocode CodeMirror mode exists (same as code editor)
+      function ensurePseudoMode() {
+        if (!window.CodeMirror || window.__nedPseudoMode) return;
+        const KW = new Set(['DECLARE','CONSTANT','INPUT','OUTPUT','IF','THEN','ELSE','ENDIF','CASE','OF','OTHERWISE','ENDCASE','FOR','TO','STEP','NEXT','WHILE','DO','ENDWHILE','REPEAT','UNTIL','PROCEDURE','ENDPROCEDURE','FUNCTION','RETURNS','RETURN','ENDFUNCTION','CALL','ARRAY','AND','OR','NOT','MOD','DIV','TRUE','FALSE']);
+        const TY = new Set(['INTEGER','REAL','CHAR','STRING','BOOLEAN','DATE']);
+        try { window.CodeMirror.defineMode('igcse-pseudocode', function () { return { token: function (st) {
+          if (st.match('//')) { st.skipToEnd(); return 'comment'; }
+          if (st.match('<-') || st.match('\u2190')) return 'operator';
+          if (st.match(/^"(?:[^"\\]|\\.)*"?/)) return 'string';
+          if (st.match(/^[0-9]+(\.[0-9]+)?/)) return 'number';
+          if (st.match(/^[<>]=?|=|<>|[-+*/^&]/)) return 'operator';
+          const w = st.match(/^[A-Za-z_][A-Za-z0-9_]*/); if (w) { const u = w[0].toUpperCase(); if (KW.has(u)) return 'keyword'; if (TY.has(u)) return 'variable-2'; return 'variable'; }
+          st.next(); return null; } }; }); window.__nedPseudoMode = true; } catch (e) {}
+      }
+
+      let editing = null, editCM = null;
+      function editNode(N) {
+        editing = N;
+        const r = board.getBoundingClientRect();
+        editbox.style.left = (N.x * (r.width / W) - 80) + 'px';
+        editbox.style.top = (N.y * (r.height / H) - 16) + 'px';
+        editbox.style.display = 'block';
+        if (window.CodeMirror) {
+          ensurePseudoMode();
+          editinput.style.display = 'none';
+          if (!editCM) {
+            const holder = document.createElement('div');
+            holder.style.cssText = 'border:1px solid var(--accent);border-radius:5px;overflow:hidden;background:#fff;min-width:170px;';
+            editbox.appendChild(holder);
+            editCM = window.CodeMirror(holder, { value: N.text, mode: 'igcse-pseudocode', lineNumbers: false, lineWrapping: true });
+            editCM.setSize('100%', 'auto');
+            editCM.on('inputRead', (inst, ch) => { if (ch.text && ch.text[0] === '-') { const c = inst.getCursor(), ln = inst.getLine(c.line); if (ln.slice(c.ch - 2, c.ch) === '<-') inst.replaceRange('\u2190', { line: c.line, ch: c.ch - 2 }, { line: c.line, ch: c.ch }); } });
+            editCM.on('keydown', (inst, e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); } else if (e.key === 'Escape') { editbox.style.display = 'none'; editing = null; } });
+            editCM.on('blur', commitEdit);
+          } else { editCM.setValue(N.text); }
+          setTimeout(() => { editCM.refresh(); editCM.focus(); }, 0);
+        } else {
+          editinput.style.display = 'block'; editinput.value = N.text; editinput.focus(); editinput.select();
+        }
+      }
+      function commitEdit() { if (!editing) return; editing.text = window.CodeMirror && editCM ? editCM.getValue().replace(/\n+$/,'') : editinput.value; drawNode(editing); editbox.style.display = 'none'; editing = null; emit(); }
       editinput.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitEdit(); else if (e.key === 'Escape') { editbox.style.display = 'none'; editing = null; } });
       editinput.addEventListener('blur', commitEdit);
 
