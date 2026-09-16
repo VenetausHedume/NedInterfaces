@@ -124,13 +124,29 @@
       });
 
       function tb(label, fn) { return Ned.el('button', { type: 'button', style: 'padding:7px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);cursor:pointer;font-size:14px;', onclick: fn }, [label]); }
+      // icon button: draws the raw shape (no text) so the student must know what it means
+      function shapeBtn(type, fn) {
+        const b = document.createElement('button'); b.type = 'button';
+        b.title = ''; // deliberately no name — testing shape knowledge, not vocabulary
+        b.style.cssText = 'width:56px;height:40px;border:1px solid var(--line);border-radius:7px;background:var(--paper);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;';
+        const ic = document.createElementNS('http://www.w3.org/2000/svg','svg');
+        ic.setAttribute('width','40'); ic.setAttribute('height','24'); ic.setAttribute('viewBox','0 0 40 24');
+        let sh;
+        if (type==='start') sh = svg('rect',{x:3,y:4,width:34,height:16,rx:8,ry:8,fill:'#fff',stroke:'#2b2b2b','stroke-width':2});
+        else if (type==='process') sh = svg('rect',{x:4,y:4,width:32,height:16,rx:2,ry:2,fill:'#fff',stroke:'#2b2b2b','stroke-width':2});
+        else if (type==='io') sh = svg('polygon',{points:'9,4 37,4 31,20 3,20',fill:'#fff',stroke:'#2b2b2b','stroke-width':2});
+        else sh = svg('polygon',{points:'20,2 38,12 20,22 2,12',fill:'#fff',stroke:'#2b2b2b','stroke-width':2}); // rhombus
+        ic.appendChild(sh); b.appendChild(ic);
+        b.addEventListener('click', fn);
+        return b;
+      }
       const btns = {};
       function setTool(t) { tool = t; connectFrom = null; Object.values(btns).forEach(b => b.style.background = 'var(--paper)'); if (btns[t]) btns[t].style.background = '#eaf1f8'; }
       btns.select = tb('Select / Move', () => setTool('select'));
-      btns.start = tb('+ Start/Stop', () => setTool('start'));
-      btns.process = tb('+ Process', () => setTool('process'));
-      btns.io = tb('+ Input/Output', () => setTool('io'));
-      btns.decision = tb('+ Decision', () => setTool('decision'));
+      btns.start = shapeBtn('start', () => setTool('start'));
+      btns.process = shapeBtn('process', () => setTool('process'));
+      btns.io = shapeBtn('io', () => setTool('io'));
+      btns.decision = shapeBtn('decision', () => setTool('decision'));
       btns.connect = tb('Connect', () => setTool('connect'));
       const bDel = tb('Delete', () => { if (!selected) return;
         if (selected.from !== undefined) edges = edges.filter(e => e !== selected);
