@@ -27,7 +27,7 @@
       board.style.cssText = 'width:100%;height:560px;background:#fffdf7;border:1px solid var(--line);border-radius:10px;touch-action:none;display:block;';
       board.innerHTML = '<defs><marker id="fc-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,4.5 L0,9 z" fill="#2b2b2b"/></marker></defs>';
       const gEdges = svg('g', {}), gNodes = svg('g', {}); board.append(gEdges, gNodes);
-      const editbox = Ned.el('div', { style: 'position:absolute;display:none;z-index:20;' });
+      const editbox = Ned.el('div', { style: 'position:absolute;display:none;z-index:9999;' });
       const editta = document.createElement('textarea');
       editta.rows = 2; editta.spellcheck = false;
       editta.style.cssText = 'font:14px/1.4 ui-monospace,Menlo,Consolas,monospace;border:2px solid var(--accent);border-radius:6px;padding:6px 8px;background:#fff;min-width:180px;resize:both;box-shadow:0 4px 14px rgba(0,0,0,.25);';
@@ -93,45 +93,30 @@
 
       function wireNode(N) {
         N.el.g.addEventListener('pointerdown', (evt) => {
-          if (tool === 'connect') { evt.stopPropagation();
+          if (tool === 'connect' || tool === 'connect-yes' || tool === 'connect-no') { evt.stopPropagation();
+            connectLabel = (tool === 'connect-yes') ? 'Yes' : (tool === 'connect-no') ? 'No' : '';
             if (!connectFrom) { connectFrom = N; select(N); }
             else if (connectFrom !== N) { makeEdge(connectFrom, N); connectFrom = null; setTool('select'); }
             return; }
           if (tool !== 'select') return;
-          evt.stopPropagation(); select(N);
+          evt.stopPropagation();
+          const wasSelected = (selected === N);
+          select(N);
+          if (wasSelected) { editNode(N); return; }   // click a selected shape -> edit its text
           const p0 = pt(evt), o = { x: N.x, y: N.y };
           const mv = (e) => { const p = pt(e); N.x = o.x + (p.x - p0.x); N.y = o.y + (p.y - p0.y); drawNode(N); drawEdges(); };
           const up = () => { emit(); window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
           window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
         });
-        N.el.g.addEventListener('dblclick', (evt) => { evt.stopPropagation(); editNode(N); });
+        // (editing is via the 'Edit text' toolbar button, or click an already-selected shape)
       }
-      // inline Yes/No picker for decision branches (no browser popup)
-      const branchPick = Ned.el('div', { style: 'position:absolute;display:none;z-index:21;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);gap:6px;' });
-      const byes = Ned.el('button', { type:'button', style:'padding:5px 12px;border:1px solid var(--line);border-radius:6px;background:#e6f4ea;cursor:pointer;margin-right:6px;' }, ['Yes']);
-      const bno  = Ned.el('button', { type:'button', style:'padding:5px 12px;border:1px solid var(--line);border-radius:6px;background:#fdecea;cursor:pointer;' }, ['No']);
-      branchPick.append(byes, bno); wrap.appendChild(branchPick);
-      let pendingEdge = null;
+      // connector label is decided by which Connect tool is active
+      let connectLabel = '';   // '', 'Yes', or 'No'
       function makeEdge(A, B) {
-        if (A.type === 'decision') {
-          pendingEdge = { A, B };
-          const r = board.getBoundingClientRect();
-          const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-          branchPick.style.left = (mx * (r.width / W) - 40) + 'px';
-          branchPick.style.top  = (my * (r.height / H) - 16) + 'px';
-          branchPick.style.display = 'flex';
-        } else {
-          edges.push({ id: uid++, from: A.id, to: B.id, label: '' }); drawEdges(); emit();
-        }
+        edges.push({ id: uid++, from: A.id, to: B.id, label: connectLabel });
+        drawEdges(); emit();
       }
-      function finishBranch(label) {
-        if (pendingEdge) { edges.push({ id: uid++, from: pendingEdge.A.id, to: pendingEdge.B.id, label }); drawEdges(); emit(); pendingEdge = null; }
-        branchPick.style.display = 'none';
-      }
-      byes.onclick = () => finishBranch('Yes');
-      bno.onclick  = () => finishBranch('No');
 
-      // ---- reliable in-shape text editor (plain textarea) ----
       let editing = null;
       function editNode(N) {
         editing = N;
@@ -188,12 +173,15 @@
       btns.io = shapeBtn('io', () => setTool('io'));
       btns.decision = shapeBtn('decision', () => setTool('decision'));
       btns.connect = tb('Connect', () => setTool('connect'));
+      btns['connect-yes'] = tb('Connect: Yes', () => setTool('connect-yes'));
+      btns['connect-no'] = tb('Connect: No', () => setTool('connect-no'));
+      const bEdit = tb('Edit text', () => { if (selected && selected.type) editNode(selected); });
       const bDel = tb('Delete', () => { if (!selected) return;
         if (selected.from !== undefined) edges = edges.filter(e => e !== selected);
         else { nodes = nodes.filter(n => n !== selected); edges = edges.filter(e => e.from !== selected.id && e.to !== selected.id); selected.el.g.remove(); }
         select(null); emit(); });
       const bClr = tb('Clear', () => { nodes.forEach(n => n.el.g.remove()); nodes = []; edges = []; select(null); emit(); });
-      toolbar.append(btns.select, btns.start, btns.process, btns.io, btns.decision, btns.connect, bDel, bClr);
+      toolbar.append(btns.select, btns.start, btns.process, btns.io, btns.decision, btns.connect, btns['connect-yes'], btns['connect-no'], bEdit, bDel, bClr);
 
       function loadValue(v) {
         (v.nodes || []).forEach(n => { const N = addNode(n.type, n.x, n.y, n.text); N.id = n.id; if (n.id >= uid) uid = n.id + 1; });
