@@ -38,7 +38,7 @@
       editbox.appendChild(editta);
       wrap.append(board, editbox);
       container.append(toolbar, wrap);
-      container.appendChild(Ned.el('p', { class: 'ned-note' }, ['Add shapes, double-click to type text, then Connect source \u2192 target. Decision branches ask Yes/No.']));
+      container.appendChild(Ned.el('p', { class: 'ned-note' }, ['Add shapes, select a shape \u2192 Edit text. Scroll to zoom; Shift+scroll to pan; drag empty space to pan.']));
 
       let W = 900, H = 560;
       function fit() { const r = board.getBoundingClientRect(); if (!r.width) return; W = Math.round(r.width); H = Math.round(r.height); board.setAttribute('viewBox', '0 0 ' + W + ' ' + H); }
@@ -215,10 +215,17 @@
       board.addEventListener('wheel', (e) => {
         e.preventDefault();
         const r = board.getBoundingClientRect();
-        const cx = (e.clientX - r.left) * (W / r.width), cy = (e.clientY - r.top) * (H / r.height);
+        const sx = (W / r.width), sy = (H / r.height);
+        // Shift held -> PAN (move around, zoom unchanged); otherwise ZOOM toward cursor
+        if (e.shiftKey) {
+          view.x -= e.deltaX * sx;
+          view.y -= e.deltaY * sy;
+          applyView();
+          return;
+        }
+        const cx = (e.clientX - r.left) * sx, cy = (e.clientY - r.top) * sy;
         const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
         const nk = Math.max(0.25, Math.min(3, view.k * factor));
-        // keep the point under the cursor fixed while zooming
         view.x = cx - (cx - view.x) * (nk / view.k);
         view.y = cy - (cy - view.y) * (nk / view.k);
         view.k = nk; applyView();
