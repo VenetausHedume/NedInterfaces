@@ -26,7 +26,11 @@
       const board = svg('svg', { viewBox: '0 0 900 560' });
       board.style.cssText = 'width:100%;height:560px;background:#fffdf7;border:1px solid var(--line);border-radius:10px;touch-action:none;display:block;';
       board.innerHTML = '<defs><marker id="fc-arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,4.5 L0,9 z" fill="#2b2b2b"/></marker></defs>';
-      const gEdges = svg('g', {}), gNodes = svg('g', {}); board.append(gEdges, gNodes);
+      const viewport = svg('g', {});           // pan/zoom transform lives here
+      const gEdges = svg('g', {}), gNodes = svg('g', {});
+      viewport.append(gEdges, gNodes); board.appendChild(viewport);
+      let view = { x: 0, y: 0, k: 1 };          // pan (x,y) + zoom (k)
+      function applyView(){ viewport.setAttribute('transform', 'translate(' + view.x + ',' + view.y + ') scale(' + view.k + ')'); }
       const editbox = Ned.el('div', { style: 'position:absolute;display:none;z-index:9999;' });
       const editta = document.createElement('textarea');
       editta.rows = 2; editta.spellcheck = false;
@@ -38,7 +42,10 @@
 
       let W = 900, H = 560;
       function fit() { const r = board.getBoundingClientRect(); if (!r.width) return; W = Math.round(r.width); H = Math.round(r.height); board.setAttribute('viewBox', '0 0 ' + W + ' ' + H); }
-      const pt = (evt) => { const r = board.getBoundingClientRect(); return { x: (evt.clientX - r.left) * (W / r.width), y: (evt.clientY - r.top) * (H / r.height) }; };
+      // screen pixel -> SVG viewBox coord
+      const px = (evt) => { const r = board.getBoundingClientRect(); return { x: (evt.clientX - r.left) * (W / r.width), y: (evt.clientY - r.top) * (H / r.height) }; };
+      // screen -> WORLD coord (undo pan/zoom) — this is what shapes/handlers use
+      const pt = (evt) => { const p = px(evt); return { x: (p.x - view.x) / view.k, y: (p.y - view.y) / view.k }; };
 
       let nodes = [], edges = [], tool = 'select', selected = null, uid = 1, connectFrom = null;
 
@@ -121,8 +128,10 @@
       function editNode(N) {
         editing = N;
         const r = board.getBoundingClientRect();
-        editbox.style.left = Math.max(4, (N.x * (r.width / W) - 90)) + 'px';
-        editbox.style.top  = Math.max(4, (N.y * (r.height / H) - 20)) + 'px';
+        const sx = (N.x * view.k + view.x) * (r.width / W);   // world -> viewBox -> screen px
+        const sy = (N.y * view.k + view.y) * (r.height / H);
+        editbox.style.left = Math.max(4, sx - 90) + 'px';
+        editbox.style.top  = Math.max(4, sy - 20) + 'px';
         editbox.style.display = 'block';
         editta.value = N.text || '';
         // focus reliably on next frame
@@ -145,7 +154,14 @@
 
       board.addEventListener('pointerdown', (evt) => { const p = pt(evt);
         if (['start', 'process', 'io', 'decision'].includes(tool)) { addNode(tool, p.x, p.y); setTool('select'); emit(); return; }
+        // empty-space click in select mode -> deselect + start panning
         select(null);
+        if (tool === 'select') {
+          const start = px(evt), v0 = { x: view.x, y: view.y };
+          const mv = (e) => { const q = px(e); view.x = v0.x + (q.x - start.x); view.y = v0.y + (q.y - start.y); applyView(); };
+          const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); };
+          window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+        }
       });
 
       function tb(label, fn) { return Ned.el('button', { type: 'button', style: 'padding:7px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);cursor:pointer;font-size:14px;', onclick: fn }, [label]); }
@@ -180,8 +196,9 @@
         if (selected.from !== undefined) edges = edges.filter(e => e !== selected);
         else { nodes = nodes.filter(n => n !== selected); edges = edges.filter(e => e.from !== selected.id && e.to !== selected.id); selected.el.g.remove(); }
         select(null); emit(); });
+      const bReset = tb('Reset view', () => { view = { x: 0, y: 0, k: 1 }; applyView(); });
       const bClr = tb('Clear', () => { nodes.forEach(n => n.el.g.remove()); nodes = []; edges = []; select(null); emit(); });
-      toolbar.append(btns.select, btns.start, btns.process, btns.io, btns.decision, btns.connect, btns['connect-yes'], btns['connect-no'], bEdit, bDel, bClr);
+      toolbar.append(btns.select, btns.start, btns.process, btns.io, btns.decision, btns.connect, btns['connect-yes'], btns['connect-no'], bEdit, bReset, bDel, bClr);
 
       function loadValue(v) {
         (v.nodes || []).forEach(n => { const N = addNode(n.type, n.x, n.y, n.text); N.id = n.id; if (n.id >= uid) uid = n.id + 1; });
@@ -195,6 +212,18 @@
         else addNode('start', W / 2, 70);
         setTool('select');
       });
+      board.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const r = board.getBoundingClientRect();
+        const cx = (e.clientX - r.left) * (W / r.width), cy = (e.clientY - r.top) * (H / r.height);
+        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        const nk = Math.max(0.25, Math.min(3, view.k * factor));
+        // keep the point under the cursor fixed while zooming
+        view.x = cx - (cx - view.x) * (nk / view.k);
+        view.y = cy - (cy - view.y) * (nk / view.k);
+        view.k = nk; applyView();
+      }, { passive: false });
+      applyView();
       window.addEventListener('resize', () => { fit(); drawEdges(); });
 
       return {
