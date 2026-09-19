@@ -74,12 +74,12 @@ function addOpenRect(x,y){
   const bot=addPrimSilent('line',[{x:L,y:B},{x:R,y:B}]);
   // joining points at the two shared corners + weld
   const idBase=uid;
-  joinPts.push({id:uid++,prim:top.id, x:L,y:T, ox:L-primCentroid(top).x, oy:T-primCentroid(top).y});
-  joinPts.push({id:uid++,prim:back.id,x:L,y:T, ox:L-primCentroid(back).x,oy:T-primCentroid(back).y});
+  joinPts.push({id:uid++,prim:top.id, vtx:0, x:L,y:T});   // top line start (L,T)
+  joinPts.push({id:uid++,prim:back.id,vtx:0, x:L,y:T});   // back line start (L,T)
   linkPts(idBase, idBase+1);
   const id2=uid;
-  joinPts.push({id:uid++,prim:back.id,x:L,y:B, ox:L-primCentroid(back).x,oy:B-primCentroid(back).y});
-  joinPts.push({id:uid++,prim:bot.id, x:L,y:B, ox:L-primCentroid(bot).x, oy:B-primCentroid(bot).y});
+  joinPts.push({id:uid++,prim:back.id,vtx:1, x:L,y:B});   // back line end (L,B)
+  joinPts.push({id:uid++,prim:bot.id, vtx:0, x:L,y:B});   // bot line start (L,B)
   linkPts(id2, id2+1);
   select(bot); emit();
 }
@@ -168,6 +168,7 @@ function bboxOf(P){ const xs=P.pts.map(p=>p.x), ys=P.pts.map(p=>p.y); return {mi
 // scale a primitive's points around an anchor (ax,ay) by (sx,sy)
 function scalePrim(P,ax,ay,sx,sy){ P.pts.forEach(pp=>{ pp.x=ax+(pp.x-ax)*sx; pp.y=ay+(pp.y-ay)*sy; }); movePrimJoins(P); }
 function redraw(){
+  syncJoins();
   ptLayer.innerHTML='';
   // editable (shaping) points — only for the selected primitive
   if(selected && selected.pts && selected.kind!=='bubble'){ selected.pts.forEach((pp,idx)=>{ const c=svg('circle',{class:'edit',r:6,cx:pp.x,cy:pp.y,fill:'#eaf1f8',stroke:'var(--accent)','stroke-width':2,style:'cursor:grab'});
@@ -195,7 +196,7 @@ function redraw(){
   }
   // joining points (user-added) — CLICK one, then CLICK another to connect
   joinPts.forEach(J=>{ const linked=links.some(l=>l.a===J.id||l.b===J.id);
-    const c=svg('circle',{r:8,cx:J.x,cy:J.y,fill:(linked?'#c0392b':'#fff'),stroke:'#c0392b','stroke-width':2,style:'cursor:grab'});
+    const c=svg('circle',{r:8,cx:J.x,cy:J.y,fill:(linked?'#4caf50':'#fff'),stroke:(linked?'#2e7d32':'#c0392b'),'stroke-width':2,style:'cursor:grab'});
     let downX=0,downY=0,moved=false;
     c.addEventListener('pointerdown',(ev)=>{ ev.stopPropagation();
       if(tool==='detach'){ links=links.filter(l=>l.a!==J.id&&l.b!==J.id); redraw(); emit(); return; }
@@ -265,7 +266,8 @@ function startRotate(P){ const c=primCentroid(P); rotating=true; redraw();
 }
 function dragEdit(P,idx){ const mv=(e)=>{const p=pt(e);P.pts[idx].x=p.x;P.pts[idx].y=p.y; movePrimJoins(P); draw(P);}; const up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);emit();}; window.addEventListener('pointermove',mv);window.addEventListener('pointerup',up); }
 // joining points added on a primitive move with that primitive (store offset from centroid)
-function movePrimJoins(P){ joinPts.filter(j=>j.prim===P.id).forEach(j=>{ const c=primCentroid(P); j.x=c.x+j.ox; j.y=c.y+j.oy; }); }
+function syncJoins(){ joinPts.forEach(j=>{ if(j.vtx==null) return; const P=prims.find(p=>p.id===j.prim); if(P&&P.pts[j.vtx]){ j.x=P.pts[j.vtx].x; j.y=P.pts[j.vtx].y; } }); }
+function movePrimJoins(P){ syncJoins(); }
 // move a primitive by (dx,dy) and drag any WELDED (linked) primitives along, transitively
 function moveWelded(startId, dx, dy){
   const seen=new Set();
@@ -324,9 +326,9 @@ board.addEventListener('pointerdown',(evt)=>{ const p=pt(evt);
   if(tool==='backcurve'){ addBackCurve(p.x,p.y); setTool('select'); return; }
   if(tool==='addin'){ terminals.push({id:uid++,kind:'in',label:String.fromCharCode(inLetter++),x:p.x,y:p.y}); drawCircuit(); emit(); setTool('select'); return; }
   if(tool==='addout'){ terminals.push({id:uid++,kind:'out',label:'Q',x:p.x,y:p.y}); drawCircuit(); emit(); setTool('select'); return; }
-  if(tool==='addjoin'){ // drop a joining point on the nearest primitive
-    let best=null,bd=1e9; prims.forEach(P=>{ const c=primCentroid(P); const d=Math.hypot(c.x-p.x,c.y-p.y); if(d<bd){bd=d;best=P;} });
-    if(best){ const c=primCentroid(best); joinPts.push({id:uid++,prim:best.id,x:p.x,y:p.y,ox:p.x-c.x,oy:p.y-c.y}); redraw(); emit(); }
+  if(tool==='addjoin'){ // drop a joining point on the nearest VERTEX (endpoint)
+    let best=null,bd=1e9,bvtx=0; prims.forEach(P=>{ P.pts.forEach((vp,i)=>{ const d=Math.hypot(vp.x-p.x,vp.y-p.y); if(d<bd){bd=d;best=P;bvtx=i;} }); });
+    if(best){ const vp=best.pts[bvtx]; joinPts.push({id:uid++,prim:best.id,vtx:bvtx,x:vp.x,y:vp.y}); redraw(); emit(); }
     setTool('select'); return;
   }
   select(null); attachFrom=null; wireFrom=null; redraw(); drawCircuit();
