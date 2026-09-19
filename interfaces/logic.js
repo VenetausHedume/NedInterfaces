@@ -204,31 +204,34 @@ function redraw(){
     hit.addEventListener('pointerdown',(ev)=>{ ev.stopPropagation();
       if(tool==='detach'){ links=links.filter(l=>l.a!==J.id&&l.b!==J.id); redraw(); emit(); return; }
       const P=prims.find(p=>p.id===J.prim); if(!P) return;
-      const startPt=pt(ev); downX=ev.clientX; downY=ev.clientY; moved=false;
+      const startPt=pt(ev); moved=false;
       const o=P.pts.map(pp=>({x:pp.x,y:pp.y}));
-      const oj=joinPts.filter(j=>j.prim===P.id).map(j=>({id:j.id,x:j.x,y:j.y}));
-      const thisJ0={x:J.x,y:J.y};
-      let snapTarget=null;
-      const mv=(e)=>{ moved=true; const p=pt(e); let dx=p.x-startPt.x, dy=p.y-startPt.y;
-        // where THIS joining point would land
-        const nx=thisJ0.x+dx, ny=thisJ0.y+dy;
-        // nearest OTHER joining point (not on this primitive)
-        // find nearest other join point
-        let best=null,bd=34; joinPts.forEach(k=>{ if(k.prim===P.id) return; const d=Math.hypot(k.x-nx,k.y-ny); if(d<bd){bd=d;best=k;} });
-        // STICKY: if already snapped to a target, keep it unless we've pulled far away (>50px)
-        if(snapTarget!=null){ const st=joinPts.find(k=>k.id===snapTarget); if(st){ const dd=Math.hypot(st.x-nx,st.y-ny); if(dd<=50){ best=st; } else { snapTarget=null; } } }
-        if(best){ dx = best.x - thisJ0.x; dy = best.y - thisJ0.y; snapTarget=best.id; }
-        // move the primitive (and drag any already-welded neighbours) by delta from original
+      const SNAP=40;
+      // nearest OTHER join point to a given world coord (skip this primitive's own)
+      function nearestOther(x,y){ let best=null,bd=SNAP; joinPts.forEach(k=>{ if(k.prim===P.id) return; const d=Math.hypot(k.x-x,k.y-y); if(d<bd){bd=d;best=k;} }); return best; }
+      const mv=(e)=>{ moved=true; const p=pt(e); const dx=p.x-startPt.x, dy=p.y-startPt.y;
         P.pts.forEach((pp,i)=>{ pp.x=o[i].x+dx; pp.y=o[i].y+dy; });
-        oj.forEach(z=>{ const jj=joinPts.find(j=>j.id===z.id); jj.x=z.x+dx; jj.y=z.y+dy; });
-        draw(P);
-        // live guide dot on the snap target
-        clearGuides(); if(best){ guideLayer.appendChild(svg('circle',{cx:best.x,cy:best.y,r:11,fill:'none',stroke:'#4caf50','stroke-width':2})); }
+        draw(P); syncJoins();
+        const jp=joinPts.find(j=>j.id===J.id);
+        const near=nearestOther(jp.x,jp.y);
+        clearGuides(); if(near){ guideLayer.appendChild(svg('circle',{cx:near.x,cy:near.y,r:13,fill:'none',stroke:'#4caf50','stroke-width':3})); }
       };
       const up=()=>{ clearGuides(); window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up);
-        if(snapTarget!=null){ if(!links.some(l=>(l.a===J.id&&l.b===snapTarget)||(l.b===J.id&&l.a===snapTarget))) links.push({a:J.id,b:snapTarget}); }
-        else if(!moved){ onJoinClick(J); }   // no drag = fall back to click-to-connect
-        redraw(); emit(); };
+        if(moved){
+          syncJoins();
+          const jp=joinPts.find(j=>j.id===J.id);
+          const near=nearestOther(jp.x,jp.y);
+          if(near){
+            // snap this primitive so J lands exactly on the target, then LINK
+            const dx=near.x-jp.x, dy=near.y-jp.y;
+            P.pts.forEach(pp=>{ pp.x+=dx; pp.y+=dy; });
+            if(!links.some(l=>(l.a===J.id&&l.b===near.id)||(l.b===J.id&&l.a===near.id))) links.push({a:J.id,b:near.id});
+          }
+        } else {
+          onJoinClick(J);   // no drag = click to connect
+        }
+        redraw(); emit();
+      };
       window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
     });
     ptLayer.appendChild(hit); ptLayer.appendChild(c); });
