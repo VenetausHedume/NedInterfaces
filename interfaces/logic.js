@@ -164,6 +164,7 @@ function onPin(p){
 function selectTerm(T){ selected=T; prims.forEach(draw); redraw(); drawCircuit(); }
 function selectWire(w){ selected=w; prims.forEach(draw); redraw(); drawCircuit(); }
 function primCentroid(P){ const n=P.pts.length; return {x:P.pts.reduce((s,p)=>s+p.x,0)/n, y:P.pts.reduce((s,p)=>s+p.y,0)/n}; }
+function distToSeg(p,a,b){ const dx=b.x-a.x,dy=b.y-a.y; const L2=dx*dx+dy*dy||1; let t=((p.x-a.x)*dx+(p.y-a.y)*dy)/L2; t=Math.max(0,Math.min(1,t)); const cx=a.x+t*dx, cy=a.y+t*dy; return Math.hypot(p.x-cx,p.y-cy); }
 function bboxOf(P){ const xs=P.pts.map(p=>p.x), ys=P.pts.map(p=>p.y); return {minx:Math.min(...xs),maxx:Math.max(...xs),miny:Math.min(...ys),maxy:Math.max(...ys)}; }
 // scale a primitive's points around an anchor (ax,ay) by (sx,sy)
 function scalePrim(P,ax,ay,sx,sy){ P.pts.forEach(pp=>{ pp.x=ax+(pp.x-ax)*sx; pp.y=ay+(pp.y-ay)*sy; }); movePrimJoins(P); }
@@ -328,9 +329,15 @@ board.addEventListener('pointerdown',(evt)=>{ const p=pt(evt);
   if(tool==='backcurve'){ addBackCurve(p.x,p.y); setTool('select'); return; }
   if(tool==='addin'){ terminals.push({id:uid++,kind:'in',label:String.fromCharCode(inLetter++),x:p.x,y:p.y}); drawCircuit(); emit(); setTool('select'); return; }
   if(tool==='addout'){ terminals.push({id:uid++,kind:'out',label:'Q',x:p.x,y:p.y}); drawCircuit(); emit(); setTool('select'); return; }
-  if(tool==='addjoin'){ // drop a joining point on the nearest VERTEX (endpoint)
-    let best=null,bd=1e9,bvtx=0; prims.forEach(P=>{ P.pts.forEach((vp,i)=>{ const d=Math.hypot(vp.x-p.x,vp.y-p.y); if(d<bd){bd=d;best=P;bvtx=i;} }); });
-    if(best){ const vp=best.pts[bvtx]; joinPts.push({id:uid++,prim:best.id,vtx:bvtx,x:vp.x,y:vp.y}); redraw(); emit(); }
+  if(tool==='addjoin'){
+    // 1) pick the primitive whose PATH is closest to the click (distance to the line/curve)
+    let bestP=null,bpd=1e9;
+    prims.forEach(P=>{ let dmin=1e9; for(let i=0;i<P.pts.length-1;i++){ dmin=Math.min(dmin, distToSeg(p, P.pts[i], P.pts[i+1])); } if(P.pts.length===1){ dmin=Math.hypot(P.pts[0].x-p.x,P.pts[0].y-p.y); } if(dmin<bpd){bpd=dmin;bestP=P;} });
+    if(bestP && bpd<40){
+      // 2) bind to the nearest VERTEX OF THAT primitive only
+      let bvtx=0,bd=1e9; bestP.pts.forEach((vp,i)=>{ const d=Math.hypot(vp.x-p.x,vp.y-p.y); if(d<bd){bd=d;bvtx=i;} });
+      const vp=bestP.pts[bvtx]; joinPts.push({id:uid++,prim:bestP.id,vtx:bvtx,x:vp.x,y:vp.y}); redraw(); emit();
+    }
     setTool('select'); return;
   }
   select(null); attachFrom=null; wireFrom=null; redraw(); drawCircuit();
