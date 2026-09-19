@@ -1,4 +1,3 @@
-cat > index.html << 'EOF'
 <!doctype html>
 <html lang="en">
 <head>
@@ -31,12 +30,9 @@ cat > index.html << 'EOF'
     </aside>
   </div>
 
-  <!-- MathLive: powers math fields -->
   <script src="https://cdn.jsdelivr.net/npm/mathlive"></script>
-  <!-- CodeMirror: powers the code + SQL editors -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 
-  <!-- load order: contract first, then each interface, then the app -->
   <script src="interfaces/_contract.js"></script>
   <script src="interfaces/text.js"></script>
   <script src="interfaces/prose.js"></script>
@@ -54,4 +50,3 @@ cat > index.html << 'EOF'
   <script src="app.js"></script>
 </body>
 </html>
-EOF
