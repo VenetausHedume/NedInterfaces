@@ -171,6 +171,7 @@ function scalePrim(P,ax,ay,sx,sy){ P.pts.forEach(pp=>{ pp.x=ax+(pp.x-ax)*sx; pp.
 function redraw(){
   syncJoins();
   ptLayer.innerHTML='';
+  vp.appendChild(ptLayer);   // keep points/handles on top so they're always grabbable
   // editable (shaping) points — only for the selected primitive
   if(selected && selected.pts && selected.kind!=='bubble'){ selected.pts.forEach((pp,idx)=>{ const c=svg('circle',{class:'edit',r:6,cx:pp.x,cy:pp.y,fill:'#eaf1f8',stroke:'var(--accent)','stroke-width':2,style:'cursor:grab'});
     c.addEventListener('pointerdown',(ev)=>{ev.stopPropagation(); dragEdit(selected,idx);}); ptLayer.appendChild(c); }); }
@@ -197,9 +198,10 @@ function redraw(){
   }
   // joining points (user-added) — CLICK one, then CLICK another to connect
   joinPts.forEach(J=>{ const linked=links.some(l=>l.a===J.id||l.b===J.id);
-    const c=svg('circle',{r:8,cx:J.x,cy:J.y,fill:(linked?'#4caf50':'#fff'),stroke:(linked?'#2e7d32':'#c0392b'),'stroke-width':2,style:'cursor:grab'});
+    const hit=svg('circle',{r:18,cx:J.x,cy:J.y,fill:'transparent',style:'cursor:grab'});   // big grab target
+    const c=svg('circle',{r:8,cx:J.x,cy:J.y,fill:(linked?'#4caf50':'#fff'),stroke:(linked?'#2e7d32':'#c0392b'),'stroke-width':2,'pointer-events':'none'});
     let downX=0,downY=0,moved=false;
-    c.addEventListener('pointerdown',(ev)=>{ ev.stopPropagation();
+    hit.addEventListener('pointerdown',(ev)=>{ ev.stopPropagation();
       if(tool==='detach'){ links=links.filter(l=>l.a!==J.id&&l.b!==J.id); redraw(); emit(); return; }
       const P=prims.find(p=>p.id===J.prim); if(!P) return;
       const startPt=pt(ev); downX=ev.clientX; downY=ev.clientY; moved=false;
@@ -229,7 +231,7 @@ function redraw(){
         redraw(); emit(); };
       window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
     });
-    ptLayer.appendChild(c); });
+    ptLayer.appendChild(hit); ptLayer.appendChild(c); });
 }
 function onJoinClick(J){
   if(tool==='detach'){ links=links.filter(l=>l.a!==J.id&&l.b!==J.id); attachFrom=null; redraw(); emit(); return; }
