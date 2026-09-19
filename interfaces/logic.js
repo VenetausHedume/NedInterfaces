@@ -210,9 +210,11 @@ function redraw(){
         // where THIS joining point would land
         const nx=thisJ0.x+dx, ny=thisJ0.y+dy;
         // nearest OTHER joining point (not on this primitive)
+        // find nearest other join point
         let best=null,bd=34; joinPts.forEach(k=>{ if(k.prim===P.id) return; const d=Math.hypot(k.x-nx,k.y-ny); if(d<bd){bd=d;best=k;} });
+        // STICKY: if already snapped to a target, keep it unless we've pulled far away (>50px)
+        if(snapTarget!=null){ const st=joinPts.find(k=>k.id===snapTarget); if(st){ const dd=Math.hypot(st.x-nx,st.y-ny); if(dd<=50){ best=st; } else { snapTarget=null; } } }
         if(best){ dx = best.x - thisJ0.x; dy = best.y - thisJ0.y; snapTarget=best.id; }
-        else snapTarget=null;
         // move the primitive (and drag any already-welded neighbours) by delta from original
         P.pts.forEach((pp,i)=>{ pp.x=o[i].x+dx; pp.y=o[i].y+dy; });
         oj.forEach(z=>{ const jj=joinPts.find(j=>j.id===z.id); jj.x=z.x+dx; jj.y=z.y+dy; });
