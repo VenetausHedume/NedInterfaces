@@ -270,7 +270,7 @@ board.addEventListener('pointerdown',(evt)=>{ const p=pt(evt);
 });
 board.addEventListener('wheel',(e)=>{ e.preventDefault(); const r=board.getBoundingClientRect(),sx=W/r.width,sy=H/r.height; if(e.shiftKey){view.x-=e.deltaX*sx;view.y-=e.deltaY*sy;applyView();return;} const cx=(e.clientX-r.left)*sx,cy=(e.clientY-r.top)*sy,f=e.deltaY<0?1.1:1/1.1,nk=Math.max(0.3,Math.min(3,view.k*f)); view.x=cx-(cx-view.x)*(nk/view.k);view.y=cy-(cy-view.y)*(nk/view.k);view.k=nk;applyView(); },{passive:false});
 
-function setTool(t){tool=t;attachFrom=null;[...tb.children].forEach(b=>b.classList.toggle('active',b.dataset.t===t));redraw&&redraw();}
+function setTool(t){tool=t;attachFrom=null;[...tb.children].forEach(b=>{ const on=(b.dataset.t===t); b.style.background=on?'#eaf1f8':'var(--paper)'; b.style.borderColor=on?'var(--accent)':'var(--line)'; });redraw&&redraw();}
 function btn(l,t){const b=document.createElement('button');b.textContent=l;b.dataset.t=t;b.style.cssText='padding:7px 11px;border:1px solid var(--line);border-radius:7px;background:var(--paper);cursor:pointer;font-size:13px;';b.onclick=()=>setTool(t);tb.appendChild(b);}
 btn('Select / Move','select'); btn('Line','line'); btn('Curve','curve'); btn('Bubble','bubble'); btn('Add joining point','addjoin'); btn('Detach','detach');
 btn('\u2b1c Open rect','openrect'); btn('\u25D6 Dome','dome'); btn('\u25D7 Back curve','backcurve'); btn('+ Input','addin'); btn('+ Output','addout');
