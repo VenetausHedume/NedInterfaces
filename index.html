@@ -30,9 +30,14 @@
     </aside>
   </div>
 
+  <!-- MathLive: math fields -->
   <script src="https://cdn.jsdelivr.net/npm/mathlive"></script>
+  <!-- CodeMirror: code + SQL editors -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <!-- Konva: logic gate builder -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/konva/10.6.0/konva.min.js"></script>
 
+  <!-- load order: contract first, then each interface, then the app -->
   <script src="interfaces/_contract.js"></script>
   <script src="interfaces/text.js"></script>
   <script src="interfaces/prose.js"></script>
