@@ -15,10 +15,36 @@
       const tb = document.createElement('div');
       tb.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center;';
       // nucleus + charge as MathLive fields (text mode) — reuse the text-box component
-      const mkField = (ph) => { const f=document.createElement('math-field'); f.setAttribute('default-mode','text');
-        f.style.cssText='min-width:70px;border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-size:15px;background:#fff;';
-        try{ f.menuItems=[]; f.mathVirtualKeyboardPolicy='manual'; }catch(e){}
-        return f; };
+      const hasMath = window.customElements && customElements.get('math-field');
+      const mkField = (w) => {
+        if(!hasMath){ const inp=document.createElement('input'); inp.type='text'; inp.style.cssText='width:'+(w||'80px')+';padding:6px;border:1px solid var(--line);border-radius:6px;font-size:14px;'; return inp; }
+        const f=document.createElement('math-field');
+        f.style.cssText='display:inline-block;width:'+(w||'90px')+';font-size:1.1rem;padding:4px 8px;min-height:2.2rem;border:1px solid var(--line);border-radius:6px;background:#fffdf7;vertical-align:middle;';
+        f.mathVirtualKeyboardPolicy='manual';
+        try{ f.menuItems=[]; }catch(e){}
+        try{ f.style.setProperty('--keyboard-toggle-display','none'); }catch(e){}
+        try{ f.inlineShortcuts={}; }catch(e){}
+        try{ f.defaultMode='text'; }catch(e){}
+        return f;
+      };
+      const fieldVal = (f)=> hasMath ? f.value : f.value;   // MathLive .value = LaTeX; input .value = text
+      // convert simple LaTeX (charges/formulae) to unicode for canvas drawing
+      const _SUP={'0':'\u2070','1':'\u00b9','2':'\u00b2','3':'\u00b3','4':'\u2074','5':'\u2075','6':'\u2076','7':'\u2077','8':'\u2078','9':'\u2079','+':'\u207a','-':'\u207b','(':'\u207d',')':'\u207e'};
+      const _SUB={'0':'\u2080','1':'\u2081','2':'\u2082','3':'\u2083','4':'\u2084','5':'\u2085','6':'\u2086','7':'\u2087','8':'\u2088','9':'\u2089','+':'\u208a','-':'\u208b','(':'\u208d',')':'\u208e'};
+      const _sup=t=>[...String(t)].map(c=>_SUP[c]||c).join('');
+      const _sub=t=>[...String(t)].map(c=>_SUB[c]||c).join('');
+      function latexToUnicode(x){ if(!x) return '';
+        let out=String(x);
+        out=out.replace(/\$/g,'');                              // strip math-island $
+        out=out.replace(/\\text\{([^}]*)\}/g,'$1');            // \text{..}
+        out=out.replace(/\^\{([^}]*)\}/g,(m,g)=>_sup(g));        // ^{..}
+        out=out.replace(/\^(.)/g,(m,g)=>_sup(g));                 // ^x
+        out=out.replace(/_\{([^}]*)\}/g,(m,g)=>_sub(g));          // _{..}
+        out=out.replace(/_(.)/g,(m,g)=>_sub(g));                   // _x
+        out=out.replace(/\\[,;: ]/g,'');                         // spacing macros
+        out=out.replace(/[{}]/g,'');
+        return out.trim();
+      }
       const nucField = mkField(); const chgField = mkField();
       const lbl=(t,el)=>{ const s=document.createElement('label'); s.style.cssText='font-size:13px;display:inline-flex;align-items:center;gap:4px;'; s.append(document.createTextNode(t)); s.append(el); return s; };
       const addShellBtn=btn('+ Add shell','addShell'), delShellBtn=btn('− Remove outer shell','delShell');
@@ -66,9 +92,10 @@ function render(){
   });
   // nucleus
   layer.add(new Konva.Circle({x:CX,y:CY,radius:24,fill:'#fff',stroke:'#2b2b2b',strokeWidth:2}));
-  const nt=new Konva.Text({x:CX,y:CY,text:nucleusText,fontSize:15,fontStyle:'bold',fill:'#2b2b2b'});
+  const nucDisp=latexToUnicode(nucleusText), chgDisp=latexToUnicode(chargeText);
+  const nt=new Konva.Text({x:CX,y:CY,text:nucDisp,fontSize:15,fontStyle:'bold',fill:'#2b2b2b'});
   nt.offsetX(nt.width()/2); nt.offsetY(nt.height()/2); layer.add(nt);
-  if(chargeText){ const ct=new Konva.Text({x:CX+nt.width()/2+2, y:CY-nt.height()/2-6, text:chargeText, fontSize:11, fontStyle:'bold', fill:'#2b2b2b'}); layer.add(ct); }
+  if(chgDisp){ const ct=new Konva.Text({x:CX+nt.width()/2+2, y:CY-nt.height()/2-4, text:_sup(chgDisp), fontSize:15, fontStyle:'bold', fill:'#2b2b2b'}); layer.add(ct); }
   // labels
   labels.forEach(L=>{ const t=new Konva.Text({x:L.x,y:L.y,text:L.text,fontSize:14,fill:'#2b2b2b',draggable:true});
     t.on('dragend',()=>{ L.x=t.x(); L.y=t.y(); emit(); });
@@ -90,7 +117,7 @@ function rebuildShellBar(){
 function emit(){
   const arr=shells.map(s=>s.count|0);
   const empty = !nucleusText && !chargeText && arr.length===0 && labels.length===0;
-  onChange(empty ? null : { nucleus:nucleusText, charge:chargeText||null, shells:arr, labels:labels.map(L=>({text:L.text,x:Math.round(L.x),y:Math.round(L.y)})) });
+  onChange(empty ? null : { nucleus:nucleusText, nucleusDisplay:latexToUnicode(nucleusText), charge:chargeText||null, chargeDisplay:latexToUnicode(chargeText)||null, shells:arr, labels:labels.map(L=>({text:L.text,x:Math.round(L.x),y:Math.round(L.y)})) });
   const total=arr.reduce((a,b)=>a+b,0);
   statusEl.textContent='nucleus: '+(nucleusText||'—')+(chargeText?(' ('+chargeText+')'):'')+'  |  configuration: '+(arr.length?arr.join(','):'(no shells)')+'  |  total electrons: '+total;
 }
@@ -100,8 +127,9 @@ function setTool(t){ tool=t; tb.querySelectorAll('[data-tool]').forEach(b=>b.cla
 tb.querySelectorAll('[data-tool]').forEach(b=> b.onclick=()=>setTool(b.dataset.tool));
 tb.querySelector('#addShell').onclick=()=>{ shells.push({count:0}); rebuildShellBar(); render(); emit(); };
 tb.querySelector('#delShell').onclick=()=>{ shells.pop(); rebuildShellBar(); render(); emit(); };
-nucField.addEventListener('input',()=>{ nucleusText=nucField.value; render(); emit(); });
-chgField.addEventListener('input',()=>{ chargeText=chgField.value; render(); emit(); });
+const _ev = hasMath ? 'input' : 'input';
+nucField.addEventListener(_ev,()=>{ nucleusText=fieldVal(nucField); render(); emit(); });
+chgField.addEventListener(_ev,()=>{ chargeText=fieldVal(chgField); render(); emit(); });
 tb.querySelector('#clear').onclick=()=>{ shells=[]; labels=[]; rebuildShellBar(); render(); emit(); };
 
 // place label on canvas click when label tool active
