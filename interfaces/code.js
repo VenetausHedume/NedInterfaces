@@ -53,6 +53,9 @@
         { label: 'Largest of five',
           question: { text: 'Write an algorithm that inputs five positive numbers and outputs the largest.', marks: 6, config: { tryInputs: [3, 9, 2, 7, 5] } },
           answer: { tests: [{ input: [3, 9, 2, 7, 5], expect: [9] }, { input: [8, 1, 1, 1, 1], expect: [8] }, { input: [1, 2, 3, 4, 50], expect: [50] }], features: ['loop', 'input', 'selection', 'output'] } },
+        { label: 'Read a text file',
+          question: { text: 'The text file Scores.txt holds one score per line. Write an algorithm, using pseudocode, that reads every score from the file and outputs how many scores are above 50.', marks: 5, config: { files: { 'Scores.txt': ['45', '72', '50', '91', '12'] } } },
+          answer: { tests: [{ files: { 'Scores.txt': ['45', '72', '50', '91', '12'] }, expect: [2] }, { files: { 'Scores.txt': ['51', '100', '99'] }, expect: [3] }, { files: { 'Scores.txt': [] }, expect: [0] }], features: ['file', 'loop', 'selection', 'counting'] } },
       ],
     },
     function (container, { question, value, onChange }) {

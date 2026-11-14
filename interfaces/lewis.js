@@ -1,7 +1,8 @@
 /* Dot-and-cross (Lewis) builder (chem) — Konva. Place atoms (bare symbols); add
    electrons into 4 side-slots (max 2 each) as dots or crosses. Slot-based for strict
    grading. A slot facing another atom = bonding region (dot+cross = shared pair).
-   Saves { atoms:[{id,element,circle,x,y,slots:{top,bottom,left,right}}] } or null.
+   Saves { atoms:[{id,element,circle,charge?,x,y,slots:{top,bottom,left,right}}] } or null. A charge ('+', '2-'…) draws the
+   atom as an ion in square brackets, for ionic dot-and-cross diagrams. Select an atom, then pick its charge.
    Marked by NedMark 'lewis': shared electrons between neighbouring atoms, and the non-bonding electrons on each atom.
    Requires Konva (index.html). */
 (function () {
@@ -11,15 +12,17 @@
       samples:[
         { label:'Covalent (water)', question:{ text:'Draw a dot-and-cross diagram for water, H2O. Show outer shell electrons only.', marks:3, config:{} }, answer:{ bonds:[['O','H',2],['O','H',2]], lone:{ O:[4], H:[0,0] } } },
         { label:'Covalent (methane)', question:{ text:'Draw a dot-and-cross diagram for methane, CH4. Show outer shell electrons only.', marks:3, config:{} }, answer:{ bonds:[['C','H',2],['C','H',2],['C','H',2],['C','H',2]], lone:{ C:[0], H:[0,0,0,0] } } },
+        { label:'Ionic (sodium chloride)', question:{ text:'Draw a dot-and-cross diagram for sodium chloride, NaCl. Show the outer shell electrons only and the charges on the ions.', marks:3, config:{} }, answer:{ ionic:true, ions:{ Na:'+', Cl:'-' }, electrons:{ Na:[0,8], Cl:[8] } } },
       ] },
     function (container, { question, value, onChange }) {
       const tb = document.createElement('div');
       tb.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;';
       tb.innerHTML = `<span style="font-size:13px;color:#8a8272;">Atom:</span>
-    <button data-el="H">H</button><button data-el="C">C</button><button data-el="N">N</button><button data-el="O">O</button><button data-el="Cl">Cl</button>
+    <button data-el="H">H</button><button data-el="C">C</button><button data-el="N">N</button><button data-el="O">O</button><button data-el="Cl">Cl</button><button data-el="F">F</button><button data-el="Na">Na</button><button data-el="Mg">Mg</button>
     <label style="font-size:13px;">other: <input type="text" id="el" value="O" maxlength="3" aria-label="Element symbol"></label>
     <button data-tool="atom">+ Place atom</button>
     <button data-tool="circle">Toggle circle</button>
+    <label style="font-size:13px;">charge: <select id="charge" aria-label="Charge on the selected atom (makes it an ion)"><option value="">none</option><option>+</option><option>2+</option><option>3+</option><option>-</option><option>2-</option><option>3-</option></select></label>
     <span class="sep"></span>
     <span style="font-size:13px;color:#8a8272;">add:</span>
     <button data-tool="dot" class="on">• Dot</button>
@@ -32,7 +35,7 @@
       const wrap = document.createElement('div'); wrap.style.cssText='position:relative;width:100%;max-width:900px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fffdf7;touch-action:none;';
       const statusEl = document.createElement('div'); statusEl.style.cssText='font:12.5px ui-monospace,Menlo,Consolas,monospace;margin-top:8px;color:#555;white-space:pre-wrap;';
       container.append(tb, wrap, statusEl);
-      container.appendChild(Ned.el('p',{class:'ned-note'},['Pick an atom and click the board to place it. Then choose Dot or Cross and click one of the four small rings around an atom to add an electron there (two per ring at most). Put atoms next to each other: electrons in the rings between them are the shared pair.']));
+      container.appendChild(Ned.el('p',{class:'ned-note'},['Pick an atom and click the board to place it. Then choose Dot or Cross and click one of the four small rings around an atom to add an electron there (two per ring at most). Put atoms next to each other: electrons in the rings between them are the shared pair. For an ion, select the atom and choose its charge: it is drawn in square brackets.']));
       tb.querySelectorAll('button').forEach(b=>{ b.style.cssText='padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer;font-size:13px;font-weight:600;'; });
       tb.querySelectorAll('.sep').forEach(x=>{ x.style.cssText='width:1px;height:24px;background:var(--line);margin:0 4px;'; });
       const elI=tb.querySelector('#el'); if(elI) elI.style.cssText='width:60px;padding:6px;border:1px solid var(--line);border-radius:6px;font-size:14px;text-align:center;';
@@ -51,19 +54,22 @@ const SIDES=['top','bottom','left','right'];
 const SLOT_OFF=26; // distance of slot centre from atom centre
 function slotCentre(a,side){ if(side==='top')return{x:a.x,y:a.y-SLOT_OFF}; if(side==='bottom')return{x:a.x,y:a.y+SLOT_OFF}; if(side==='left')return{x:a.x-SLOT_OFF,y:a.y}; return{x:a.x+SLOT_OFF,y:a.y}; }
 
-function addAtom(el,x,y){ const a={id:'a'+(uid++),el,circle:false,x,y,slots:{top:[],bottom:[],left:[],right:[]}}; atoms.push(a); render(); emit(); return a; }
+function addAtom(el,x,y){ const a={id:'a'+(uid++),el,circle:false,charge:'',x,y,slots:{top:[],bottom:[],left:[],right:[]}}; atoms.push(a); render(); emit(); return a; }
 
 function render(){
   layer.destroyChildren();
   atoms.forEach(a=>{
     if(a.circle) layer.add(new Konva.Circle({x:a.x,y:a.y,radius:SLOT_OFF+8,stroke:'#2b2b2b',strokeWidth:1.5}));
+    if(a.charge){ const r=SLOT_OFF+14; const br=(x,dir)=>layer.add(new Konva.Line({points:[x+dir*6,a.y-r,x,a.y-r,x,a.y+r,x+dir*6,a.y+r],stroke:'#2b2b2b',strokeWidth:1.8,listening:false}));
+      br(a.x-r,1); br(a.x+r,-1);
+      layer.add(new Konva.Text({x:a.x+r+3,y:a.y-r-6,text:a.charge.replace('-','\u2212'),fontSize:15,fontStyle:'bold',fill:'#2b2b2b',listening:false})); }
     // element symbol
     const t=new Konva.Text({x:a.x,y:a.y,text:a.el,fontSize:20,fontStyle:'bold',fill:'#2b2b2b'}); t.offsetX(t.width()/2); t.offsetY(t.height()/2); layer.add(t);
     // draggable hit pad
     const pad=new Konva.Circle({x:a.x,y:a.y,radius:16,fill:'rgba(0,0,0,0.001)',draggable:true});
     pad.on('dragmove',()=>{ a.x=pad.x(); a.y=pad.y(); render(); });
     pad.on('dragend',()=>emit());
-    pad.on('mousedown touchstart',(e)=>{ if(tool==='select'){ e.cancelBubble=true; selected=a; render(); } });
+    pad.on('mousedown touchstart',(e)=>{ if(tool==='select'){ e.cancelBubble=true; selected=a; chargeSel.value=a.charge||''; render(); } });
     layer.add(pad);
     // slot markers + electrons
     SIDES.forEach(side=>{ const c=slotCentre(a,side); const es=a.slots[side];
@@ -85,14 +91,14 @@ function render(){
 function onSlot(a,side){
   if(tool==='dot'||tool==='cross'){ if(a.slots[side].length<2){ a.slots[side].push(tool); render(); emit(); } }
   else if(tool==='erase'){ if(a.slots[side].length){ a.slots[side].pop(); render(); emit(); } }
-  else if(tool==='select'){ selected=a; render(); }
+  else if(tool==='select'){ selected=a; chargeSel.value=a.charge||''; render(); }
 }
 
 // facing side between two atoms -> which slot is the "bonding region"
 function facingSide(a,b){ const dx=b.x-a.x, dy=b.y-a.y; if(Math.abs(dx)>=Math.abs(dy)) return dx>0?'right':'left'; return dy>0?'bottom':'top'; }
 function emit(){
   const empty = atoms.length===0;
-  onChange(empty ? null : { atoms:atoms.map(a=>({id:a.id,element:a.el,circle:a.circle,x:Math.round(a.x),y:Math.round(a.y),slots:a.slots})) });
+  onChange(empty ? null : { atoms:atoms.map(a=>Object.assign({id:a.id,element:a.el,circle:a.circle,x:Math.round(a.x),y:Math.round(a.y),slots:a.slots},a.charge?{charge:a.charge}:{})) });
   // grading-friendly summary: per atom electron count + bonding regions (a slot with 1 dot+1 cross between two near atoms)
   let lines=[];
   atoms.forEach(a=>{ const tot=SIDES.reduce((s,sd)=>s+a.slots[sd].length,0); const dots=SIDES.reduce((s,sd)=>s+a.slots[sd].filter(x=>x==='dot').length,0); const cr=tot-dots;
@@ -112,6 +118,8 @@ function setTool(t){ tool=t; tb.querySelectorAll('[data-tool]').forEach(b=>{ con
 tb.querySelectorAll('[data-el]').forEach(b=> b.onclick=()=>{ tb.querySelector('#el').value=b.dataset.el; setTool('atom'); });
 tb.querySelectorAll('[data-tool]').forEach(b=>{ if(!['atom','circle'].includes(b.dataset.tool)) b.onclick=()=>setTool(b.dataset.tool); });
 tb.querySelector('[data-tool="atom"]').onclick=()=>setTool('atom');
+const chargeSel=tb.querySelector('#charge');
+chargeSel.onchange=()=>{ if(selected){ selected.charge=chargeSel.value; render(); emit(); } };
 tb.querySelector('[data-tool="circle"]').onclick=()=>{ if(selected){ selected.circle=!selected.circle; render(); emit(); } };
 stage.on('mousedown touchstart',(e)=>{ if(e.target===stage){
   if(tool==='atom'){ const t=stage.getAbsoluteTransform().copy(); t.invert(); const p=t.point(stage.getPointerPosition());
@@ -125,7 +133,7 @@ tb.querySelector('#del').onclick=()=>{ if(selected){ atoms=atoms.filter(a=>a!==s
 tb.querySelector('#clear').onclick=()=>{ atoms=[]; selected=null; render(); emit(); };
 
 function loadValue(v){
-  atoms=((v&&v.atoms)||[]).map(a=>({id:a.id,el:a.element,circle:!!a.circle,x:a.x,y:a.y,slots:{top:(a.slots.top||[]).slice(),bottom:(a.slots.bottom||[]).slice(),left:(a.slots.left||[]).slice(),right:(a.slots.right||[]).slice()}}));
+  atoms=((v&&v.atoms)||[]).map(a=>({id:a.id,el:a.element,circle:!!a.circle,charge:a.charge||'',x:a.x,y:a.y,slots:{top:(a.slots.top||[]).slice(),bottom:(a.slots.bottom||[]).slice(),left:(a.slots.left||[]).slice(),right:(a.slots.right||[]).slice()}}));
   uid=atoms.reduce((n,a)=>Math.max(n,+String(a.id).replace(/\D/g,'')||0),0)+1; selected=null; render(); emit();
 }
 setTool(tool); loadValue(value);

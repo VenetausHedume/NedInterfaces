@@ -4,21 +4,22 @@
 
    NedPseudo.run(code, inputs)          -> { ok, output:[lines], error?:{ line, message }, steps }
    NedPseudo.runFlowchart(value, inputs)-> same, for a flowchart saved by the flowchart builder ({ nodes, edges })
-   NedPseudo.features(code)             -> { loop, selection, input, output, array, totalling, counting, procedure }
+   NedPseudo.features(code)             -> { loop, selection, input, output, array, totalling, counting, procedure, file }
 
    Understands: DECLARE, CONSTANT, ← (also <- and =), INPUT / READ, OUTPUT / PRINT, IF…THEN…ELSE…ENDIF,
    CASE OF…OTHERWISE…ENDCASE, FOR…TO…STEP…NEXT, WHILE…DO…ENDWHILE, REPEAT…UNTIL, PROCEDURE / FUNCTION / CALL / RETURN,
    1-D and 2-D arrays, + − * / ^ DIV MOD, = <> < > <= >=, AND OR NOT, & for joining strings,
    LENGTH, UCASE, LCASE, SUBSTRING, LEFT, RIGHT, MID, ROUND, INT, RANDOM, DIV(), MOD().
    Keywords and names are not case-sensitive (students are not marked on capitals).
-   File handling is not supported. */
+   Text files: OPENFILE "name" FOR READ / WRITE / APPEND, READFILE "name", Var, WRITEFILE "name", Value, CLOSEFILE "name", EOF("name").
+   run(code, inputs, limit, files) takes files as { name:[lines] } and returns the files after the run. */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(); else root.NedPseudo = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
   const KEY = new Set(['DECLARE', 'CONSTANT', 'INPUT', 'READ', 'OUTPUT', 'PRINT', 'IF', 'THEN', 'ELSE', 'ENDIF', 'CASE', 'OF', 'OTHERWISE', 'ENDCASE', 'FOR', 'TO', 'STEP', 'NEXT',
     'WHILE', 'DO', 'ENDWHILE', 'REPEAT', 'UNTIL', 'PROCEDURE', 'ENDPROCEDURE', 'FUNCTION', 'RETURNS', 'RETURN', 'ENDFUNCTION', 'CALL', 'ARRAY', 'AND', 'OR', 'NOT', 'MOD', 'DIV', 'TRUE', 'FALSE',
-    'INTEGER', 'REAL', 'CHAR', 'STRING', 'BOOLEAN', 'DATE', 'ELSEIF']);
+    'INTEGER', 'REAL', 'CHAR', 'STRING', 'BOOLEAN', 'DATE', 'ELSEIF', 'OPENFILE', 'READFILE', 'WRITEFILE', 'CLOSEFILE']);
   class PErr extends Error { constructor(message, line) { super(message); this.line = line; } }
 
   /* ── tokens ── */
@@ -120,12 +121,18 @@
             return { k: 'declare', names, type, dims, line }; }
           case 'CONSTANT': { n++; p.eat('kw', 'CONSTANT'); const name = p.eat('id').v; if (p.is('op', '←')) p.eat('op', '←'); else p.eat('op', '='); return { k: 'assign', to: { name }, e: p.expr(), line }; }
           case 'INPUT': case 'READ': { n++; p.eat('kw'); const ts = []; if (p.is('str')) { p.eat('str'); if (p.is('op', ',')) p.eat('op', ','); } ts.push(target(p, line)); while (p.is('op', ',')) { p.eat('op', ','); ts.push(target(p, line)); } return { k: 'input', ts, line }; }
+          case 'OPENFILE': { n++; p.eat('kw'); const f = p.expr(); if (!p.is('kw', 'FOR')) throw new PErr('OPENFILE needs FOR READ, FOR WRITE or FOR APPEND after the file name.', line); p.eat('kw', 'FOR');
+            const md = String((p.done() ? {} : p.eat(p.is('kw') ? 'kw' : 'id')).v || '').toUpperCase(); if (!['READ', 'WRITE', 'APPEND'].includes(md)) throw new PErr('OPENFILE needs FOR READ, FOR WRITE or FOR APPEND.', line);
+            return { k: 'open', f, mode: md, line }; }
+          case 'READFILE': { n++; p.eat('kw'); const f = p.expr(); p.eat('op', ','); return { k: 'readf', f, t: target(p, line), line }; }
+          case 'WRITEFILE': { n++; p.eat('kw'); const f = p.expr(); p.eat('op', ','); return { k: 'writef', f, e: p.expr(), line }; }
+          case 'CLOSEFILE': { n++; p.eat('kw'); return { k: 'close', f: p.expr(), line }; }
           case 'OUTPUT': case 'PRINT': { n++; p.eat('kw'); const es = []; if (!p.done()) { es.push(p.expr()); while (p.is('op', ',')) { p.eat('op', ','); es.push(p.expr()); } } if (!p.done()) throw new PErr('Separate the things you OUTPUT with commas.', line); return { k: 'output', es, line }; }
           case 'IF': { n++; p.eat('kw', 'IF'); const cond = p.expr(); let rest = [];
             if (p.is('kw', 'THEN')) { p.eat('kw', 'THEN'); rest = p.rest(); } else if (!p.done()) throw new PErr('IF needs THEN after the condition.', line);
             else { if (!kw('THEN')) throw new PErr('IF needs THEN after the condition.', line); rest = L[n].toks.slice(1); n++; }
             const yes = [], no = [];
-            if (rest.length) { L.splice(n, 0, { line, toks: rest }); }
+            if (rest.length) { const last = rest[rest.length - 1]; if (rest.length > 1 && last.t === 'kw' && last.v === 'ENDIF') L.splice(n, 0, { line, toks: rest.slice(0, -1) }, { line, toks: [last] }); else L.splice(n, 0, { line, toks: rest }); }   // one-line IF … THEN … ENDIF
             yes.push(...block(['ELSE', 'ENDIF', 'ELSEIF']));
             if (kw('ELSE')) { const e = L[n]; if (e.toks.length > 1) { e.toks.shift(); } else n++; no.push(...block(['ENDIF'])); }
             need('ENDIF', 'IF', line);
@@ -173,8 +180,11 @@
   /* ── running ── */
   const num = (v, line) => { if (typeof v === 'number') return v; if (typeof v === 'string' && v.trim() !== '' && !isNaN(+v)) return +v; if (typeof v === 'boolean') throw new PErr('TRUE/FALSE cannot be used as a number.', line); throw new PErr(`"${v}" is not a number.`, line); };
   const show = v => (typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE') : typeof v === 'number' ? String(+v.toFixed(10)) : String(v));
-  function machine(inputs, limit) {
+  function machine(inputs, limit, files) {
     const globals = new Map(), types = new Map(), defs = new Map(), out = [];
+    const store = {}; Object.keys(files || {}).forEach(k => { store[k] = (files[k] || []).map(String); });
+    const opened = {};
+    const fileOf = (name, line, mode) => { const o = opened[name]; if (!o) throw new PErr(`The file "${name}" is not open. Use OPENFILE first.`, line); if (mode && (mode === 'READ') !== (o.mode === 'READ')) throw new PErr(`The file "${name}" was opened FOR ${o.mode}, so it cannot be ${mode === 'READ' ? 'read' : 'written'}.`, line); return o; };
     const queue = (inputs || []).map(x => x); let steps = 0;
     const tick = line => { if (++steps > (limit || 100000)) throw new PErr('The program ran for too long. A loop probably never ends.', line); };
     const frames = [globals];
@@ -223,7 +233,7 @@
       bounds(a, key, to.name, line); a.data.set(key.join(','), v);
     }
     function call(name, args, line, wantValue) {
-      const B = { LENGTH: s => show(s[0]).length, UCASE: s => show(s[0]).toUpperCase(), LCASE: s => show(s[0]).toLowerCase(), UPPER: s => show(s[0]).toUpperCase(), LOWER: s => show(s[0]).toLowerCase(),
+      const B = { EOF: s => { const nm = show(s[0]), o = fileOf(nm, line, 'READ'); return o.pos >= (store[nm] || []).length; }, LENGTH: s => show(s[0]).length, UCASE: s => show(s[0]).toUpperCase(), LCASE: s => show(s[0]).toLowerCase(), UPPER: s => show(s[0]).toUpperCase(), LOWER: s => show(s[0]).toLowerCase(),
         SUBSTRING: s => show(s[0]).substr(num(s[1], line) - 1, num(s[2], line)), MID: s => show(s[0]).substr(num(s[1], line) - 1, num(s[2], line)), LEFT: s => show(s[0]).slice(0, num(s[1], line)), RIGHT: s => { const t = show(s[0]); return t.slice(Math.max(0, t.length - num(s[1], line))); },
         ROUND: s => { const p = Math.pow(10, s.length > 1 ? num(s[1], line) : 0); return Math.round(num(s[0], line) * p) / p; }, INT: s => Math.trunc(num(s[0], line)), RANDOM: () => Math.random(),
         NUM_TO_STR: s => show(s[0]), STR_TO_NUM: s => num(s[0], line), ASC: s => show(s[0]).charCodeAt(0), CHR: s => String.fromCharCode(num(s[0], line)) };
@@ -246,6 +256,10 @@
           case 'assign': assign(s.to, ev(s.e, s.line), s.line); break;
           case 'input': s.ts.forEach(t => { if (!queue.length) throw new PErr('The program asked for more input than it was given.', s.line); let v = queue.shift(); const ty = types.get(t.name);
             if (typeof v === 'string' && v.trim() !== '' && !isNaN(+v) && ty !== 'STRING' && ty !== 'CHAR') v = +v; assign(t, v, s.line); }); break;
+          case 'open': { const nm = show(ev(s.f, s.line)); if (s.mode === 'READ' && !store[nm]) throw new PErr(`There is no file called "${nm}".`, s.line); if (s.mode === 'WRITE' || !store[nm]) store[nm] = []; opened[nm] = { mode: s.mode, pos: 0 }; break; }
+          case 'readf': { const nm = show(ev(s.f, s.line)), o = fileOf(nm, s.line, 'READ'); if (o.pos >= store[nm].length) throw new PErr(`The program read past the end of "${nm}". Check EOF first.`, s.line); let v = store[nm][o.pos++]; const ty = types.get(s.t.name); if (v.trim() !== '' && !isNaN(+v) && ty !== 'STRING' && ty !== 'CHAR') v = +v; assign(s.t, v, s.line); break; }
+          case 'writef': { const nm = show(ev(s.f, s.line)); fileOf(nm, s.line, 'WRITE'); store[nm].push(show(ev(s.e, s.line))); break; }
+          case 'close': { const nm = show(ev(s.f, s.line)); fileOf(nm, s.line); delete opened[nm]; break; }
           case 'output': out.push(s.es.map(e => show(ev(e, s.line))).join('')); break;
           case 'if': exec(truth(ev(s.cond, s.line), s.line) ? s.yes : s.no); break;
           case 'case': { const v = ev(s.subj, s.line); let done = false;
@@ -261,12 +275,12 @@
         }
       }
     }
-    return { exec, out, ev, truth, assign, queue, steps: () => steps, tick, defs };
+    return { exec, out, ev, truth, assign, queue, steps: () => steps, tick, defs, files: store };
   }
-  function run(code, inputs, limit) {
+  function run(code, inputs, limit, files) {
     let m = null;
-    try { const prog = parse(code); m = machine(inputs, limit); prog.filter(s => s.k === 'def').forEach(s => m.defs.set(s.name, s)); m.exec(prog.filter(s => s.k !== 'def')); return { ok: true, output: m.out, steps: m.steps() }; }
-    catch (e) { if (e && e.__ret) return { ok: true, output: m.out, steps: m.steps() }; if (e instanceof PErr) return { ok: false, output: m ? m.out : [], error: { line: e.line || null, message: e.message }, steps: m ? m.steps() : 0 }; throw e; }
+    try { const prog = parse(code); m = machine(inputs, limit, files); prog.filter(s => s.k === 'def').forEach(s => m.defs.set(s.name, s)); m.exec(prog.filter(s => s.k !== 'def')); return { ok: true, output: m.out, steps: m.steps(), files: m.files }; }
+    catch (e) { if (e && e.__ret) return { ok: true, output: m.out, steps: m.steps(), files: m.files }; if (e instanceof PErr) return { ok: false, output: m ? m.out : [], error: { line: e.line || null, message: e.message }, steps: m ? m.steps() : 0 }; throw e; }
   }
   function check(code) { try { parse(code); return null; } catch (e) { if (e instanceof PErr) return { line: e.line || null, message: e.message }; throw e; } }
 
@@ -318,6 +332,7 @@
       array: has(/[A-Za-z_]\w*\s*\[[^\]]+\]/), procedure: has(/\b(PROCEDURE|FUNCTION)\b/i),
       totalling: /([A-Za-z_]\w*)\s*(?:←|<-|=)\s*\1\s*\+\s*(?!1\b)[A-Za-z_]/i.test(s),
       counting: /([A-Za-z_]\w*)\s*(?:←|<-|=)\s*\1\s*\+\s*1\b/i.test(s),
+      file: has(/\b(OPENFILE|READFILE|WRITEFILE)\b/i),
       forLoop: has(/\bFOR\b/i), whileLoop: has(/\bWHILE\b/i), repeatLoop: has(/\bREPEAT\b/i),
     };
   }

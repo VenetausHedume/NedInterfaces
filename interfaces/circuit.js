@@ -10,6 +10,7 @@
     { name:'Circuit (build)', unlocks:'physics circuits',
       samples:[
         { label:'Series circuit', question:{ text:'Draw a series circuit with a cell, a switch and two lamps.', marks:4, config:{} }, answer:{ components:{ cell:1, switch:1, lamp:2 }, arrangement:'series' } },
+        { label:'Thermistor and lamp in series', question:{ text:'Draw a circuit in which a cell, a thermistor and a lamp are connected in series.', marks:3, config:{} }, answer:{ components:{ cell:1, thermistor:1, lamp:1 }, arrangement:'series' } },
         { label:'Meters', question:{ text:'Draw a circuit with a cell and a resistor. Add an ammeter to measure the current and a voltmeter to measure the p.d. across the resistor.', marks:5, config:{} }, answer:{ components:{ cell:1, resistor:1, ammeter:1, voltmeter:1 }, meters:true } },
       ] },
     function (container, { question, value, onChange }) {
@@ -26,6 +27,13 @@
     <button data-comp="voltmeter" title="Voltmeter"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="9" y2="13"/><circle cx="22" cy="13" r="9"/><line x1="35" y1="13" x2="42" y2="13"/><text x="22" y="17" font-size="11" text-anchor="middle" stroke="none" fill="#2b2b2b" font-weight="bold">V</text></svg></button>
     <button data-comp="bulb" title="Bulb/indicator"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="9" y2="13"/><circle cx="22" cy="13" r="9"/><path d="M15 13 a7 7 0 0 1 14 0" /><line x1="35" y1="13" x2="42" y2="13"/></svg></button>
     <button data-comp="variable" title="Variable resistor"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="8" y2="13"/><rect x="8" y="7" width="28" height="12"/><line x1="36" y1="13" x2="42" y2="13"/><line x1="10" y1="22" x2="34" y2="4"/><path d="M31 5 l3 -1 l-1 3" stroke-width="1.5"/></svg></button>
+    <button data-comp="thermistor" title="Thermistor"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="8" y2="13"/><rect x="8" y="7" width="28" height="12"/><line x1="36" y1="13" x2="42" y2="13"/><polyline points="6,23 10,23 34,3"/></svg></button>
+    <button data-comp="ldr" title="Light-dependent resistor (LDR)"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="15" x2="8" y2="15"/><rect x="8" y="10" width="28" height="10"/><line x1="36" y1="15" x2="42" y2="15"/><line x1="12" y1="1" x2="18" y2="7"/><path d="M15 7 h3 v-3" stroke-width="1.5"/><line x1="22" y1="1" x2="28" y2="7"/><path d="M25 7 h3 v-3" stroke-width="1.5"/></svg></button>
+    <button data-comp="diode" title="Diode"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="14" y2="13"/><path d="M14 5 L28 13 L14 21 Z"/><line x1="28" y1="5" x2="28" y2="21"/><line x1="28" y1="13" x2="42" y2="13"/></svg></button>
+    <button data-comp="led" title="Light-emitting diode (LED)"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="15" x2="12" y2="15"/><path d="M12 8 L24 15 L12 22 Z"/><line x1="24" y1="8" x2="24" y2="22"/><line x1="24" y1="15" x2="42" y2="15"/><line x1="26" y1="6" x2="32" y2="1"/><line x1="31" y1="9" x2="37" y2="4"/></svg></button>
+    <button data-comp="fuse" title="Fuse"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="42" y2="13"/><rect x="10" y="8" width="24" height="10"/></svg></button>
+    <button data-comp="heater" title="Heater"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="8" y2="13"/><rect x="8" y="7" width="28" height="12"/><line x1="15" y1="7" x2="15" y2="19"/><line x1="22" y1="7" x2="22" y2="19"/><line x1="29" y1="7" x2="29" y2="19"/><line x1="36" y1="13" x2="42" y2="13"/></svg></button>
+    <button data-comp="motor" title="Motor"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="9" y2="13"/><circle cx="22" cy="13" r="9"/><line x1="35" y1="13" x2="42" y2="13"/><text x="22" y="17" font-size="11" text-anchor="middle" stroke="none" fill="#2b2b2b" font-weight="bold">M</text></svg></button>
     <span class="sep"></span>
     <button id="del">Delete</button>
     <button id="clear">Clear</button>`;
@@ -79,6 +87,18 @@ function drawComp(type){
     parts.push(line([-18,0,-14,0])); parts.push(line([14,0,18,0])); }
   else if(type==='voltmeter'){ parts.push(new Konva.Circle({radius:14,stroke:S,strokeWidth:SW}));
     const t=new Konva.Text({text:'V',fontSize:15,fontStyle:'bold',fill:S}); t.offsetX(t.width()/2); t.offsetY(t.height()/2); parts.push(t);
+    parts.push(line([-18,0,-14,0])); parts.push(line([14,0,18,0])); }
+  else if(type==='thermistor'||type==='heater'||type==='fuse'||type==='ldr'){
+    if(type==='fuse'){ parts.push(new Konva.Rect({x:-16,y:-6,width:32,height:12,stroke:S,strokeWidth:SW})); parts.push(line([-18,0,18,0])); }
+    else parts.push(new Konva.Rect({x:-18,y:-8,width:36,height:16,stroke:S,strokeWidth:SW}));
+    if(type==='thermistor') parts.push(line([-26,16,-20,16,20,-16]));
+    if(type==='heater') [-6,6].forEach(x=>parts.push(line([x,-8,x,8])));
+    if(type==='ldr') [-10,4].forEach(x=>parts.push(new Konva.Arrow({points:[x-8,-26,x,-14],stroke:S,fill:S,strokeWidth:1.8,pointerLength:5,pointerWidth:5}))); }
+  else if(type==='diode'||type==='led'){ parts.push(new Konva.Line({points:[-10,-10,8,0,-10,10],closed:true,stroke:S,strokeWidth:SW}));
+    parts.push(line([8,-10,8,10])); parts.push(line([-18,0,-10,0])); parts.push(line([8,0,18,0]));
+    if(type==='led') [0,9].forEach(x=>parts.push(new Konva.Arrow({points:[x,-12,x+8,-22],stroke:S,fill:S,strokeWidth:1.8,pointerLength:5,pointerWidth:5}))); }
+  else if(type==='motor'){ parts.push(new Konva.Circle({radius:14,stroke:S,strokeWidth:SW}));
+    const t=new Konva.Text({text:'M',fontSize:15,fontStyle:'bold',fill:S}); t.offsetX(t.width()/2); t.offsetY(t.height()/2); parts.push(t);
     parts.push(line([-18,0,-14,0])); parts.push(line([14,0,18,0])); }
   parts.forEach(p=>g.add(p));
   return g;

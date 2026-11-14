@@ -161,6 +161,28 @@ const cases = [['text', { points: [{ alts: ['refinery gas'] }, { alts: ['bitumen
   ['econ', EL, { shifts: { S: 'left' }, equilibrium: null, labels: { y: 'Quantity' } }, {}], ['code', SUM, { code: 'INPUT N\nOUTPUT N' }, {}], ['flowchart', { tests: [{ input: [1, 2, 3], expect: [6] }], features: ['decision'] }, swapped, {}],
   ['order', ORD, { order: ['init', 'for'] }, {}], ['sql', MODEL, { code: 'SELECT Nme FROM Students' }, q], ['sql', MODEL, { code: 'SELECT Name FROM Students' }, q], ['shells', { shells: [2, 8], charge: '2-' }, { shells: [2, 6] }, {}], ['structure', { model: eth }, single, {}], ['lewis', WA, nol, {}],
   ['circuit', { components: { cell: 1 }, arrangement: 'series', meters: true }, { components: [{ type: 'lamp' }], overall: 'open', meters: [] }, {}]];
+// file handling (syllabus: open, close and use a file for reading and writing)
+{ const code = 'DECLARE Line : STRING\nCount <- 0\nOPENFILE "Names.txt" FOR READ\nWHILE NOT EOF("Names.txt") DO\n  READFILE "Names.txt", Line\n  Count <- Count + 1\nENDWHILE\nCLOSEFILE "Names.txt"\nOPENFILE "Out.txt" FOR WRITE\nWRITEFILE "Out.txt", Count\nCLOSEFILE "Out.txt"\nOUTPUT Count';
+  const r = P.run(code, [], undefined, { 'Names.txt': ['Ann', 'Bo', 'Cy'] });
+  t('files: read to EOF and count', r.output, ['3']);
+  t('files: written file returned', r.files['Out.txt'], ['3']);
+  t('files: reading an unopened file explains itself', /not open/.test(P.run('READFILE "x.txt", A', []).error.message), true);
+  t('files: reading a file opened for WRITE', /cannot be read/.test(P.run('OPENFILE "a.txt" FOR WRITE\nREADFILE "a.txt", B', []).error.message), true);
+  t('files: APPEND keeps old lines', P.run('OPENFILE "a.txt" FOR APPEND\nWRITEFILE "a.txt", "z"\nCLOSEFILE "a.txt"', [], undefined, { 'a.txt': ['y'] }).files['a.txt'], ['y', 'z']);
+  const ans = { tests: [{ files: { 'Names.txt': ['Ann', 'Bo', 'Cy'] }, expect: [3], expectFiles: { 'Out.txt': ['3'] } }, { files: { 'Names.txt': [] }, expect: [0] }], features: ['file', 'loop', 'counting'] };
+  t('files: marked full', M.mark('code', ans, { code }, { marks: 3 }).score, 3);
+  t('files: wrong count gets feature marks only', M.mark('code', ans, { code: code.replace('Count + 1', 'Count + 2') }, { marks: 3 }).score, 2); }
+// ionic dot-and-cross
+{ const A = { ionic: true, ions: { Na: '+', Cl: '-' }, electrons: { Na: [0, 8], Cl: [8] } };
+  const na = { id: 'a1', element: 'Na', charge: '+', x: 200, y: 200, slots: { top: [], bottom: [], left: [], right: [] } };
+  const cl = { id: 'a2', element: 'Cl', charge: '-', x: 400, y: 200, slots: { top: ['dot', 'dot'], bottom: ['dot', 'dot'], left: ['dot', 'cross'], right: ['dot', 'dot'] } };
+  t('ionic: NaCl full marks', M.mark('lewis', A, { atoms: [na, cl] }, { marks: 3 }).score, 3);
+  t('ionic: missing charge', M.mark('lewis', A, { atoms: [Object.assign({}, na, { charge: '' }), cl] }, { marks: 3 }).score, 2);
+  t('ionic: gained electron not shown', M.mark('lewis', A, { atoms: [na, Object.assign({}, cl, { slots: { top: ['dot', 'dot'], bottom: ['dot', 'dot'], left: ['dot', 'dot'], right: ['dot', 'dot'] } })] }, { marks: 3 }).score, 2); }
+// new circuit symbols
+t('circuit: thermistor asked, resistor given', M.mark('circuit', { components: { cell: 1, thermistor: 1, lamp: 1 }, arrangement: 'series' }, { components: [{ type: 'cell' }, { type: 'resistor' }, { type: 'lamp' }], overall: 'series' }, { marks: 3 }).score, 1);
+t('circuit: thermistor circuit right', M.mark('circuit', { components: { cell: 1, thermistor: 1, lamp: 1 }, arrangement: 'series' }, { components: [{ type: 'cell' }, { type: 'thermistor' }, { type: 'lamp' }], overall: 'series' }, { marks: 3 }).score, 3);
+
 let fbOk = 0; const thin = [];
 cases.forEach(([ui, a, v, qq]) => { const question = Object.assign({ marks: 4 }, qq); const r = M.mark(ui, a, v, question); const fb = M.explain(ui, a, v, r, question); if (fb.length && fb.every(f => f.text && !/undefined|NaN|\[object/.test(f.text))) fbOk++; else thin.push(ui + ': ' + JSON.stringify(fb)); });
 t('feedback for all ' + cases.length + ' wrong-answer cases is readable', thin, []);

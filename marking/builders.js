@@ -6,11 +6,11 @@
 })(typeof self !== 'undefined' ? self : this, function (M, P, Q) {
   'use strict';
   const un = (max) => ({ score: 0, max, status: 'unanswered', detail: {} });
-  const FEATURE_NAMES = { loop: 'uses a loop', forLoop: 'uses a FOR loop', whileLoop: 'uses a WHILE loop', repeatLoop: 'uses a REPEAT loop', selection: 'uses IF or CASE', input: 'takes input', output: 'gives output',
+  const FEATURE_NAMES = { loop: 'uses a loop', file: 'uses a text file', forLoop: 'uses a FOR loop', whileLoop: 'uses a WHILE loop', repeatLoop: 'uses a REPEAT loop', selection: 'uses IF or CASE', input: 'takes input', output: 'gives output',
     array: 'uses an array', totalling: 'keeps a running total', counting: 'counts', procedure: 'uses a procedure or function', decision: 'has a decision box' };
 
   /* ───────── algorithms: pseudocode and flowcharts are RUN against test cases ─────────
-     answer: { tests:[{ input:[…], expect:[…] }], features?:['loop','input','totalling',…] }
+     answer: { tests:[{ input:[…], expect:[…], files?:{name:[lines]}, expectFiles?:{name:[lines]} }], features?:['loop','input','totalling',…] }
      Full marks when every test gives the expected output (extra text such as prompts is ignored).
      Otherwise one mark for each listed feature the answer shows, up to max − 1; with no feature list,
      a share of max − 1 for the tests that pass. A syntax slip does not zero the answer: features are read from the words. */
@@ -19,8 +19,9 @@
       const code = kind === 'code' ? ((value && value.code) || '') : '';
       if (kind === 'code' ? !code.trim() : !(value && (value.nodes || []).length)) return un(max);
       const tests = (answer.tests || []).map(t => {
-        const r = kind === 'code' ? P.run(code, t.input || []) : P.runFlowchart(value, t.input || []);
-        return { pass: r.ok && P.outputMatches(r.output, t.expect || []), output: r.output, error: r.error || null, input: t.input || [], expect: t.expect || [] };
+        const r = kind === 'code' ? P.run(code, t.input || [], undefined, t.files) : P.runFlowchart(value, t.input || []);
+        const filesOk = !t.expectFiles || (r.ok && Object.keys(t.expectFiles).every(nm => JSON.stringify(((r.files || {})[nm] || []).map(x => String(x).trim())) === JSON.stringify(t.expectFiles[nm].map(x => String(x).trim()))));
+        return { pass: r.ok && P.outputMatches(r.output, t.expect || []) && filesOk, filesOk, output: r.output, error: r.error || null, input: t.input || [], expect: t.expect || [] };
       });
       const passed = tests.filter(t => t.pass).length;
       const text = kind === 'code' ? code : (value.nodes || []).map(n => n.text || '').join('\n');
@@ -107,6 +108,19 @@
   function markLewis(answer, value, max) {
     const atoms = (value && value.atoms) || [];
     if (!atoms.length) return un(max);
+    if (answer.ionic) {   // ionic: each ion has the right charge and outer-shell electrons; the gained electron is shown as the other symbol
+      const sym = e => String(e).toLowerCase(), want = {}; Object.keys(answer.ions || {}).forEach(k => { want[sym(k)] = answer.ions[k]; });
+      const canon = c => String(c || '').replace(/[−–]/g, '-').replace(/^1(?=[+-])/, '');
+      const chargesOk = atoms.every(a => sym(a.element) in want) && Object.keys(want).every(k => atoms.some(a => sym(a.element) === k)) && atoms.every(a => canon(a.charge) === canon(want[sym(a.element)]));
+      const count = a => Object.keys(a.slots).reduce((s, k) => s + a.slots[k].length, 0);
+      const ew = {}; Object.keys(answer.electrons || {}).forEach(k => { ew[sym(k)] = [].concat(answer.electrons[k]); });
+      const electronsOk = atoms.every(a => !ew[sym(a.element)] || ew[sym(a.element)].includes(count(a)));
+      const anions = atoms.filter(a => /-$/.test(canon(a.charge)));
+      const transferOk = anions.every(a => { const all = [].concat(...Object.values(a.slots)); return all.includes('dot') && all.includes('cross'); });
+      const crit = [electronsOk, chargesOk].concat(max >= 3 ? [transferOk] : []);
+      const n = crit.filter(Boolean).length;
+      return { score: n === crit.length ? max : Math.min(Math.max(0, max - 1), n), max, status: 'marked', detail: { ionic: true, electronsOk, chargesOk, transferOk } };
+    }
     const side = (A, B) => (Math.abs(B.x - A.x) >= Math.abs(B.y - A.y) ? (B.x > A.x ? 'right' : 'left') : (B.y > A.y ? 'bottom' : 'top'));
     const used = {}; atoms.forEach(a => { used[a.id] = 0; });
     const bonds = []; let mixedOk = true;
@@ -161,6 +175,19 @@
     const labelOf = k => { const m = String(k).match(/^r(\d+)c(\d+)$/); if (m && cfg.table) return `in row "${cfg.table[+m[1]][0] || m[1]}", column "${cfg.table[0][+m[2]] || m[2]}"`; const list = cfg.labels || cfg.spots || cfg.nodes || []; const i = list.findIndex(x => String(x.id) === String(k)); return i >= 0 && !cfg.nodes ? String(i + 1) : String(k); };
     switch (ui) {
       case 'text': case 'short': {
+        if (d.eq) { const e = d.eq;
+          if (!e.arrow) { bad('Write the equation with an arrow (→ or ->) between the two sides.'); break; }
+          if (e.word) { (e.reactants ? good : bad)('Reactants' + (e.reactants ? ' right.' : ' not right.')); (e.products ? good : bad)('Products' + (e.products ? ' right.' : ' not right.')); }
+          else { (e.formulae ? good : bad)(e.formulae ? 'All the formulae are right.' : 'Check the formulae: one or more substances or charges are wrong, missing or extra.');
+            if (e.formulae) (e.balanced ? good : bad)(e.balanced ? 'The equation is balanced.' : 'The equation is not balanced: count each kind of atom on both sides.');
+            if (e.states != null) (e.states ? good : bad)(e.states ? 'State symbols right.' : 'Check the state symbols: (s), (l), (g) or (aq).'); }
+          if (r.score < r.max) info('Expected: ' + answer.equation);
+          break; }
+        if (d.logic) { const L = d.logic;
+          if (L.error) bad(L.error + '. Use AND, OR, NOT, NAND, NOR, XOR and brackets.');
+          else if (L.same) good('Your expression gives the right output for every combination of inputs.');
+          else bad('When ' + Object.keys(L.row).map(k => k + ' = ' + L.row[k]).join(', ') + ' your expression gives a different output from the correct one.');
+          break; }
         (d.awarded || []).forEach(i => good('You made the point: ' + answer.points[i].alts[0] + '.'));
         if (r.score < r.max) { const need = Math.min(r.max, answer.need || r.max) - r.score; const rest = (d.missed || []).map(i => answer.points[i].alts[0]);
           if (rest.length) info(`${need} more mark${need === 1 ? '' : 's'} available. Points that score: ${rest.slice(0, 6).join('; ')}.`);
@@ -233,6 +260,10 @@
         else { d.atomsOk ? good('You have the right atoms.') : bad('Check the number of each type of atom against the formula.'); if (d.atomsOk) d.valencyOk ? bad('Every atom has the right number of bonds, but they are joined in the wrong arrangement.') : bad('Count the bonds on each atom: carbon makes 4, oxygen 2, hydrogen 1.'); }
         break; }
       case 'lewis': {
+        if (d.ionic) { d.electronsOk ? good('The outer-shell electrons on each ion are right.') : bad('Check the outer shells: the metal ion has lost its outer electrons, the non-metal ion has a full outer shell.');
+          d.chargesOk ? good('The charges on the ions are right.') : bad('Check the charges: select each ion and choose its charge.');
+          if (!d.transferOk) bad('Show the electron the non-metal gained as the other symbol (a cross among the dots, or a dot among the crosses).');
+          break; }
         d.bondsOk ? good('The shared pairs are right.') : bad('Check the shared electrons between the atoms: each single bond is one pair.');
         d.loneOk ? good('The non-bonding electrons are right.') : bad('Check the electrons that are not shared: count each atom’s outer shell.');
         if (d.bondsOk && d.loneOk && !d.mixedOk) bad('Each shared pair should be one dot and one cross, to show an electron from each atom.');

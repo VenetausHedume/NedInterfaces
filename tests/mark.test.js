@@ -209,6 +209,44 @@ t('econ no equilibrium', sc('econ', { shifts: { S: 'left' } }, { shifts: { S: 'l
 t('econ both shifted when one expected', sc('econ', { shifts: { S: 'left' } }, { shifts: { S: 'left', D: 'right' }, equilibrium: 'D1S1' }, 3), 0);
 t('econ both expected', sc('econ', { shifts: { S: 'left', D: 'right' } }, { shifts: { S: 'left', D: 'right' }, equilibrium: 'D1S1' }, 3), 3);
 
+// ── syllabus check (14 Nov): symbols, algebra, equations, logic expressions ──
+const cel1 = (spec, v) => sc('table', { cells: { r1c1: spec } }, { cells: { r1c1: v } }, 1);
+t('genotype: tt is not Tt', cel1('Tt', 'tt'), 0);
+t('genotype: either order', cel1('Tt', 'tT'), 1);
+t('genotype: TT is not tt', cel1('tt', 'TT'), 0);
+t('ordinary word ignores capitals', cel1('nucleus', 'Nucleus'), 1);
+t('formula: capitals matter (h2so4)', sc('text', { points: [{ alts: ['H2SO4'] }], need: 1 }, { latex: 'h2so4' }, 1), 0);
+t('formula: CO is not Co', cel1('Co', 'CO'), 0);
+t('formula inside a sentence', sc('text', { points: [{ alts: ['CO2'] }], need: 1 }, { latex: 'the gas is CO_2' }, 1), 1);
+t('case:false turns it off', cel1({ alts: ['Tt'], case: false }, 'tt'), 1);
+const alg = (model, ans) => sc('formula', { final: [{ expr: model }] }, { answer: ans }, 1);
+t('factorise: either order of brackets', alg('(x-2)(x-3)', '(x-3)(x-2)'), 1);
+t('factorise: expanded form refused', alg('(x-2)(x-3)', 'x^2-5x+6'), 0);
+t('factorise: not fully factorised refused', alg('2x(x+3)', 'x(2x+6)'), 0);
+t('factorise: one bracket alone refused', alg('2(x+3)', '(2x+6)'), 0);
+t('expand: copying the question refused', alg('3x+6', '3(x+2)'), 0);
+t('expand: unsimplified refused', alg('3x+6', '2x+x+6'), 0);
+t('expand: terms in any order', alg('3x+6', '6+3x'), 1);
+t('simplify: letters in any order', alg('2x^2y', '2yx^2'), 1);
+t('fraction: same value, different look', alg('(x+1)/2', '\\frac{1}{2}x+\\frac12'), 1);
+t('wrong algebra', alg('5x-10y', '5x-10'), 0);
+const EQ = { equation: '2H2 + O2 → 2H2O' };
+t('equation right', sc('text', EQ, { latex: '2H_2+O_2\\rightarrow 2H_2O' }, 2), 2);
+t('equation unbalanced: formulae mark only', sc('text', EQ, { latex: 'H_2+O_2\\rightarrow H_2O' }, 2), 1);
+t('equation: a multiple is still balanced', sc('text', EQ, { latex: '4H2 + 2O2 -> 4H2O' }, 2), 2);
+t('equation: wrong formula', sc('text', EQ, { latex: 'H2 + O → H2O' }, 2), 0);
+t('equation: no arrow', sc('text', EQ, { latex: '2H2 + O2 2H2O' }, 2), 0);
+const ST = { equation: 'Zn(s) + 2HCl(aq) → ZnCl2(aq) + H2(g)', states: true };
+t('equation with state symbols', sc('text', ST, { latex: 'Zn(s)+2HCl(aq)\\rightarrow ZnCl_2(aq)+H_2(g)' }, 3), 3);
+t('equation missing state symbols', sc('text', ST, { latex: 'Zn+2HCl→ZnCl2+H2' }, 3), 2);
+t('ionic half-equation', sc('text', { equation: 'Cu2+ + 2e- → Cu' }, { latex: 'Cu^{2+}+2e^-\\rightarrow Cu' }, 1), 1);
+t('ionic half-equation, electrons wrong', sc('text', { equation: 'Cu2+ + 2e- → Cu' }, { latex: 'Cu^{2+}+e^-\\rightarrow Cu' }, 1), 0);
+t('ionic equation with brackets', sc('text', { equation: 'Fe3+ + 3OH- → Fe(OH)3' }, { latex: 'Fe^{3+}+3OH^-\\rightarrow Fe(OH)_3' }, 2), 2);
+t('word equation, any order', sc('text', { equation: 'glucose + oxygen → carbon dioxide + water' }, { latex: 'oxygen + glucose → water + carbon dioxide' }, 2), 2);
+t('word equation, one side wrong', sc('text', { equation: 'glucose + oxygen → carbon dioxide + water' }, { latex: 'glucose + oxygen → carbon dioxide + energy' }, 2), 1);
+t('logic expression equivalent', sc('text', { logic: '(A AND B) OR NOT C' }, { latex: 'X = NOT C OR (B AND A)' }, 2), 2);
+t('logic expression different', sc('text', { logic: '(A AND B) OR NOT C' }, { latex: 'A AND B OR C' }, 2), 0);
+
 // ── general ──
 t('no answer key', M.mark('text', null, { latex: 'x' }, { marks: 1 }).status, 'no_answer_key');
 t('unknown ui', M.mark('zzz', {}, { a: 1 }, { marks: 1 }).status, 'no_marker');

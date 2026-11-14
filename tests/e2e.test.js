@@ -58,6 +58,21 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await h.open('text', 3);
     await h.type('#mount math-field', 'H2SO4');
     ok('text: formula H2SO4 -> 1/1', (await h.score()) === '1/1', [await h.score(), await h.value()]);
+    await h.open('text', 3);
+    await h.type('#mount math-field', 'h2so4');
+    ok('text: formula in the wrong case (h2so4) -> 0/1', (await h.score()) === '0/1', await h.value());
+    await h.open('text', 4);
+    await h.type('#mount math-field', 'Zn(s)+2HCl(aq)->ZnCl2(aq)+H2(g)');
+    ok('text: symbol equation with state symbols typed -> 3/3', (await h.score()) === '3/3', [await h.score(), await h.value()]);
+    await h.open('text', 4);
+    await h.type('#mount math-field', 'Zn+HCl->ZnCl2+H2');
+    ok('text: unbalanced, no state symbols -> 1/3 with feedback', (await h.score()) === '1/3' && /not balanced/.test(await page.textContent('#mark')), [await h.score(), await page.textContent('#mark')]);
+    await h.open('text', 6);
+    await h.type('#mount math-field', 'oxygen + glucose -> water + carbon dioxide');
+    ok('text: word equation typed -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+    await h.open('text', 7);
+    await h.type('#mount math-field', 'X = C OR (A AND B)');
+    ok('text: logic expression typed -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
 
     // 1.2 formula
     await h.open('formula', 0);
@@ -450,6 +465,20 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     ok('lewis: water built with its controls -> 3/3', (await h.score()) === '3/3', [await h.score(), await h.value()]);
     await h.reload();
     ok('lewis: survives reload', (await h.value()).atoms.length === 3 && (await h.score()) === '3/3');
+    await h.open('lewis', 2);
+    at4 = await canvas();
+    await page.fill('#mount #el', 'Na'); await page.click('#mount [data-tool=atom]'); await at4(200, 200);
+    await page.fill('#mount #el', 'Cl'); await page.click('#mount [data-tool=atom]'); await at4(400, 200);
+    await page.click('#mount [data-tool=select]'); await at4(200, 200); await page.selectOption('#mount #charge', '+');
+    await at4(400, 200); await page.selectOption('#mount #charge', '-');
+    await page.click('#mount [data-tool=dot]');
+    for (const [x, y] of [[400, 174], [400, 174], [400, 226], [400, 226], [426, 200], [426, 200], [374, 200]]) await at4(x, y);
+    await page.click('#mount [data-tool=cross]'); await at4(374, 200);
+    v = await h.value();
+    ok('lewis ionic: charges saved on the ions', v.atoms.map(a => a.element + (a.charge || '')).join(' ') === 'Na+ Cl-', v.atoms);
+    ok('lewis ionic: NaCl built with its controls -> 3/3', (await h.score()) === '3/3', [await h.score(), await page.textContent('#mark')]);
+    await h.reload();
+    ok('lewis ionic: survives reload', (await h.score()) === '3/3');
 
     await h.open('circuit', 0);
     for (const c of ['cell', 'switch', 'lamp', 'lamp']) await page.click(`#mount [data-comp=${c}]`);
@@ -481,6 +510,17 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     ok('flowchart: Run button steps through the student\'s own flowchart', (await page.textContent('#mount [data-run=output]')).trim() === '11', await page.textContent('#mount [data-run=output]'));
     await h.open('flowchart', 1);
     ok('flowchart: no Run button on a non-algorithm flowchart (FDE cycle)', (await page.locator('#mount [data-run=go]').count()) === 0);
+
+    await h.open('circuit', 1);
+    for (const c of ['cell', 'thermistor', 'lamp']) await page.click(`#mount [data-comp=${c}]`);
+    v = await h.value();
+    ok('circuit: new symbols (thermistor) can be added', v.components.map(c => c.type).join(',') === 'cell,thermistor,lamp', v.components);
+    ok('circuit: all syllabus symbols offered', (await page.evaluate(() => ['thermistor', 'ldr', 'diode', 'led', 'fuse', 'heater', 'motor'].filter(t => !document.querySelector(`#mount [data-comp=${t}]`)))).length === 0);
+    r = await mountWith('code', 2, { code: 'Count <- 0\nOPENFILE "Scores.txt" FOR READ\nWHILE NOT EOF("Scores.txt") DO\n  READFILE "Scores.txt", S\n  IF S > 50 THEN Count <- Count + 1 ENDIF\nENDWHILE\nCLOSEFILE "Scores.txt"\nOUTPUT Count' });
+    ok('code: a program reading a text file is marked 5/5', r.score === '5/5', r);
+    ok('code: the text file is shown to the student', /Scores\.txt/.test(await page.textContent('#mount')));
+    await page.click('#mount [data-run=go]');
+    ok('code: Run reads the file', (await page.textContent('#mount [data-run=output]')).trim() === '2', await page.textContent('#mount [data-run=output]'));
 
     // every interface (including the parked ones) still mounts, and every marked sample starts at 0
     const all = await page.evaluate(() => Object.keys(Ned.registry).map(id => [id, (Ned.registry[id].meta.samples || []).map(s => !!s.answer)]));

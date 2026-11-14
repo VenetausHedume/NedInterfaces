@@ -30,6 +30,7 @@
     s = s.replace(/\\(?:text|mathrm|mathit|mathbf|operatorname|textbf|textit|mathsf)\s*\{([^{}]*)\}/g, '$1');
     s = s.replace(/\\[,;:!]/g, ' ').replace(/\\(?:quad|qquad)(?![a-zA-Z])/g, ' ').replace(/\\(?:left|right|displaystyle)(?![a-zA-Z])/g, '');
     s = s.replace(/\\ /g, ' ').replace(/\\placeholder\s*(\{[^{}]*\})?/g, '');
+    s = s.replace(/\\(d|t)?frac\s*(\d)\s*(\d)/g, '\\frac{$2}{$3}');                 // \frac12
     for (let i = 0; i < 6 && /\\(?:d|t)?frac/.test(s); i++) s = s.replace(/\\(?:d|t)?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (m, a, b) => `${wrap(a)}/${wrap(b)}`);
     for (let i = 0; i < 4 && /\\sqrt/.test(s); i++) s = s.replace(/\\sqrt\s*\{([^{}]*)\}/g, 'sqrt($1)');
     s = s.replace(/\^\s*\{\s*\\circ\s*\}|\^\s*\\circ/g, '°');
@@ -104,7 +105,7 @@
   }
   function context(text, syn) {
     const toks = tokens(text);
-    return { set: new Set(toks), text: toks.join(' '), raw: new Set(rawTokens(text)), compact: norm(text).replace(/\s+/g, ''), syn };
+    return { set: new Set(toks), text: toks.join(' '), raw: new Set(rawTokens(text)), compact: norm(text).replace(/\s+/g, ''), syn, orig: text };
   }
   function wordPresent(ctx, w) { const t = tokens(w); return t.length ? t.every(x => hasTok(ctx.set, ctx.text, x, ctx.syn)) : ctx.compact.includes(norm(w).replace(/\s+/g, '')); }
   /* one mark-scheme point: { alts:[...], require:[word | [any of]], reject:[word] } */
@@ -112,7 +113,7 @@
     if (!p || !p.alts) return false;
     if ((p.reject || []).some(w => wordPresent(ctx, w))) return false;
     if (!(p.require || []).every(r => (Array.isArray(r) ? r : [r]).some(w => wordPresent(ctx, w)))) return false;
-    return p.alts.some(a => matchAlt(ctx, a));
+    return p.alts.some(a => caseMatters(a, p) ? caseHit(ctx.orig, a) : matchAlt(ctx, a));
   }
   function valueText(v) {
     if (v == null) return '';
@@ -123,6 +124,8 @@
   /* ───────────── text / written points ─────────────
      answer: { points:[{alts,require?,reject?}], need }      value: { latex } | { text } | string */
   function markPoints(answer, value, max, opts) {
+    if (answer.equation) return markEquation(answer, value, max);
+    if (answer.logic) return markLogicText(answer, value, max);
     const text = valueText(value);
     if (!text.trim()) return { score: 0, max, status: 'unanswered', detail: {} };
     const ctx = context(text, buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms)));
@@ -219,7 +222,7 @@
     let correct = false, unitWrong = false;
     const st0 = parseNumber(raw);
     for (const f of answer.final || []) {
-      if (f.expr != null) { if (raw && exprCanon(raw) === exprCanon(f.expr)) correct = true; continue; }
+      if (f.expr != null) { if (raw && algebraSame(raw, f.expr, f.form)) correct = true; continue; }
       if (!st0) continue;
       const su = unitNorm(latexToText(v.unit || '') || st0.unit);
       const eus = (f.units || [f.unit || '']).map(unitNorm).filter(Boolean);
@@ -253,11 +256,192 @@
     if (!text.trim()) return false;
     if (typeof spec === 'string' || typeof spec === 'number') spec = { alts: [String(spec)], exact: typeof spec === 'number' || /^[-+]?[\d.]+$/.test(String(spec)) };
     if (spec.final) return markNumeric(spec, { answer: text }, 1).score === 1;
+    if (spec.alts && spec.alts.some(x => caseMatters(x, spec))) {
+      if (spec.alts.some(x => caseMatters(x, spec) && caseHit(text, x))) return true;
+      spec = Object.assign({}, spec, { alts: spec.alts.filter(x => !caseMatters(x, spec)) });
+      if (!spec.alts.length) return false;
+    }
     if (spec.exact) {
       const a = norm(text).replace(/\s+/g, '');
       return spec.alts.some(x => { const b = norm(String(x)).replace(/\s+/g, ''); if (a === b) return true; const p = parseNumber(text), q = parseNumber(String(x)); return !!(p && q && !p.unit && !q.unit && p.n === q.n); });
     }
     return pointHit(context(text, syn), spec);
+  }
+
+  /* ───────────── symbols whose capitals carry meaning ─────────────
+     Chemical formulae (CO2, NaCl, Co vs CO) and genotypes (Tt, tt, XHXh) are compared case-sensitively, so
+     "tt" is never accepted for "Tt". A genotype may be written either way round ("tT" = "Tt").
+     A spec can force it either way with case:true / case:false. */
+  function caseMatters(a, spec) {
+    if (spec && spec.case != null) return !!spec.case;
+    a = latexToText(String(a)).trim();
+    if (!a || /\s/.test(a) || !/[A-Za-z]/.test(a)) return false;
+    if (/^([A-Za-z])\1$/i.test(a)) return true;                 // TT, Tt, tt
+    if (/[a-z][A-Z]/.test(a)) return true;                      // NaCl, CaCO3, XHXh
+    if (/^(?:[A-Z][a-z]?\d*|\(|\)\d*)+(?:\d?[+\-])?$/.test(a) && (/[a-z\d]/.test(a) || a.length === 2)) return true;   // Co, CO, HCl, Fe2O3, SO4 2-
+    if (/[A-Z]/.test(a) && /\d/.test(a)) return true;            // H2O, CO2, Fe2O3
+    return false;
+  }
+  function caseHit(text, alt) {
+    const t = latexToText(text || '').replace(/[₀-₉]/g, c => SUBS[c]);
+    const a = latexToText(String(alt)).replace(/\s+/g, '');
+    const words = t.split(/[^A-Za-z0-9()^+\-]+/).filter(Boolean);
+    if (t.replace(/\s+/g, '') === a) return true;
+    if (/^([A-Za-z])\1$/i.test(a)) return words.some(w => w === a || (w.length === 2 && w[1] + w[0] === a));
+    return words.some(w => w === a);
+  }
+
+  /* ───────────── algebra: same expression, and in the asked-for form ─────────────
+     Two expressions are the same when they agree at several random values of their letters.
+     The form follows the model answer unless spec.form says otherwise:
+       model factorised  -> the student's must be a product of brackets   ("factorise")
+       model has no brackets -> the student's must have none, and no more terms than the model ("expand", "simplify")
+     so copying the question ("3(x+2)" for "expand 3(x+2)") never scores. */
+  function toJs(s) {
+    s = norm(s).replace(/\s+/g, '').replace(/^[a-z]=(?!=)/, '').replace(/×/g, '*').replace(/÷/g, '/').replace(/π/g, '(pi)')
+      .replace(/sqrt/g, 'q').replace(/\^/g, '**');
+    if (/[^0-9a-z.+\-*/()]/.test(s)) return null;
+    s = s.replace(/pi/g, 'P');
+    // implicit multiplication: 2x, x(…), )(, )x, 2(…), xy
+    s = s.replace(/(\d|\))(?=[a-zA-Z(])/g, '$1*').replace(/([a-zA-Z])(?=[a-zA-Z(\d])/g, (m, c, off, str) => c === 'q' && str[off + 1] === '(' ? c : c + '*');
+    s = s.replace(/\)(?=\d)/g, ')*');
+    return s;
+  }
+  function evalAt(js, vars) {
+    try {
+      const names = Object.keys(vars);
+      // eslint-disable-next-line no-new-func
+      return Function(...names, 'q', 'P', '"use strict"; return (' + js + ');')(...names.map(n => vars[n]), Math.sqrt, Math.PI);
+    } catch (e) { return NaN; }
+  }
+  function topTerms(s) { let d = 0, n = 1; const t = norm(s).replace(/\s+/g, '').replace(/^[a-z]=(?!=)/, '');
+    for (let i = 0; i < t.length; i++) { const c = t[i]; if (c === '(') d++; else if (c === ')') d--; else if (!d && (c === '+' || c === '-') && i > 0 && !/[e^*/(]/.test(t[i - 1])) n++; } return n; }
+  function wraps(t) { if (t[0] !== '(' || t[t.length - 1] !== ')') return false; let d = 0; for (let i = 0; i < t.length; i++) { if (t[i] === '(') d++; else if (t[i] === ')') d--; if (!d && i < t.length - 1) return false; } return true; }
+  function gcd(a, b) { return b ? gcd(b, a % b) : Math.abs(a); }
+  function fullyFactorised(t) {     // no bracket still holding a common number: 2(2x+6) is not finished
+    return (t.match(/\(([^()]*)\)/g) || []).every(b => { const cs = (b.slice(1, -1).match(/(^|[+\-])\d*(?=[a-z]|$|[+\-])|(^|[+\-])\d+/g) || []).map(x => Math.abs(Number(x.replace(/[+\-]/, '')) || 1)); return cs.length < 2 || cs.reduce(gcd) === 1; });
+  }
+  function shapeOf(s) {
+    let t = norm(s).replace(/\s+/g, '').replace(/^[a-z]=(?!=)/, '');
+    while (wraps(t)) t = t.slice(1, -1);
+    if (!/\(/.test(t)) return 'plain';
+    let d = 0, slash = false; for (const c of t) { if (c === '(') d++; else if (c === ')') d--; else if (!d && c === '/') slash = true; }
+    const product = /\)\(|\)[\da-z]|[\da-z]\(/.test(t);
+    return !slash && product && fullyFactorised(t) && topTerms(t) === 1 && /\([^()]*[a-z][^()]*[+\-][^()]*\)/.test(t) ? 'factorised' : 'other';
+  }
+  function algebraSame(student, model, form) {
+    if (exprCanon(student) === exprCanon(model)) return true;
+    const a = toJs(student), b = toJs(model);
+    if (!a || !b) return false;
+    const letters = [...new Set((a + b).match(/[a-z]/g) || [])].filter(c => c !== 'q');
+    if ((a.match(/[a-z]/g) || []).some(c => c !== 'q' && !letters.includes(c))) return false;
+    for (let k = 0; k < 6; k++) {
+      const vars = {}; letters.forEach((c, i) => { vars[c] = 0.37 + 1.13 * k + 0.71 * i + (k % 2 ? -3.1 : 0); });
+      const x = evalAt(a, vars), y = evalAt(b, vars);
+      if (!isFinite(x) || !isFinite(y) || Math.abs(x - y) > 1e-7 * Math.max(1, Math.abs(y))) return false;
+    }
+    const want = form || shapeOf(model);
+    if (want === 'factorised') return shapeOf(student) === 'factorised';
+    if (want === 'plain' || want === 'expanded' || want === 'simplified') return shapeOf(student) === 'plain' && topTerms(student) <= topTerms(model);
+    return true;
+  }
+
+  /* ───────────── chemical equations ─────────────
+     answer: { equation:'2H2 + O2 → 2H2O', states?:true, marks?:{formulae,balance,states} }   value: text box
+     Symbol equations: right species on each side (formulae, charges), then balanced (any multiple of the model's
+     numbers), then state symbols if the question asks for them. Word equations: reactants, then products. */
+  function eqSides(text) {
+    let s = latexToText(text || '').replace(/[−–—]/g, '-').replace(/⟶|⇌|→|->|=+>?|⟹/g, '→');
+    const parts = s.split('→');
+    if (parts.length !== 2) return null;
+    return parts.map(splitSpecies);
+  }
+  function splitSpecies(side) {
+    const out = []; let cur = '', depth = 0;
+    const s = side.trim();
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === '(') depth++; if (c === ')') depth--;
+      if (c === '+' && depth === 0 && s[i - 1] !== '^') {
+        const rest = s.slice(i + 1).trimStart();
+        if (rest && /^[A-Za-z0-9(½]/.test(rest) && cur.trim()) { out.push(cur.trim()); cur = ''; continue; }
+      }
+      cur += c;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out.map(species);
+  }
+  function species(t) {
+    let s = t.replace(/\s+/g, ' ').trim(), state = null, coef = 1;
+    const st = s.match(/\(\s*(s|l|g|aq)\s*\)\s*$/i); if (st) { state = st[1].toLowerCase(); s = s.slice(0, st.index).trim(); }
+    const c = s.match(/^(\d+(?:\.\d+)?|½)\s*(?=[A-Za-z(])/); if (c) { coef = c[1] === '½' ? 0.5 : Number(c[1]); s = s.slice(c[0].length); }
+    let charge = '';
+    const ch = s.match(/\^\(?(\d*)([+\-])\)?$/) || s.match(/(?<=[A-Za-z)\]])(\d?)([+\-])$/);
+    if (ch) { charge = (ch[1] && ch[1] !== '1' ? ch[1] : '') + ch[2]; s = s.slice(0, ch.index); }
+    const word = /\s/.test(s) || /^[a-z]{3,}/.test(s);
+    return { f: word ? norm(s) : s.replace(/\s+/g, ''), charge, coef, state, word };
+  }
+  function atomCount(f) {           // H2SO4 -> {H:2,S:1,O:4}, Ca(OH)2 -> {Ca:1,O:2,H:2}
+    const stack = [{}]; let m;
+    const tokens = f.match(/[A-Z][a-z]?\d*|e\d*|\(|\)\d*|·|\d+/g) || [];
+    for (const tk of tokens) {
+      if (tk === '(') stack.push({});
+      else if (tk[0] === ')') { const n = Number(tk.slice(1) || 1), top = stack.pop(); for (const k in top) stack[stack.length - 1][k] = (stack[stack.length - 1][k] || 0) + top[k] * n; }
+      else if ((m = tk.match(/^([A-Z][a-z]?|e)(\d*)$/))) { if (m[1] === 'e') continue; stack[stack.length - 1][m[1]] = (stack[stack.length - 1][m[1]] || 0) + Number(m[2] || 1); }
+    }
+    return stack[0];
+  }
+  const key = sp => sp.f + (sp.charge ? '^' + sp.charge : '');
+  function sameSet(a, b, ci) { const k = x => ci ? key(x).toLowerCase() : key(x); const A = a.map(k).sort().join('|'), B = b.map(k).sort().join('|'); return A === B; }
+  function markEquation(answer, value, max) {
+    const text = valueText(value);
+    if (!text.trim()) return { score: 0, max, status: 'unanswered', detail: {} };
+    const model = eqSides(answer.equation), got = eqSides(text);
+    if (!model) return { score: 0, max, status: 'no_answer_key', detail: {} };
+    if (!got) return { score: 0, max, status: 'marked', detail: { eq: { arrow: false } } };
+    const word = model[0].concat(model[1]).some(s => s.word);
+    const d = { arrow: true, word };
+    if (word) {
+      d.reactants = sameSet(got[0], model[0], true); d.products = sameSet(got[1], model[1], true);
+      const n = (d.reactants ? 1 : 0) + (d.products ? 1 : 0);
+      return { score: max >= 2 ? Math.min(max, n) : (n === 2 ? max : 0), max, status: 'marked', detail: { eq: d } };
+    }
+    d.formulae = sameSet(got[0], model[0]) && sameSet(got[1], model[1]);
+    if (d.formulae) {
+      const ratio = [];
+      model.forEach((side, i) => side.forEach(sp => { const g = got[i].find(x => key(x) === key(sp)); ratio.push(g.coef / sp.coef); }));
+      d.balanced = ratio.every(r => Math.abs(r - ratio[0]) < 1e-9);
+      if (!d.balanced) {   // a different but still balanced set of numbers also counts
+        const qOf = sp => sp.charge ? (sp.charge.endsWith('-') ? -1 : 1) * Number(sp.charge.slice(0, -1) || 1) : (sp.f === 'e' ? -1 : 0);
+        const tally = side => { const t = { _q: 0 }; side.forEach(sp => { const a = atomCount(sp.f); for (const k in a) t[k] = (t[k] || 0) + a[k] * sp.coef; t._q += qOf(sp) * sp.coef; }); return t; };
+        const L = tally(got[0]), R = tally(got[1]); const ks = new Set(Object.keys(L).concat(Object.keys(R)));
+        d.balanced = [...ks].every(k => Math.abs((L[k] || 0) - (R[k] || 0)) < 1e-9);
+      }
+    }
+    if (answer.states) {
+      d.states = model.every((side, i) => side.every(sp => { const g = got[i].find(x => key(x) === key(sp)); return g && g.state === sp.state; }));
+    }
+    const parts = [d.formulae, d.formulae && d.balanced].concat(answer.states ? [d.states] : []);
+    const n = parts.filter(Boolean).length;
+    const score = max >= parts.length ? Math.min(max, n) : (n === parts.length ? max : Math.max(0, Math.min(max, n - (parts.length - max))));
+    return { score, max, status: 'marked', detail: { eq: d } };
+  }
+
+  /* ───────────── a logic expression written as text ─────────────
+     answer: { logic:'(A AND B) OR NOT C' }   full marks when the student's expression has the same truth table */
+  function markLogicText(answer, value, max) {
+    const text = valueText(value).replace(/^\s*[A-Z]\s*=\s*/, '');
+    if (!text.trim()) return { score: 0, max, status: 'unanswered', detail: {} };
+    let e, m;
+    try { e = parseExpr(text); } catch (err) { return { score: 0, max, status: 'marked', detail: { logic: { error: 'Could not read the expression: ' + err.message } } }; }
+    m = parseExpr(answer.logic);
+    const vars = [...new Set([...exprVars(e), ...exprVars(m)])].sort();
+    let bad = null;
+    for (let r = 0; r < 1 << vars.length && !bad; r++) {
+      const env = {}; vars.forEach((v, i) => { env[v] = (r >> (vars.length - 1 - i)) & 1; });
+      if (evalExpr(e, env) !== evalExpr(m, env)) bad = env;
+    }
+    return { score: bad ? 0 : max, max, status: 'marked', detail: { logic: { same: !bad, row: bad } } };
   }
 
   /* ───────────── mcq ─────────────
@@ -466,5 +650,5 @@
     if (value == null) return { score: 0, max, status: 'unanswered', detail: {} };
     return fn(answer, value, max, opts || {}, question);
   }
-  return { mark, latexToText, norm, tokens, parseNumber, exprCanon, parseExpr, markPoints, markProse, markNumeric, markMcq, markMatch, markKeyed, markLogic, markPlot, markEcon, MARKERS };
+  return { mark, latexToText, norm, tokens, parseNumber, exprCanon, parseExpr, markPoints, markProse, markNumeric, markMcq, markMatch, markKeyed, markLogic, markPlot, markEcon, MARKERS, algebraSame, markEquation, markLogicText, caseMatters };
 });

@@ -33,8 +33,8 @@ Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowc
 
 | id | Student does | Saves | Mark scheme (`answer`) | Marked by |
 |---|---|---|---|---|
-| `text` | types a short answer | `{ latex }` | `{ points:[{alts,require?,reject?}], need }` | keyword match per point |
-| `formula` | working, answer, unit (unit always shown) | `{ formula, answer, unit }` | `{ final:[{value,unit,units?,abs?} \| {lo,hi} \| {expr}], method:[…] }` | number within 0.5 %, unit check, method marks |
+| `text` | types a short answer | `{ latex }` | `{ points:[{alts,require?,reject?}], need }`, or `{ equation }`, or `{ logic }` | keyword match per point; equations by species and balance; logic expressions by truth table |
+| `formula` | working, answer, unit (unit always shown) | `{ formula, answer, unit }` | `{ final:[{value,unit,units?,abs?} \| {lo,hi} \| {expr}], method:[…] }` | number within 0.5 %, unit check, method marks; algebra by value and form |
 | `mcq` | picks one / several / a picture | `{ choice }` or `{ choices:[…] }` | `{ key }` or `{ keys:[…], scale? }` | exact; several = right ticks − wrong ticks |
 | `match` | picks a partner for each item | `{ pairs:{left:right} }` | `{ pairs:{…}, scale? }` | one per correct pair |
 | `table` | fills blank cells | `{ cells:{ r1c2:"…" } }` | `{ cells:{ r1c2: spec }, scheme?:'row', scale? }` | each cell as text or number |
@@ -44,17 +44,28 @@ Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowc
 | `logic` | builds a gate circuit | `{ gates, inputs, outputs, wires }` | `{ expr:"(A AND B) OR NOT C", output? }` | truth table; part marks per correct gate |
 | `flowfill` | completes blank flowchart boxes | `{ boxes:{id:"…"} }` | `{ boxes:{ id: spec } }` | each box as text (exact if chosen from a list) |
 | `order` | puts given lines of an algorithm in order, with indents (Parsons) | `{ order:[…], indent:[…] }` | `{ order:[…], indent? }` | longest run in the right order |
-| `code` | writes Cambridge pseudocode; **Run** button runs it on inputs they type | `{ code }` | `{ tests:[{input,expect}], features? }` | runs the program on each test; part marks for loop / selection / totalling … |
+| `code` | writes Cambridge pseudocode; **Run** button runs it on inputs they type (and on `config.files`) | `{ code }` | `{ tests:[{input,expect,files?,expectFiles?}], features? }` | runs the program on each test; part marks for loop / selection / totalling … |
 | `sql` | writes a query; the table is shown and **Run query** shows the result | `{ code }` | `{ model, tables }` | runs both queries and compares the rows (ORDER BY needed if the model sorts) |
 | `flowchart` | builds a flowchart from shapes; **Run flowchart** steps through it | `{ nodes, edges }` | `{ tests, features? }` | runs the flowchart like a program; FDE-style diagrams use `config.run:false` |
-| `circuit` | clicks components in, then terminal to terminal to wire | `{ components, wires }` | `{ components, arrangement, meters? }` | parts present, series/parallel, meters placed right |
+| `circuit` | clicks components in (all syllabus symbols, incl. thermistor, LDR, diode, LED, fuse, heater, motor), then terminal to terminal to wire | `{ components, wires }` | `{ components, arrangement, meters? }` | parts present, series/parallel, meters placed right |
 | `shells` | adds shells and electrons, nucleus and charge | `{ nucleus, charge, shells }` | `{ shells, charge? }` | electrons per shell, charge |
 | `structure` | builds a molecule from atoms and bonds | `{ atoms, bonds }` | `{ model }` | same molecule (atom-and-bond fingerprint) |
-| `lewis` | places dots and crosses around atoms | `{ atoms }` | `{ … }` | shared pairs, lone electrons, full shells |
+| `lewis` | places dots and crosses around atoms; picks a charge to make an ion | `{ atoms }` | `{ bonds, lone }` or `{ ionic:true, ions, electrons }` | covalent: shared pairs, lone electrons; ionic: electrons, charges, gained electron shown |
 
 `spec` = a string or number, or `{ alts:[…], require?, reject?, exact? }`, or `{ final:[…] }` for a number with a unit.
 `scale` = marks for a count, e.g. `{ 5:4, 4:3, 3:2, 2:1 }`.
 `require` = words that must be present (an inner list means "any of"); `reject` = words that cancel the point.
+
+**Capitals.** Chemical formulae and genotypes (`H2SO4`, `Co`, `NaCl`, `Tt`, `tt`) are compared with capitals, so `tt` never
+scores for `Tt` and `CO` never scores for `Co`. Genotypes may be either way round (`tT` = `Tt`). Force it with `case:true|false`.
+
+**Algebra.** `{ expr }` answers count when they have the same value as the model for any letters, **and** the same form:
+a factorised model needs a full factorisation (`2(x+3)`, not `(2x+6)` or `x(2x+6)`); a model without brackets needs an
+answer without brackets and no more terms (so copying the question, `3(x+2)` for "expand", scores nothing). `form` overrides.
+
+**Equations.** `{ equation:'Zn(s) + 2HCl(aq) → ZnCl2(aq) + H2(g)', states?:true }`: one mark for the right formulae and
+charges, one for balancing (any multiple), one for state symbols when asked. Ionic and half-equations work (`Cu2+ + 2e- → Cu`).
+Word equations get one mark per side. Nuclide notation is not read: use table boxes for mass and proton numbers.
 
 Typed boxes are MathLive fields (answers arrive as LaTeX; the markers convert it) with a plain-input fallback.
 
@@ -66,6 +77,7 @@ Typed boxes are MathLive fields (answers arrive as LaTeX; the markers convert it
 - `logic` on a phone is cramped: the canvas pans, but building is easier on a wider screen.
 - `flowfill` scrolls sideways inside its box on a phone.
 - `code`/`flowchart` marks depend on good test cases in the mark scheme; a program that prints extra words still passes if the numbers match.
+- `code` runs Cambridge pseudocode only. Answers written in Python, Java or Visual Basic are not run.
 
 ## Set aside for now: graph interfaces
 
@@ -85,9 +97,9 @@ Their marking stays in `marking/mark.js`.
 
 ```
 npm install            # once, in ../vendor or anywhere: playwright, mathlive, konva (only needed for the tests)
-node tests/mark.test.js       # 150 marking checks
-node tests/builders.test.js   # 108 checks: pseudocode, SQL, flowchart, ordering, science builders
-node tests/e2e.test.js        # 140 browser checks (181 with NED_GRAPHS=1): every interface driven through its real controls
+node tests/mark.test.js       # 182 marking checks
+node tests/builders.test.js   # 120 checks: pseudocode (incl. files), SQL, flowchart, ordering, science builders
+node tests/e2e.test.js        # 153 browser checks (194 with NED_GRAPHS=1): every interface driven through its real controls
 ```
 
 The test page (`index.html`) marks every sample live in the right-hand panel and has a "Reload saved answer" button
