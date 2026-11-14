@@ -73,6 +73,12 @@ Method marks need the operation, not just the numbers: `924/0.88` is not shown b
 words, formulae for names (CO₂ = carbon dioxide), "ppt", "infra-red"/"IR", "2.8.3" for 2,8,3, and words the question
 already says. Capitals matter only for formulae and genotypes (pH is exempt; X^BX^b = X^bX^B).
 
+**Writing keys (converter practice).** Put words that must appear together in quotes: `'"collision rate" increases'`
+does not score for "collide … the rate increases". Use `require` for the key term a point cannot do without (e.g.
+`activation energy` + a comparison word). `scale` works on short answers too ("3 observations = 2 marks, 2 = 1").
+For maths: `form:'simplest'` when the question says "simplest form", `figs 1152` as a method line for "M1 figs 1152",
+and ranges ("1–2 atm") count when both ends are inside the allowed range.
+
 **Equations.** `{ equation:'Zn(s) + 2HCl(aq) → ZnCl2(aq) + H2(g)', states?:true }`: one mark for the right formulae and
 charges, one for balancing (any multiple), one for state symbols when asked. Ionic and half-equations work (`Cu2+ + 2e- → Cu`).
 Word equations get one mark per side. Nuclide notation is not read from typed text: use the `nuclide` interface.

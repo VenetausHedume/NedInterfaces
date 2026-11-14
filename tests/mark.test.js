@@ -247,6 +247,18 @@ t('word equation, one side wrong', sc('text', { equation: 'glucose + oxygen → 
 t('logic expression equivalent', sc('text', { logic: '(A AND B) OR NOT C' }, { latex: 'X = NOT C OR (B AND A)' }, 2), 2);
 t('logic expression different', sc('text', { logic: '(A AND B) OR NOT C' }, { latex: 'A AND B OR C' }, 2), 0);
 
+// ── from the real candidate answers (Cambridge ECR booklets, Nov 2026) ──
+t('quoted key words must be together', sc('text', { points: [{ alts: ['"collision rate" increases'] }], need: 1 }, { latex: 'more particles to collide so the rate would increase' }, 1), 0);
+t('quoted key words together score', sc('text', { points: [{ alts: ['"collision rate" increases'] }], need: 1 }, { latex: 'the collision rate increases' }, 1), 1);
+t('scale on short answers: 2 of 3 observations = 1', sc('text', { points: [{ alts: ['bubbles'] }, { alts: ['solid dissolves'] }, { alts: ['blue solution'] }], need: 3, scale: { 3: 2, 2: 1 } }, { latex: 'bubbles of gas and a blue solution' }, 2), 1);
+t('sulphate = sulfate', sc('text', { points: [{ require: ['copper sulfate'] }], need: 1 }, { latex: 'copper sulphate' }, 1), 1);
+t('range answer inside the allowed range', sc('formula', { final: [{ lo: 1, hi: 5, unit: 'atm', units: ['atm', 'atmospheres', ''] }] }, { answer: '1-2 atmospheres' }, 1), 1);
+t('range answer partly outside', sc('formula', { final: [{ lo: 400, hi: 500, unit: '°C', units: ['°C', ''] }] }, { answer: '450 °C to 700 °C' }, 1), 0);
+t('fraction with a product below: 5/(2x)', sc('formula', { final: [{ expr: '(x+5)/(2x)' }] }, { answer: '\\frac{5+x}{2x}' }, 2), 2);
+t('simplest form: unsimplified fraction gets the method mark only', sc('formula', { final: [{ expr: '(x+5)/(2x)', form: 'simplest' }], method: ['10x+2x^2'] }, { answer: '\\frac{10x+2x^2}{4x^2}', formula: '(8x+2x+2x^2)/(4x^2)' }, 2), 1);
+t('"figs" method mark', sc('formula', { final: [{ value: 0.01152 }], method: ['figs 1152'] }, { answer: '1.152\\times10^{10}' }, 2), 1);
+t('repeated words in a key count once', sc('text', { points: [{ alts: ['more particles have energy greater than the activation energy'] }], need: 1 }, { latex: 'they collide with greater energy' }, 1), 0);
+
 // ── general ──
 t('no answer key', M.mark('text', null, { latex: 'x' }, { marks: 1 }).status, 'no_answer_key');
 t('unknown ui', M.mark('zzz', {}, { a: 1 }, { marks: 1 }).status, 'no_marker');

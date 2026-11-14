@@ -31,7 +31,7 @@
     s = s.replace(/\\[,;:!]/g, ' ').replace(/\\(?:quad|qquad)(?![a-zA-Z])/g, ' ').replace(/\\(?:left|right|displaystyle)(?![a-zA-Z])/g, '');
     s = s.replace(/\\ /g, ' ').replace(/\\placeholder\s*(\{[^{}]*\})?/g, '');
     s = s.replace(/\\(d|t)?frac\s*(\d)\s*(\d)/g, '\\frac{$2}{$3}');                 // \frac12
-    for (let i = 0; i < 6 && /\\(?:d|t)?frac/.test(s); i++) s = s.replace(/\\(?:d|t)?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (m, a, b) => `${wrap(a)}/${wrap(b)}`);
+    for (let i = 0; i < 6 && /\\(?:d|t)?frac/.test(s); i++) s = s.replace(/\\(?:d|t)?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (m, a, b) => `${wrap(a)}/${/^(\d+(\.\d+)?|[A-Za-z])$/.test(b.trim()) ? b.trim() : '(' + b.trim() + ')'}`);
     for (let i = 0; i < 4 && /\\sqrt/.test(s); i++) s = s.replace(/\\sqrt\s*\{([^{}]*)\}/g, 'sqrt($1)');
     s = s.replace(/\^\s*\{\s*\\circ\s*\}|\^\s*\\circ/g, '°');
     s = s.replace(/\^\s*\{([^{}]*)\}/g, (m, a) => '^' + wrap(a)).replace(/_\s*\{([^{}]*)\}/g, '$1').replace(/_([0-9a-zA-Z])/g, '$1');
@@ -43,7 +43,7 @@
   const PHRASES = [[/\bcan['’]?t\b/g, 'cannot'], [/\b(\w+)n['’]t\b/g, '$1 not'], [/['’]s\b/g, 's'],
     [/\binfra[\s-]?red\b|\bir\b/g, 'infrared'], [/\bultra[\s-]?violet\b|\buv\b/g, 'ultraviolet'], [/\bcheck[\s-]sum\b/g, 'checksum'],
     [/\b(man|human)[\s-]made\b|\bmade by (people|humans|man)\b/g, 'manmade'], [/\bgift of nature\b|\bfrom nature\b/g, 'natural'],
-    [/\bppt\b/g, 'precipitate'], [/\bsulphur/g, 'sulfur'], [/\baluminium\b/g, 'aluminum'], [/=\s*0(?![\d.])/g, ' is zero'],
+    [/\bppt\b/g, 'precipitate'], [/\bsteering(?!\s*wheel)\b/g, 'steering wheel'], [/\b(front glass|front window|windshield)\b/g, 'windscreen'], [/\bsulph/g, 'sulf'], [/\baluminium\b/g, 'aluminum'], [/=\s*0(?![\d.])/g, ' is zero'],
     [/(?<![\d.])(\d+)\.(\d+)\.(\d+)((?:\.\d+)*)(?![\d.])/g, (m) => m.replace(/\./g, ',')]];   // 2.8.3 -> 2,8,3 (an electron arrangement, not a decimal)
   function norm(s) {
     let t = latexToText(s).toLowerCase();
@@ -101,8 +101,16 @@
   }
   /* does the student's text contain this alternative?  all key words for short ones, most for long ones */
   function matchAlt(ctx, alt) {
+    /* "quoted words" in a mark-scheme alternative must appear together, in that order ("collision rate", not "collide … rate") */
+    const quoted = [...String(alt).matchAll(/"([^"]+)"/g)].map(m => tokens(m[1])).filter(t => t.length > 1);
+    if (quoted.length) {
+      const words = rawTokens(ctx.orig || ctx.text).map(stem);          // stop-words kept: "collide so the rate" is not "collision rate"
+      const at = (w, i) => hasTok(new Set([words[i]]), words[i] || '', w, ctx.syn);
+      if (!quoted.every(ph => words.some((_, i) => ph.every((w, k) => at(w, i + k))))) return false;
+      alt = String(alt).replace(/"/g, '');
+    }
     if (/^\s*\d+(\s*,\s*\d+)+\s*$/.test(alt)) { const a = alt.replace(/\s+/g, ''); return new RegExp('(^|[^\\d,])' + a + '($|[^\\d,])').test(ctx.compact); }
-    let need = tokens(alt);
+    let need = [...new Set(tokens(alt))];
     if (need.length >= 2 && ctx.q) { const own = need.filter(t => !ctx.q.has(t)); if (own.length) need = own; }   // words the question already says need not be repeated
     if (need.length === 1 && !/\s/.test(alt.trim()) && alt.trim().length >= 6 && ctx.compact.includes(norm(alt).replace(/\s+/g, ''))) return true;
     if (!need.length) {                                  // nothing but stop-words or symbols: a letter answer ("A"), "+2", "→"
@@ -156,7 +164,7 @@
     const awarded = [], missed = [];
     (answer.points || []).forEach((p, i) => { if ((!p.alts && !p.require) || exclude.has(i)) return; (pointHit(ctx, p) ? awarded : missed).push(i); });
     const need = Math.min(max, answer.need || max);
-    const score = Math.min(need, awarded.length);
+    const score = answer.scale ? ladder(awarded.length, max, answer.scale) : Math.min(need, awarded.length);
     return { score, max, status: score >= max ? 'marked' : 'unsure', detail: { awarded, missed } };
   }
 
@@ -170,18 +178,17 @@
     const syn = buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms));
     const pts = answer.points || [];
     const taken = new Set((opts && opts.exclude) || []);
-    const perBox = [];
+    const perBox = [], extraHits = [];
     /* when the student sorted their points under headings, a point only counts under the heading it belongs to */
     const sideOf = value && value.sides && answer.groups ? value.sides : null;
     boxes.forEach((b, bi) => {
       const ctx = context(b, syn, question);
-      let got = -1;
+      const got = [];
       const allowed = sideOf && answer.groups[sideOf[bi]] ? answer.groups[sideOf[bi]].points : null;
-      for (let i = 0; i < pts.length; i++) if ((pts[i].alts || pts[i].require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, pts[i])) { got = i; break; }
-      if (got >= 0) taken.add(got);
-      perBox.push(got);
+      for (let i = 0; i < pts.length && !got.length; i++) if ((pts[i].alts || pts[i].require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, pts[i])) { got.push(i); taken.add(i); }   // one point per box: overlapping mark-scheme points in one sentence must not count twice
+      perBox.push(got.length ? got[0] : -1); extraHits.push(...got.slice(1));
     });
-    let awarded = perBox.filter(i => i >= 0);
+    let awarded = perBox.filter(i => i >= 0).concat(extraHits);
     let score = awarded.length;
     const groupScores = [];
     if (answer.groups && answer.groups.length) {
@@ -248,6 +255,8 @@
   const opNorm = t => latexToText(t).replace(/[×·∗]|(?<=[\d)]\s*)x(?=\s*[\d(])/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-').replace(/\s+/g, '').replace(/[()]/g, '');
   function triples(t) { const out = []; const re = /(-?\d+(?:\.\d+)?)([*/+\-])(?=(-?\d+(?:\.\d+)?))/g; let m; while ((m = re.exec(t))) out.push([+m[1], m[2], +m[3]]); return out; }
   function methodShown(line, working) {
+    const figs = line.match(/^\s*figs\s+(\d+)\s*$/i);
+    if (figs) return (latexToText(working).replace(/[^\d.\s;×x*^]/g, ' ').match(/[\d.]+/g) || []).some(n => n.replace('.', '').replace(/^0+/, '').startsWith(figs[1]));
     const w = opNorm(working), l = opNorm(line);
     if (/[a-z]/i.test(l.replace(/sqrt/g, ''))) return w.toLowerCase().includes(l.toLowerCase());
     const lt = triples(l);
@@ -281,7 +290,10 @@
       if (!unitOk && su) for (const eu of eus) { const k = prefixFactor(su, eu); if (k) { st = Object.assign({}, st0, { n: st0.n * k }); if (f.strict) strictMiss = true; else unitOk = true; break; } }   // strict: right amount in the wrong unit loses the unit mark
       if (f.abs) st = Object.assign({}, st, { n: Math.abs(st.n) });
       let hit;
-      if (f.lo != null) { const lo = parseNumber(String(f.lo)), hi = parseNumber(String(f.hi)); hit = lo && hi && st.n >= lo.n - 1e-9 && st.n <= hi.n + 1e-9; }
+      if (f.lo != null) { const lo = parseNumber(String(f.lo)), hi = parseNumber(String(f.hi));
+        const rg = norm(raw).match(/^\s*(-?\d+(?:\.\d+)?)\s*(?:°?[a-z]*\s*)?(?:-|–|to)\s*(\d+(?:\.\d+)?)\s*(.*)$/);
+        if (rg) { const a = +rg[1], b = +rg[2]; hit = lo && hi && a >= lo.n - 1e-9 && b <= hi.n + 1e-9; if (!unitOk && rg[3] && (eus.includes(unitNorm(rg[3])))) unitOk = true; }
+        else hit = lo && hi && st.n >= lo.n - 1e-9 && st.n <= hi.n + 1e-9; }
       else { const exp = parseNumber(String(f.value)); const e2 = exp && (f.abs ? Object.assign({}, exp, { n: Math.abs(exp.n) }) : exp);
         hit = e2 && (f.exact ? Math.abs(st.n - e2.n) <= Math.abs(e2.n) * 1e-9 : numEqual(st, e2)); }
       if (hit) { if (unitOk) correct = true; else unitWrong = true; }
@@ -394,6 +406,7 @@
       if (!isFinite(x) || !isFinite(y) || Math.abs(x - y) > 1e-7 * Math.max(1, Math.abs(y))) return false;
     }
     if (form === 'any') return true;
+    if (form === 'simplest') return norm(student).replace(/[\s()]/g, '').length <= norm(model).replace(/[\s()]/g, '').length + 2;
     const want = form || (shapeOf(model) === 'factorised' ? 'factorised' : null);
     if (want === 'factorised') return shapeOf(student) === 'factorised';
     if (want === 'plain' || want === 'expanded' || want === 'simplified') return shapeOf(student) === 'plain' && topTerms(student) <= topTerms(model);

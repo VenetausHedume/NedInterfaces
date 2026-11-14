@@ -5,7 +5,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   return {
     general: {
-      increase: ['rise', 'go up', 'grow', 'higher', 'greater', 'bigger', 'larger'],
+      increase: ['rise', 'risen', 'rose', 'rising', 'go up', 'grow', 'higher', 'greater', 'bigger', 'larger'],
       decrease: ['fall', 'drop', 'go down', 'reduce', 'lower', 'less', 'smaller'],
       fast: ['quick', 'rapid'],
       wage: ['pay', 'salary', 'earnings'],
@@ -29,7 +29,7 @@
       constant: ['stay same', 'remain same', 'not change', 'unchanged', 'stays same', 'remains same'],
       occur: ['happen', 'take place'],
       collision: ['collide', 'collides', 'colliding'],
-      frequent: ['often', 'per second', 'rate'],
+      frequent: ['often', 'per second'],
       filter: ['filtration', 'filtrate'],
       wash: ['rinse'],
       zero: ['0', 'nothing'],
@@ -41,6 +41,11 @@
       remain: ['stay', 'keep'],
       may: ['might', 'could'],
       digest: ['break down', 'breakdown', 'digestion'],
+      rise: ['risen', 'rose', 'rising'],
+      uncertain: ['unknown', 'unclear', 'unidentified', 'indeterminate', 'undetermined', 'not certain'],
+      buy: ['purchase', 'purchasing'],
+      hit: ['crash', 'crashes', 'smash', 'strike', 'struck', 'bang'],
+      unit: ['particular', 'given'],
     },
   };
 });
