@@ -40,8 +40,15 @@
     return s.replace(/\s+/g, ' ').trim();
     function wrap(a) { a = a.trim(); return /^[\w.]+$/.test(a) ? a : '(' + a + ')'; }
   }
+  const PHRASES = [[/\bcan['’]?t\b/g, 'cannot'], [/\b(\w+)n['’]t\b/g, '$1 not'], [/['’]s\b/g, 's'],
+    [/\binfra[\s-]?red\b|\bir\b/g, 'infrared'], [/\bultra[\s-]?violet\b|\buv\b/g, 'ultraviolet'], [/\bcheck[\s-]sum\b/g, 'checksum'],
+    [/\b(man|human)[\s-]made\b|\bmade by (people|humans|man)\b/g, 'manmade'], [/\bgift of nature\b|\bfrom nature\b/g, 'natural'],
+    [/\bppt\b/g, 'precipitate'], [/\bsulphur/g, 'sulfur'], [/\baluminium\b/g, 'aluminum'], [/=\s*0(?![\d.])/g, ' is zero'],
+    [/(?<![\d.])(\d+)\.(\d+)\.(\d+)((?:\.\d+)*)(?![\d.])/g, (m) => m.replace(/\./g, ',')]];   // 2.8.3 -> 2,8,3 (an electron arrangement, not a decimal)
   function norm(s) {
-    return latexToText(s).toLowerCase()
+    let t = latexToText(s).toLowerCase();
+    PHRASES.forEach(([re, to]) => { t = t.replace(re, to); });
+    return t
       .replace(/[−–—]/g, '-').replace(/[×]/g, 'x').replace(/[‘’·]/g, "'")
       .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, m => '^' + [...m].map(c => SUP[c]).join(''))
       .replace(/[₀-₉]/g, c => SUBS[c])
@@ -65,6 +72,7 @@
   function tokens(s) { return rawTokens(s).filter(w => !STOP.has(w)).map(stem); }
   function lev1(a, b) {
     if (a === b) return true;
+    if (a.length === b.length) { const d = [...a].map((c, i) => (c !== b[i] ? i : -1)).filter(i => i >= 0); if (d.length === 2 && d[1] === d[0] + 1 && a[d[0]] === b[d[1]] && a[d[1]] === b[d[0]]) return true; }
     if (Math.abs(a.length - b.length) > 1) return false;
     let i = 0, j = 0, d = 0;
     while (i < a.length && j < b.length) {
@@ -87,12 +95,16 @@
       if (c.includes(' ')) { if ((' ' + text + ' ').includes(' ' + c + ' ')) return true; continue; }
       if (set.has(c)) return true;
       if (c.length >= 5 && !/\d/.test(c)) for (const s of set) if (lev1(s, c)) return true;
+      if (c.length === 4 && !/\d/.test(c)) for (const s of set) if (s.length === 4 && s !== c && lev1(s, c) && [...s].sort().join('') === [...c].sort().join('')) return true;   // vlave → valve
     }
     return false;
   }
   /* does the student's text contain this alternative?  all key words for short ones, most for long ones */
   function matchAlt(ctx, alt) {
-    const need = tokens(alt);
+    if (/^\s*\d+(\s*,\s*\d+)+\s*$/.test(alt)) { const a = alt.replace(/\s+/g, ''); return new RegExp('(^|[^\\d,])' + a + '($|[^\\d,])').test(ctx.compact); }
+    let need = tokens(alt);
+    if (need.length >= 2 && ctx.q) { const own = need.filter(t => !ctx.q.has(t)); if (own.length) need = own; }   // words the question already says need not be repeated
+    if (need.length === 1 && !/\s/.test(alt.trim()) && alt.trim().length >= 6 && ctx.compact.includes(norm(alt).replace(/\s+/g, ''))) return true;
     if (!need.length) {                                  // nothing but stop-words or symbols: a letter answer ("A"), "+2", "→"
       const rawNeed = rawTokens(alt);
       if (rawNeed.length) return rawNeed.every(w => ctx.raw.has(w));
@@ -103,17 +115,28 @@
     const frac = hits / need.length;
     return need.length <= 2 ? frac === 1 : need.length <= 4 ? frac >= 0.75 : frac >= 0.6;
   }
-  function context(text, syn) {
+  const FORMULA = { CO2: 'carbon dioxide', H2O: 'water', O2: 'oxygen', H2: 'hydrogen', N2: 'nitrogen', CO: 'carbon monoxide', SO2: 'sulfur dioxide', CH4: 'methane',
+    NaCl: 'sodium chloride', HCl: 'hydrochloric acid', NaOH: 'sodium hydroxide', H2SO4: 'sulfuric acid', NH3: 'ammonia', CaCO3: 'calcium carbonate', Cl2: 'chlorine', CaO: 'calcium oxide',
+    C6H12O6: 'glucose', C2H5OH: 'ethanol', HNO3: 'nitric acid', NO2: 'nitrogen dioxide', Fe: 'iron', Cu: 'copper', Zn: 'zinc', Mg: 'magnesium', Na: 'sodium', K: 'potassium', Ca: 'calcium', Al: 'aluminum', Ag: 'silver', Pb: 'lead' };
+  function withNames(text) {           // "CO2 and H2O" also reads as "carbon dioxide and water"
+    const t = latexToText(text).replace(/[₀-₉]/g, c => SUBS[c]);
+    const add = []; t.split(/[^A-Za-z0-9]+/).forEach(w => { if (FORMULA[w] && (/\d/.test(w) || /[A-Z].*[A-Z]|^[A-Z][a-z]$/.test(w))) add.push(FORMULA[w]); });
+    return add.length ? text + ' ; ' + add.join(' ; ') : text;
+  }
+  function context(text, syn, question) {
+    const orig = text; text = withNames(text);
     const toks = tokens(text);
-    return { set: new Set(toks), text: toks.join(' '), raw: new Set(rawTokens(text)), compact: norm(text).replace(/\s+/g, ''), syn, orig: text };
+    return { set: new Set(toks), text: toks.join(' '), raw: new Set(rawTokens(text)), compact: norm(text).replace(/\s+/g, ''), syn, orig, q: question && question.text ? new Set(tokens(question.text)) : null };
   }
   function wordPresent(ctx, w) { const t = tokens(w); return t.length ? t.every(x => hasTok(ctx.set, ctx.text, x, ctx.syn)) : ctx.compact.includes(norm(w).replace(/\s+/g, '')); }
   /* one mark-scheme point: { alts:[...], require:[word | [any of]], reject:[word] } */
   function pointHit(ctx, p) {
-    if (!p || !p.alts) return false;
+    if (!p || (!p.alts && !p.require)) return false;
     if ((p.reject || []).some(w => wordPresent(ctx, w))) return false;
-    if (!(p.require || []).every(r => (Array.isArray(r) ? r : [r]).some(w => wordPresent(ctx, w)))) return false;
-    return p.alts.some(a => caseMatters(a, p) ? caseHit(ctx.orig, a) : matchAlt(ctx, a));
+    const reqWord = w => (caseMatters(w) ? caseHit(ctx.orig, w) || (FORMULA[w] && wordPresent(ctx, FORMULA[w])) : wordPresent(ctx, w));
+    if (!(p.require || []).every(r => (Array.isArray(r) ? r : [r]).some(reqWord))) return false;
+    if (!p.alts || !p.alts.length) return true;                  // a point made only of required words
+    return p.alts.some(a => caseMatters(a, p) ? caseHit(ctx.orig, a) || (!!FORMULA[a] && matchAlt(ctx, FORMULA[a])) : matchAlt(ctx, a));
   }
   function valueText(v) {
     if (v == null) return '';
@@ -123,15 +146,15 @@
 
   /* ───────────── text / written points ─────────────
      answer: { points:[{alts,require?,reject?}], need }      value: { latex } | { text } | string */
-  function markPoints(answer, value, max, opts) {
+  function markPoints(answer, value, max, opts, question) {
     if (answer.equation) return markEquation(answer, value, max);
     if (answer.logic) return markLogicText(answer, value, max);
     const text = valueText(value);
     if (!text.trim()) return { score: 0, max, status: 'unanswered', detail: {} };
-    const ctx = context(text, buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms)));
+    const ctx = context(text, buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms)), question);
     const exclude = new Set((opts && opts.exclude) || []);
     const awarded = [], missed = [];
-    (answer.points || []).forEach((p, i) => { if (!p.alts || exclude.has(i)) return; (pointHit(ctx, p) ? awarded : missed).push(i); });
+    (answer.points || []).forEach((p, i) => { if ((!p.alts && !p.require) || exclude.has(i)) return; (pointHit(ctx, p) ? awarded : missed).push(i); });
     const need = Math.min(max, answer.need || max);
     const score = Math.min(need, awarded.length);
     return { score, max, status: score >= max ? 'marked' : 'unsure', detail: { awarded, missed } };
@@ -140,7 +163,7 @@
   /* ───────────── long answer, one box per point ─────────────
      answer: { points:[...], groups?:[{title,max,points:[indexes]}], need? }   value: { points:[latex...], conclusion? }
      Each box can earn at most one point; each point is credited once; a group never earns more than its max. */
-  function markProse(answer, value, max, opts) {
+  function markProse(answer, value, max, opts, question) {
     const boxes = ((value && value.points) || []).concat(value && value.conclusion ? [value.conclusion] : []).map(latexToText).filter(b => b.trim());
     if (typeof value === 'string' && value.trim()) boxes.push(latexToText(value));
     if (!boxes.length) return { score: 0, max, status: 'unanswered', detail: {} };
@@ -151,10 +174,10 @@
     /* when the student sorted their points under headings, a point only counts under the heading it belongs to */
     const sideOf = value && value.sides && answer.groups ? value.sides : null;
     boxes.forEach((b, bi) => {
-      const ctx = context(b, syn);
+      const ctx = context(b, syn, question);
       let got = -1;
       const allowed = sideOf && answer.groups[sideOf[bi]] ? answer.groups[sideOf[bi]].points : null;
-      for (let i = 0; i < pts.length; i++) if (pts[i].alts && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, pts[i])) { got = i; break; }
+      for (let i = 0; i < pts.length; i++) if ((pts[i].alts || pts[i].require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, pts[i])) { got = i; break; }
       if (got >= 0) taken.add(got);
       perBox.push(got);
     });
@@ -172,7 +195,7 @@
 
   /* ───────────── numbers ───────────── */
   function parseNumber(s) {
-    s = norm(s).replace(/(?<![\d.])\d{1,3}(?:[ ,]\d{3})+\b/g, m => m.replace(/[ ,]/g, '')).replace(/^[a-z]\s*=\s*/, '').replace(/^[$£€]\s*/, '');
+    s = norm(s).replace(/(?<![\d.])\d{1,3}(?:[ ,]\d{3})+\b/g, m => m.replace(/[ ,]/g, '')).replace(/^[a-z]\s*=\s*/, '').replace(/^[$£€]\s*/, '').replace(/^\+\s*(?=\d)/, '');
     let m = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*(?:x|\*)\s*10\s*\^?\s*\(?(-?\d+)\)?\s*(.*)$/);
     if (m) return { n: parseFloat(m[1]) * Math.pow(10, parseInt(m[2], 10)), unit: m[3], sig: sig(m[1]) };
     m = s.match(/^\s*(-?\d+(?:\.\d+)?)e(-?\d+)\s*(.*)$/);
@@ -187,7 +210,12 @@
   }
   function sig(d) { const t = d.replace('-', '').replace('.', '').replace(/^0+/, ''); return Math.max(1, t.length); }
   function unitNorm(u) {
-    return norm(u).replace(/\s+/g, '').replace(/per/g, '/').replace(/[°º]/g, 'deg').replace(/\^/g, '').replace(/[.;,()]+/g, '')
+    u = norm(u).trim().replace(/\^\((-?\d)\)/g, '^$1');
+    if (/\s/.test(u) && /\^?-\d/.test(u)) {           // kg m s^-1 -> kg m/s
+      const num = [], den = []; u.split(/\s+/).forEach(w => { const m = w.match(/^(.+?)\^?-(\d)$/); if (m) den.push(m[1] + (m[2] === '1' ? '' : m[2])); else num.push(w); });
+      u = num.join('') + (den.length ? '/' + den.join('') : '');
+    }
+    return u.replace(/\s+/g, '').replace(/per/g, '/').replace(/[°º]/g, 'deg').replace(/\^/g, '').replace(/[.;,()]+/g, '')
       .replace(/^(newtons?)$/, 'n').replace(/^(joules?)$/, 'j').replace(/^(amps?|amperes?)$/, 'a').replace(/^(volts?)$/, 'v')
       .replace(/^(watts?)$/, 'w').replace(/^(ohms?|Ω|ω)$/, 'ohm').replace(/^(metres?|meters?)$/, 'm').replace(/^(seconds?|secs?)$/, 's')
       .replace(/^years?$/, 'year').replace(/^(percent|percentage)$/, '%').replace(/^(grams?)$/, 'g').replace(/^(moles?|mols)$/, 'mol');
@@ -214,35 +242,56 @@
   /* answer: { final:[{value,unit?,units?,abs?} | {lo,hi,unit?} | {expr}], method:[lines] }
      value : { formula?, working?, answer, unit } (latex or plain)  — or a bare string
      Full marks for a correct final answer. Otherwise 1 mark per method line whose numbers all appear in the working (max-1). */
+  /* method lines: numbers joined by operations ('924/0.88', '1.2*15') must appear with the same operation in the working
+     (× and * the same; a × b = b × a); a line with letters ('20w+12', 'y=k/x^2') must appear as written (spaces ignored);
+     a single number ('197', '-2') must appear (with its sign). */
+  const opNorm = t => latexToText(t).replace(/[×·∗]|(?<=[\d)]\s*)x(?=\s*[\d(])/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-').replace(/\s+/g, '').replace(/[()]/g, '');
+  function triples(t) { const out = []; const re = /(-?\d+(?:\.\d+)?)([*/+\-])(?=(-?\d+(?:\.\d+)?))/g; let m; while ((m = re.exec(t))) out.push([+m[1], m[2], +m[3]]); return out; }
+  function methodShown(line, working) {
+    const w = opNorm(working), l = opNorm(line);
+    if (/[a-z]/i.test(l.replace(/sqrt/g, ''))) return w.toLowerCase().includes(l.toLowerCase());
+    const lt = triples(l);
+    if (!lt.length) { const n = l.match(/^-?\d+(?:\.\d+)?$/); return !!n && new RegExp('(^|[^\\d.])' + l.replace(/[.\-]/g, '\\$&') + '(?![\\d.])').test(w); }
+    const wt = triples(w);
+    const same = (a, b) => Math.abs(a - b) <= Math.abs(b) * 1e-9 + 1e-12 || (String(b).includes('.') && Math.abs(a - b) <= Math.abs(b) * 0.005);
+    return lt.every(([a, op, b]) => wt.some(([c, op2, d]) => op === op2 && ((same(c, a) && same(d, b)) || (op === '*' && same(c, b) && same(d, a)))));
+  }
+  /* answer: { final:[{value,unit?,units?,abs?,exact?,strict?} | {lo,hi,unit?} | {expr,form?} | {text:[formulae]}], method:[lines] }
+     value : { formula?, working?, answer, unit } (latex or plain)  — or a bare string
+     Full marks for a correct final answer. A right number with a missing or wrong unit loses one mark (a unit list that
+     includes '' makes the unit optional). exact:true = a fraction answer: rounded decimals do not count. strict:true =
+     "give your answer in km": no conversion from other units. Otherwise 1 mark per method line shown (max − 1). */
   function markNumeric(answer, value, max) {
     const v = typeof value === 'string' ? { answer: value } : (value || {});
     const raw = latexToText(v.answer != null ? v.answer : (v.latex || '')).trim();
     const working = latexToText([v.working, v.formula].filter(Boolean).join(' '));
     if (!raw && !working.trim()) return { score: 0, max, status: 'unanswered', detail: {} };
-    let correct = false, unitWrong = false;
+    let correct = false, unitWrong = false, partForm = false;
     const st0 = parseNumber(raw);
     for (const f of answer.final || []) {
-      if (f.expr != null) { if (raw && algebraSame(raw, f.expr, f.form)) correct = true; continue; }
+      if (f.text != null) { if (raw && [].concat(f.text).some(t => caseHit(raw, t) && raw.replace(/[\s{}_]/g, '').length <= String(t).length + 2)) correct = true; continue; }
+      if (f.expr != null) { if (raw && algebraSame(raw, f.expr, f.form)) correct = true;
+        else if (raw && (f.form || shapeOf(f.expr)) === 'factorised' && /\(/.test(raw) && algebraSame(raw, f.expr, 'any')) partForm = true; continue; }
       if (!st0) continue;
       const su = unitNorm(latexToText(v.unit || '') || st0.unit);
-      const eus = (f.units || [f.unit || '']).map(unitNorm).filter(Boolean);
-      let st = st0, unitOk = !su || !eus.length || eus.includes(su);
-      if (!unitOk) for (const eu of eus) { const k = prefixFactor(su, eu); if (k) { st = Object.assign({}, st0, { n: st0.n * k }); unitOk = true; break; } }
+      const listed = f.units || [f.unit || ''];
+      const eus = listed.map(unitNorm).filter(Boolean), optional = !eus.length || listed.some(u => unitNorm(u) === '');
+      let st = st0, unitOk = su ? (!eus.length || eus.includes(su)) : optional;
+      let strictMiss = false;
+      if (!unitOk && su) for (const eu of eus) { const k = prefixFactor(su, eu); if (k) { st = Object.assign({}, st0, { n: st0.n * k }); if (f.strict) strictMiss = true; else unitOk = true; break; } }   // strict: right amount in the wrong unit loses the unit mark
       if (f.abs) st = Object.assign({}, st, { n: Math.abs(st.n) });
       let hit;
       if (f.lo != null) { const lo = parseNumber(String(f.lo)), hi = parseNumber(String(f.hi)); hit = lo && hi && st.n >= lo.n - 1e-9 && st.n <= hi.n + 1e-9; }
-      else { const exp = parseNumber(String(f.value)); hit = exp && numEqual(st, f.abs ? Object.assign({}, exp, { n: Math.abs(exp.n) }) : exp); }
+      else { const exp = parseNumber(String(f.value)); const e2 = exp && (f.abs ? Object.assign({}, exp, { n: Math.abs(exp.n) }) : exp);
+        hit = e2 && (f.exact ? Math.abs(st.n - e2.n) <= Math.abs(e2.n) * 1e-9 : numEqual(st, e2)); }
       if (hit) { if (unitOk) correct = true; else unitWrong = true; }
     }
     if (correct) return { score: max, max, status: 'marked', detail: { final: true } };
     let method = 0;
-    const have = new Set(numbersIn(working + ' ' + raw));
-    for (const line of answer.method || []) {
-      if (line.split(/\s+OR\s+|\s+or\s+/).some(alt => { const ns = numbersIn(alt); return ns.length >= 2 && ns.every(n => have.has(n)); })) method++;
-    }
+    for (const line of answer.method || []) if (line.split(/\s+OR\s+|\s+or\s+/).some(alt => methodShown(alt, working + ' ; ' + raw))) method++;
     const cap = Math.max(0, max - 1);
-    const score = Math.min(cap, method + (unitWrong ? Math.max(0, cap - method) : 0));
-    return { score, max, status: 'marked', detail: { final: false, method, unitWrong } };
+    const score = partForm && max >= 2 ? cap : Math.min(cap, method + (unitWrong ? Math.max(0, cap - method) : 0));
+    return { score, max, status: 'marked', detail: { final: false, method, unitWrong, partForm } };
   }
 
   /* how many marks for n right (minus wrong)?  scale: {"3":2,"2":1}; default 1 each, capped at max */
@@ -262,7 +311,7 @@
       if (!spec.alts.length) return false;
     }
     if (spec.exact) {
-      const a = norm(text).replace(/\s+/g, '');
+      const a = norm(text).replace(/\s+/g, '').replace(/^0x(?=[0-9a-f]+$)/, '').replace(/(?<=^[0-9a-f]+)(?:_?16|\(16\))$/, '');
       return spec.alts.some(x => { const b = norm(String(x)).replace(/\s+/g, ''); if (a === b) return true; const p = parseNumber(text), q = parseNumber(String(x)); return !!(p && q && !p.unit && !q.unit && p.n === q.n); });
     }
     return pointHit(context(text, syn), spec);
@@ -274,17 +323,21 @@
      A spec can force it either way with case:true / case:false. */
   function caseMatters(a, spec) {
     if (spec && spec.case != null) return !!spec.case;
-    a = latexToText(String(a)).trim();
+    a = latexToText(String(a)).replace(/[\^{}]/g, '').trim();
     if (!a || /\s/.test(a) || !/[A-Za-z]/.test(a)) return false;
+    if (/^ph$/i.test(a)) return false;                           // pH: examiners accept PH, ph
     if (/^([A-Za-z])\1$/i.test(a)) return true;                 // TT, Tt, tt
     if (/[a-z][A-Z]/.test(a)) return true;                      // NaCl, CaCO3, XHXh
     if (/^(?:[A-Z][a-z]?\d*|\(|\)\d*)+(?:\d?[+\-])?$/.test(a) && (/[a-z\d]/.test(a) || a.length === 2)) return true;   // Co, CO, HCl, Fe2O3, SO4 2-
     if (/[A-Z]/.test(a) && /\d/.test(a)) return true;            // H2O, CO2, Fe2O3
     return false;
   }
+  const SEXLINK = /^((?:X[A-Za-z]?)|Y)((?:X[A-Za-z]?)|Y)$/;
   function caseHit(text, alt) {
-    const t = latexToText(text || '').replace(/[₀-₉]/g, c => SUBS[c]);
-    const a = latexToText(String(alt)).replace(/\s+/g, '');
+    const t = latexToText(text || '').replace(/[₀-₉]/g, c => SUBS[c]).replace(/\^([A-Za-z])/g, '$1').replace(/[{}]/g, '');
+    const a = latexToText(String(alt)).replace(/\s+/g, '').replace(/\^([A-Za-z])/g, '$1').replace(/[{}]/g, '');
+    const sl = a.match(SEXLINK);
+    if (sl) return t.split(/[^A-Za-z]+/).filter(Boolean).some(w => { const m = w.match(SEXLINK); return w === a || (m && m[1] === sl[2] && m[2] === sl[1]); });
     const words = t.split(/[^A-Za-z0-9()^+\-]+/).filter(Boolean);
     if (t.replace(/\s+/g, '') === a) return true;
     if (/^([A-Za-z])\1$/i.test(a)) return words.some(w => w === a || (w.length === 2 && w[1] + w[0] === a));
@@ -340,7 +393,8 @@
       const x = evalAt(a, vars), y = evalAt(b, vars);
       if (!isFinite(x) || !isFinite(y) || Math.abs(x - y) > 1e-7 * Math.max(1, Math.abs(y))) return false;
     }
-    const want = form || shapeOf(model);
+    if (form === 'any') return true;
+    const want = form || (shapeOf(model) === 'factorised' ? 'factorised' : null);
     if (want === 'factorised') return shapeOf(student) === 'factorised';
     if (want === 'plain' || want === 'expanded' || want === 'simplified') return shapeOf(student) === 'plain' && topTerms(student) <= topTerms(model);
     return true;
@@ -372,7 +426,7 @@
     return out.map(species);
   }
   function species(t) {
-    let s = t.replace(/\s+/g, ' ').trim(), state = null, coef = 1;
+    let s = t.replace(/\s+/g, ' ').trim().replace(/\s+(\d?[+\-−])$/, '^($1)'), state = null, coef = 1;   // 'Cr2O7 2-' as mark schemes print it
     const st = s.match(/\(\s*(s|l|g|aq)\s*\)\s*$/i); if (st) { state = st[1].toLowerCase(); s = s.slice(0, st.index).trim(); }
     const c = s.match(/^(\d+(?:\.\d+)?|½)\s*(?=[A-Za-z(])/); if (c) { coef = c[1] === '½' ? 0.5 : Number(c[1]); s = s.slice(c[0].length); }
     let charge = '';

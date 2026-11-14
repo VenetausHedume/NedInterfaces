@@ -34,7 +34,7 @@ Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowc
 | id | Student does | Saves | Mark scheme (`answer`) | Marked by |
 |---|---|---|---|---|
 | `text` | types a short answer | `{ latex }` | `{ points:[{alts,require?,reject?}], need }`, or `{ equation }`, or `{ logic }` | keyword match per point; equations by species and balance; logic expressions by truth table |
-| `formula` | working, answer, unit (unit always shown) | `{ formula, answer, unit }` | `{ final:[{value,unit,units?,abs?} \| {lo,hi} \| {expr}], method:[…] }` | number within 0.5 %, unit check, method marks; algebra by value and form |
+| `formula` | working, answer, unit (unit always shown) | `{ formula, answer, unit }` | `{ final:[{value,unit,units?,abs?,exact?,strict?} \| {lo,hi} \| {expr,form?} \| {text}], method:[…] }` | number within 0.5 %, unit check, method marks; algebra by value and form |
 | `mcq` | picks one / several / a picture | `{ choice }` or `{ choices:[…] }` | `{ key }` or `{ keys:[…], scale? }` | exact; several = right ticks − wrong ticks |
 | `match` | picks a partner for each item | `{ pairs:{left:right} }` | `{ pairs:{…}, scale? }` | one per correct pair |
 | `table` | fills blank cells | `{ cells:{ r1c2:"…" } }` | `{ cells:{ r1c2: spec }, scheme?:'row', scale? }` | each cell as text or number |
@@ -45,7 +45,7 @@ Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowc
 | `flowfill` | completes blank flowchart boxes | `{ boxes:{id:"…"} }` | `{ boxes:{ id: spec } }` | each box as text (exact if chosen from a list) |
 | `order` | puts given lines of an algorithm in order, with indents (Parsons) | `{ order:[…], indent:[…] }` | `{ order:[…], indent? }` | longest run in the right order |
 | `code` | writes Cambridge pseudocode **or Python**; **Run** runs it on inputs they type (and on `config.files`) | `{ code, lang? }` | `{ tests:[{input,expect,files?,expectFiles?}], features? }` | runs the program on each test; part marks for loop / selection / totalling … |
-| `sql` | writes a query; the table is shown and **Run query** shows the result | `{ code }` | `{ model, tables }` | runs both queries and compares the rows (ORDER BY needed if the model sorts) |
+| `sql` | writes a query; the table is shown and **Run query** shows the result | `{ code }` | `{ query }` (tables in `config.tables`) | runs both queries and compares the rows (ORDER BY needed if the model sorts) |
 | `flowchart` | builds a flowchart from shapes; **Run flowchart** steps through it | `{ nodes, edges }` | `{ tests, features? }` | runs the flowchart like a program; FDE-style diagrams use `config.run:false` |
 | `circuit` | clicks components in (all syllabus symbols, incl. thermistor, LDR, diode, LED, fuse, heater, motor), then terminal to terminal to wire | `{ components, wires }` | `{ components, arrangement, meters? }` | parts present, series/parallel, meters placed right |
 | `shells` | adds shells and electrons, nucleus and charge | `{ nucleus, charge, shells }` | `{ shells, charge? }` | electrons per shell, charge |
@@ -63,6 +63,15 @@ scores for `Tt` and `CO` never scores for `Co`. Genotypes may be either way roun
 **Algebra.** `{ expr }` answers count when they have the same value as the model for any letters, **and** the same form:
 a factorised model needs a full factorisation (`2(x+3)`, not `(2x+6)` or `x(2x+6)`); a model without brackets needs an
 answer without brackets and no more terms (so copying the question, `3(x+2)` for "expand", scores nothing). `form` overrides.
+
+**Numbers and units.** A right number with no unit, or the wrong unit, loses one mark (list `''` in `units` to make the
+unit optional). Other SI prefixes convert (25 kN = 25 000 N) unless `strict:true` ("give your answer in km").
+`exact:true` for fraction answers (0.18 does not score for 8/45). `{ text:['C3H4O4','C3O4H4'] }` for a formula answer.
+Method marks need the operation, not just the numbers: `924/0.88` is not shown by `924 × 0.88`.
+
+**Wording.** Typed answers forgive: contractions ("don't have" = "no"), one-letter typos and swapped letters in longer
+words, formulae for names (CO₂ = carbon dioxide), "ppt", "infra-red"/"IR", "2.8.3" for 2,8,3, and words the question
+already says. Capitals matter only for formulae and genotypes (pH is exempt; X^BX^b = X^bX^B).
 
 **Equations.** `{ equation:'Zn(s) + 2HCl(aq) → ZnCl2(aq) + H2(g)', states?:true }`: one mark for the right formulae and
 charges, one for balancing (any multiple), one for state symbols when asked. Ionic and half-equations work (`Cu2+ + 2e- → Cu`).
@@ -113,6 +122,7 @@ Biology drawings of specimens stay out: a drawing's quality cannot be marked wit
 npm install            # once, in ../vendor or anywhere: playwright, mathlive, konva (only needed for the tests)
 node tests/mark.test.js       # 182 marking checks
 node tests/builders.test.js   # 160 checks: pseudocode (incl. files), Python, SQL, flowchart, ordering, science builders, drawing
+node tests/subjects.test.js   # 271 real 2017 questions from all six subjects, answered as students write
 node tests/e2e.test.js        # 164 browser checks (247 with NED_DRAWING=1): every interface driven through its real controls
 ```
 
