@@ -1,3 +1,4 @@
+const GRAPHS = !!process.env.NED_GRAPHS;
 /* Browser tests: every phase-1 interface is driven through its real controls, and the live mark panel is read back.
    Run: node tests/e2e.test.js            (needs Playwright; CDN libraries are served from ../vendor when offline) */
 const { chromium } = require('playwright');
@@ -19,7 +20,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await routeCdn(page, opts);
     const h = {
       page, errs,
-      open: async (ui, sample) => { await page.goto(`${BASE}?ui=${ui}&sample=${sample || 0}`); await page.waitForFunction(() => window.NedLab && document.getElementById('mount').children.length > 0); await page.waitForTimeout(150); },
+      open: async (ui, sample) => { await page.goto(`${BASE}?${GRAPHS ? "parked=1&" : ""}ui=${ui}&sample=${sample || 0}`); await page.waitForFunction(() => window.NedLab && document.getElementById('mount').children.length > 0); await page.waitForTimeout(150); },
       score: () => page.getAttribute('#mark', 'data-score'),
       status: () => page.getAttribute('#mark', 'data-status'),
       value: () => page.evaluate(() => NedLab.value),
@@ -238,6 +239,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     for (const [a, b] of [[[v.inputs[0].x + 16, v.inputs[0].y], [g.x - 40, g.y - 13]], [[v.inputs[1].x + 16, v.inputs[1].y], [g.x - 40, g.y + 13]], [[g.x + 33, g.y], [v.outputs[0].x - 16, v.outputs[0].y]]]) { await at2(a[0], a[1]); await at2(b[0], b[1]); }
     ok('logic: AND where NAND is asked -> 0/3', (await h.score()) === '0/3', await h.score());
 
+    if (GRAPHS) {   // graph interfaces are set aside; NED_GRAPHS=1 tests them
     // 1.15 plot points
     await h.open('plot', 0);
     const scr = (x, y) => page.evaluate(([a, b]) => document.getElementById('mount').__nedPlot.screen(a, b), [x, y]);
@@ -330,6 +332,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await page.keyboard.press('Enter');
     await h.reload();
     ok('econ: survives reload', (await h.score()) === '3/3' && (await page.getAttribute('#mount [data-curve=S][data-dir=left]', 'aria-pressed')) === 'true');
+    }
 
     // put the lines in order
     await h.open('order', 0);
@@ -388,6 +391,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await page.click('#mount [data-run=go]');
     ok('sql: Run explains a wrong column name', /no column called "Nme"/.test(await page.textContent('#mount [data-run=output]')));
 
+    if (GRAPHS) {
     // economics: label it yourself
     await h.open('econ', 2);
     ok('econ labelling: the diagram starts unlabelled', (await page.textContent('#mount svg')).includes('?') && !/Price|Quantity/.test(await page.textContent('#mount svg')));
@@ -399,6 +403,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     ok('econ labelling: a wrong label loses the label mark -> 3/4', (await h.score()) === '3/4');
     await h.reload();
     ok('econ labelling: survives reload', (await h.score()) === '3/4' && (await page.inputValue('#mount [data-label=y]')) === 'Price');
+    }
 
     // the science builders and the free flowchart: a saved answer loads back and is marked
     const mountWith = async (ui, n, v) => { await h.open(ui, n); await page.evaluate(([ui, n, v]) => { const m = document.getElementById('mount'); m.innerHTML = ''; const s = Ned.registry[ui].meta.samples[n]; let out = v; const inst = Ned.registry[ui].factory(m, { question: s.question, value: v, onChange: x => { out = x; window.__emitted = x; } }); window.__mk = NedMark.mark(ui, s.answer, v, s.question); window.__fb = NedMark.explain(ui, s.answer, v, window.__mk, s.question); }, [ui, n, v]); await page.waitForTimeout(250); return page.evaluate(() => ({ score: __mk.score + '/' + __mk.max, fb: __fb.length, kids: document.getElementById('mount').children.length })); };
@@ -510,7 +515,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
   /* ───────── phone width ───────── */
   await session({ name: 'phone', viewport: { width: 375, height: 800 } }, async (h) => {
     const { page } = h;
-    for (const [ui, n] of [['text', 2], ['formula', 0], ['mcq', 1], ['mcq', 2], ['match', 0], ['table', 0], ['prose', 0], ['label', 0], ['place', 0], ['logic', 0], ['flowfill', 0], ['plot', 1], ['plot', 3], ['econ', 0], ['econ', 2], ['order', 0], ['code', 0], ['sql', 0]]) {
+    for (const [ui, n] of [['text', 2], ['formula', 0], ['mcq', 1], ['mcq', 2], ['match', 0], ['table', 0], ['prose', 0], ['label', 0], ['place', 0], ['logic', 0], ['flowfill', 0], ['order', 0], ['code', 0], ['sql', 0]]) {
       await h.open(ui, n);
       ok(`phone: ${ui}/${n} does not make the page scroll sideways`, await h.noOverflow(), await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]));
     }
@@ -518,6 +523,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     ok('phone: label boxes move into a list under the figure', await page.evaluate(() => { const st = document.querySelector('#mount > div > div').getBoundingClientRect(); return [...document.querySelectorAll('#mount input')].every(i => i.getBoundingClientRect().top >= st.bottom - 1); }));
     for (let i = 0; i < 4; i++) await page.fill(`#mount [aria-label="Label ${i + 1}"]`, ['cell wall', 'nucleus', 'vacuole', 'chloroplast'][i]);
     ok('phone: label -> 4/4', (await h.score()) === '4/4');
+    if (GRAPHS) {
     await h.open('plot', 0);
     await page.locator('#mount svg').scrollIntoViewIfNeeded();
     const p = await page.evaluate(() => document.getElementById('mount').__nedPlot.screen(3, 5.8));
@@ -526,6 +532,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await h.open('econ', 0);
     await page.click('#mount [data-curve=D][data-dir=right]'); await page.click('#mount [data-eq=D1S]');
     ok('phone: econ -> 3/3', (await h.score()) === '3/3');
+    }
   });
 
   await browser.close(); srv.close();

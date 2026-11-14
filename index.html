@@ -60,16 +60,15 @@
   <script src="interfaces/code.js"></script>
   <script src="interfaces/sql.js"></script>
   <script src="interfaces/flowchart.js"></script>
-  <script src="interfaces/plot.js"></script>
-  <script src="interfaces/econ.js"></script>
   <!-- science builders (now marked) and parked ones -->
-  <script src="interfaces/graph.js"></script>
   <script src="interfaces/circuit.js"></script>
   <script src="interfaces/shells.js"></script>
   <script src="interfaces/structure.js"></script>
   <script src="interfaces/lewis.js"></script>
   <script src="interfaces/photo.js"></script>
   <script src="interfaces/math.js"></script>
+  <!-- set aside for now: graph interfaces (open index.html?parked=1 to see them) -->
+  <script>if (/[?&]parked=1/.test(location.search)) ['plot', 'econ', 'graph'].forEach(n => document.write('<script src="parked/' + n + '.js"><\/script>'));</script>
   <script src="app.js"></script>
 </body>
 </html>

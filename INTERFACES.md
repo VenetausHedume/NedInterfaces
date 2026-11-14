@@ -43,8 +43,6 @@ Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowc
 | `place` | picks what goes at each spot | `{ spots:{id:"…"} }` | `{ spots:{ id: spec } }` | exact per spot |
 | `logic` | builds a gate circuit | `{ gates, inputs, outputs, wires }` | `{ expr:"(A AND B) OR NOT C", output? }` | truth table; part marks per correct gate |
 | `flowfill` | completes blank flowchart boxes | `{ boxes:{id:"…"} }` | `{ boxes:{ id: spec } }` | each box as text (exact if chosen from a list) |
-| `plot` | plots points, draws straight lines, may choose the scale | `{ axes, points, lines }` | `{ points?, line?, segments?, scale? }` | half a small square; gradient/intercept; segment shape + label |
-| `econ` | shifts D or S, marks the new equilibrium; with `config.labelling` also names the axes and curves | `{ shifts:{D:'right'}, equilibrium, labels? }` | `{ shifts:{…}, labels? }` | curve, direction, equilibrium, labels |
 | `order` | puts given lines of an algorithm in order, with indents (Parsons) | `{ order:[…], indent:[…] }` | `{ order:[…], indent? }` | longest run in the right order |
 | `code` | writes Cambridge pseudocode; **Run** button runs it on inputs they type | `{ code }` | `{ tests:[{input,expect}], features? }` | runs the program on each test; part marks for loop / selection / totalling … |
 | `sql` | writes a query; the table is shown and **Run query** shows the result | `{ code }` | `{ model, tables }` | runs both queries and compares the rows (ORDER BY needed if the model sorts) |
@@ -68,11 +66,20 @@ Typed boxes are MathLive fields (answers arrive as LaTeX; the markers convert it
 - `logic` on a phone is cramped: the canvas pans, but building is easier on a wider screen.
 - `flowfill` scrolls sideways inside its box on a phone.
 - `code`/`flowchart` marks depend on good test cases in the mark scheme; a program that prints extra words still passes if the numbers match.
-- `plot` covers points and straight lines only. Curves, shading, ray diagrams and constructions are not here.
+
+## Set aside for now: graph interfaces
+
+In `parked/`, not loaded by the lab. Open `index.html?parked=1` to use them; `NED_GRAPHS=1 node tests/e2e.test.js` tests them.
+Their marking stays in `marking/mark.js`.
+
+| id | Student does | Saves | Mark scheme (`answer`) | Marked by |
+|---|---|---|---|---|
+| `plot` | plots points, draws straight lines, may choose the scale | `{ axes, points, lines }` | `{ points?, line?, segments?, scale? }` | half a small square; gradient/intercept; segment shape + label |
+| `econ` | shifts D or S, marks the new equilibrium; with `config.labelling` also names the axes and curves | `{ shifts:{D:'right'}, equilibrium, labels? }` | `{ shifts:{…}, labels? }` | curve, direction, equilibrium, labels |
 
 ## Parked (no fair marking without AI)
 
-`graph` (free-hand curves) and `photo` (photo of working). `math` is the on-screen maths keyboard, not a question type.
+`graph` (free-hand curves, also in `parked/`) and `photo` (photo of working). `math` is the on-screen maths keyboard, not a question type.
 
 ## Testing
 
@@ -80,8 +87,8 @@ Typed boxes are MathLive fields (answers arrive as LaTeX; the markers convert it
 npm install            # once, in ../vendor or anywhere: playwright, mathlive, konva (only needed for the tests)
 node tests/mark.test.js       # 150 marking checks
 node tests/builders.test.js   # 108 checks: pseudocode, SQL, flowchart, ordering, science builders
-node tests/e2e.test.js        # 185 browser checks: every interface driven through its real controls
+node tests/e2e.test.js        # 140 browser checks (181 with NED_GRAPHS=1): every interface driven through its real controls
 ```
 
 The test page (`index.html`) marks every sample live in the right-hand panel and has a "Reload saved answer" button
-that rebuilds the interface from its saved value. Open `index.html?ui=plot&sample=1` to jump to one sample.
+that rebuilds the interface from its saved value. Open `index.html?ui=table&sample=0` to jump to one sample.
