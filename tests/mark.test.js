@@ -259,6 +259,16 @@ t('simplest form: unsimplified fraction gets the method mark only', sc('formula'
 t('"figs" method mark', sc('formula', { final: [{ value: 0.01152 }], method: ['figs 1152'] }, { answer: '1.152\\times10^{10}' }, 2), 1);
 t('repeated words in a key count once', sc('text', { points: [{ alts: ['more particles have energy greater than the activation energy'] }], need: 1 }, { latex: 'they collide with greater energy' }, 1), 0);
 
+// ── sf:true (science schemes print rounded values) ──
+const ohm = { final: [{ value: '11', unit: 'Ω', sf: true }], method: ['8.0/0.72'] };
+t('sf: 11.1 rounds to 11', sc('formula', ohm, { answer: '11.1', unit: 'ohms' }, 3), 3);
+t('sf: 11.11 rounds to 11', sc('formula', ohm, { answer: '11.11', unit: 'Ω' }, 3), 3);
+t('sf: 12 does not', sc('formula', ohm, { answer: '12', unit: 'Ω', formula: '8.0/0.72' }, 3), 1);
+t('sf: 10.4 does not', sc('formula', ohm, { answer: '10.4', unit: 'Ω' }, 3), 0);
+t('sf: 0.45 needs 2 dp (0.449 ok)', sc('formula', { final: [{ value: '0.45', sf: true, units: [''] }] }, { answer: '0.449' }, 1), 1);
+t('sf: 0.45 vs 0.46', sc('formula', { final: [{ value: '0.45', sf: true, units: [''] }] }, { answer: '0.46' }, 1), 0);
+t('no sf: 11.1 is not 11', sc('formula', { final: [{ value: '11', unit: 'Ω' }] }, { answer: '11.1', unit: 'Ω' }, 1), 0);
+
 // ── general ──
 t('no answer key', M.mark('text', null, { latex: 'x' }, { marks: 1 }).status, 'no_answer_key');
 t('unknown ui', M.mark('zzz', {}, { a: 1 }, { marks: 1 }).status, 'no_marker');

@@ -66,7 +66,8 @@ answer without brackets and no more terms (so copying the question, `3(x+2)` for
 
 **Numbers and units.** A right number with no unit, or the wrong unit, loses one mark (list `''` in `units` to make the
 unit optional). Other SI prefixes convert (25 kN = 25 000 N) unless `strict:true` ("give your answer in km").
-`exact:true` for fraction answers (0.18 does not score for 8/45). `{ text:['C3H4O4','C3O4H4'] }` for a formula answer.
+`exact:true` for fraction answers (0.18 does not score for 8/45). `sf:true` when the scheme's number is rounded (science
+"11 Ω" for 8.0/0.72): 11.1 counts because it rounds to 11; 12 does not. The converter sets it for the sciences, not maths. `{ text:['C3H4O4','C3O4H4'] }` for a formula answer.
 Method marks need the operation, not just the numbers: `924/0.88` is not shown by `924 × 0.88`.
 
 **Wording.** Typed answers forgive: contractions ("don't have" = "no"), one-letter typos and swapped letters in longer

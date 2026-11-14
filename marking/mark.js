@@ -268,8 +268,18 @@
   /* answer: { final:[{value,unit?,units?,abs?,exact?,strict?} | {lo,hi,unit?} | {expr,form?} | {text:[formulae]}], method:[lines] }
      value : { formula?, working?, answer, unit } (latex or plain)  — or a bare string
      Full marks for a correct final answer. A right number with a missing or wrong unit loses one mark (a unit list that
-     includes '' makes the unit optional). exact:true = a fraction answer: rounded decimals do not count. strict:true =
+     includes '' makes the unit optional). exact:true = a fraction answer: rounded decimals do not count. sf:true = more precise answers that round to the value count. strict:true =
      "give your answer in km": no conversion from other units. Otherwise 1 mark per method line shown (max − 1). */
+  /* sf:true — the scheme's number is rounded ("11 Ω" for 8.0/0.72 = 11.1…): a more precise answer counts when it rounds
+     to the scheme's last significant place (11.1 -> 11), a different one does not (12, or 10.9 -> 11? yes; 10.4 -> no). */
+  function sfHit(x, v, txt) {
+    const t = txt.replace(/[\s,]/g, '').replace(/^-/, '');
+    let place;
+    if (/\./.test(t)) place = -(t.split('.')[1].length);
+    else { const z = t.match(/0*$/)[0].length; place = z < t.length ? z : 0; }
+    const k = Math.pow(10, place), r = Math.round(x / k) * k;
+    return Math.abs(r - v) <= k * 1e-6;
+  }
   function markNumeric(answer, value, max) {
     const v = typeof value === 'string' ? { answer: value } : (value || {});
     const raw = latexToText(v.answer != null ? v.answer : (v.latex || '')).trim();
@@ -295,7 +305,7 @@
         if (rg) { const a = +rg[1], b = +rg[2]; hit = lo && hi && a >= lo.n - 1e-9 && b <= hi.n + 1e-9; if (!unitOk && rg[3] && (eus.includes(unitNorm(rg[3])))) unitOk = true; }
         else hit = lo && hi && st.n >= lo.n - 1e-9 && st.n <= hi.n + 1e-9; }
       else { const exp = parseNumber(String(f.value)); const e2 = exp && (f.abs ? Object.assign({}, exp, { n: Math.abs(exp.n) }) : exp);
-        hit = e2 && (f.exact ? Math.abs(st.n - e2.n) <= Math.abs(e2.n) * 1e-9 : numEqual(st, e2)); }
+        hit = e2 && (f.exact ? Math.abs(st.n - e2.n) <= Math.abs(e2.n) * 1e-9 : numEqual(st, e2) || (f.sf && sfHit(st.n, e2.n, String(f.value)))); }
       if (hit) { if (unitOk) correct = true; else unitWrong = true; }
     }
     if (correct) return { score: max, max, status: 'marked', detail: { final: true } };
