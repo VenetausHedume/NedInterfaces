@@ -183,6 +183,69 @@ const cases = [['text', { points: [{ alts: ['refinery gas'] }, { alts: ['bitumen
 t('circuit: thermistor asked, resistor given', M.mark('circuit', { components: { cell: 1, thermistor: 1, lamp: 1 }, arrangement: 'series' }, { components: [{ type: 'cell' }, { type: 'resistor' }, { type: 'lamp' }], overall: 'series' }, { marks: 3 }).score, 1);
 t('circuit: thermistor circuit right', M.mark('circuit', { components: { cell: 1, thermistor: 1, lamp: 1 }, arrangement: 'series' }, { components: [{ type: 'cell' }, { type: 'thermistor' }, { type: 'lamp' }], overall: 'series' }, { marks: 3 }).score, 3);
 
+// Python answers (syllabus: "pseudocode or program code")
+{ const Py = require('../marking/python.js');
+  t('python: runner loads in Node', Py.available(), true);
+  const A = { tests: [{ input: [4, 5, 6], expect: [15] }, { input: [10, 0, -3], expect: [7] }], features: ['loop', 'input', 'totalling', 'output'] };
+  const good = 'total = 0\nfor i in range(3):\n    total = total + int(input("Number: "))\nprint("Total", total)';
+  t('python: right program -> full marks', M.mark('code', A, { code: good, lang: 'python' }, { marks: 4 }).score, 4);
+  t('python: same code marked as pseudocode fails to run', M.mark('code', A, { code: good }, { marks: 4 }).detail.passed, 0);
+  t('python: off-by-one loop gets feature marks', M.mark('code', A, { code: good.replace('range(3)', 'range(2)'), lang: 'python' }, { marks: 4 }).score, 3);
+  t('python: error line reported', Py.run('x = 1\nprint(y)', []).error.line, 2);
+  t('python: endless loop stopped', /too long/.test(Py.run('while True:\n    pass', [], 300).error.message), true);
+  t('python: files read and written', Py.run('n = 0\nfor line in open("S.txt"):\n    n += 1\nf = open("O.txt", "w")\nf.write(str(n))\nf.close()', [], 0, { 'S.txt': ['a', 'b'] }).files['O.txt'], ['2']);
+  t('python: features read from the words', Py.features('count = 0\nwhile x != -1:\n    count += 1\n    x = int(input())\nprint(count)').counting, true); }
+
+// nuclear equations
+{ const Q = { marks: 3, config: { left: 1, right: 2, given: [{ side: 'left', i: 0, A: 238, Z: 92, s: 'U' }] } };
+  const A = { left: [{ A: 238, Z: 92, s: 'U' }], right: [{ A: 234, Z: 90, s: 'Th' }, { A: 4, Z: 2, s: 'He' }] };
+  const v = r => ({ left: [{ A: '', Z: '', s: '' }], right: r });
+  t('nuclide: alpha decay right', M.mark('nuclide', A, v([{ A: '234', Z: '90', s: 'Th' }, { A: '4', Z: '2', s: 'He' }]), Q).score, 3);
+  t('nuclide: particles in either order, α accepted', M.mark('nuclide', A, v([{ A: '4', Z: '2', s: 'α' }, { A: '234', Z: '90', s: 'Th' }]), Q).score, 3);
+  t('nuclide: mass number wrong', M.mark('nuclide', A, v([{ A: '238', Z: '90', s: 'Th' }, { A: '4', Z: '2', s: 'He' }]), Q).score, 2);
+  t('nuclide: mostly blank', M.mark('nuclide', A, v([{ A: '', Z: '', s: 'Th' }, { A: '', Z: '', s: '' }]), Q).score, 0);
+  const r = M.mark('nuclide', A, v([{ A: '238', Z: '90', s: 'Th' }, { A: '4', Z: '2', s: 'He' }]), Q);
+  t('nuclide: feedback names the box and the mass imbalance', M.explain('nuclide', A, null, r, Q).map(f => f.text).join(' ').includes('should be 234') && M.explain('nuclide', A, null, r, Q).some(f => /238 before, 242 after/.test(f.text)), true);
+  const QB = { marks: 2, config: { left: 1, right: 2, given: [{ side: 'left', i: 0, A: 14, Z: 6, s: 'C' }, { side: 'right', i: 0, s: 'N' }] } };
+  const AB = { left: [{ A: 14, Z: 6, s: 'C' }], right: [{ A: 14, Z: 7, s: 'N' }, { A: 0, Z: -1, s: 'e' }] };
+  t('nuclide: beta with −1 typed as a minus sign', M.mark('nuclide', AB, { left: [{}], right: [{ A: '14', Z: '7', s: 'N' }, { A: '0', Z: '−1', s: 'β' }] }, QB).score, 2); }
+
+// drawing interfaces (set aside in the lab, marked here)
+{ const sc = (ui, A, v, q) => M.mark(ui, A, v, q).score;
+  const R = { region: { lines: [{ through: [[0, 1], [7, 1]], strict: false, keep: [3, 2] }, { through: [[2, 0], [2, 7]], strict: true, keep: [3, 2] }, { through: [[0, 6], [6, 0]], strict: false, keep: [3, 2] }], marks: 4 } };
+  const AX = { xmin: 0, xmax: 7, xstep: 1, ymin: 0, ymax: 7, ystep: 1, minor: 2 }, L = [{ p1: [0, 1], p2: [7, 1] }, { p1: [2, 0], p2: [2, 7], dashed: true }, { p1: [1, 5], p2: [5, 1] }];
+  t('region: all right', sc('plot', R, { axes: AX, points: [], lines: L, region: [3, 2] }, { marks: 4 }), 4);
+  t('region: R outside', sc('plot', R, { axes: AX, points: [], lines: L, region: [1, 2] }, { marks: 4 }), 3);
+  t('region: strict line drawn solid', sc('plot', R, { axes: AX, points: [], lines: L.map(l => ({ p1: l.p1, p2: l.p2 })), region: [3, 2] }, { marks: 4 }), 3);
+  t('curve: credited once enough points', sc('plot', { curve: { marks: 1, min: 6 } }, { axes: AX, points: [[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5]], lines: [] }, { marks: 1 }), 1);
+  t('transform: right image', sc('transform', { shape: [[3, 1], [5, 1], [5, 2]] }, { shapes: [{ pts: [[5, 2], [3, 1], [5, 1]] }] }, { marks: 2 }), 2);
+  t('transform: wrong place', sc('transform', { shape: [[3, 1], [5, 1], [5, 2]] }, { shapes: [{ pts: [[4, 1], [6, 1], [6, 2]] }] }, { marks: 2 }), 1);
+  t('transform: wrong shape', sc('transform', { shape: [[3, 1], [5, 1], [5, 2]] }, { shapes: [{ pts: [[1, 3], [1, 5], [2, 5]] }] }, { marks: 2 }), 0);
+  t('numberline: right', sc('numberline', { lo: { v: -2, closed: false }, hi: { v: 3, closed: true } }, { lo: { v: -2, closed: false }, hi: { v: 3, closed: true } }, { marks: 2 }), 2);
+  t('numberline: one circle wrong', sc('numberline', { lo: { v: -2, closed: false }, hi: { v: 3, closed: true } }, { lo: { v: -2, closed: true }, hi: { v: 3, closed: true } }, { marks: 2 }), 1);
+  t('venn: shading right', sc('venn', { shaded: ['A'] }, { shaded: ['A'] }, { marks: 1 }), 1);
+  t('venn: one region out', sc('venn', { shaded: ['none', 'C', 'AC', 'BC', 'ABC'] }, { shaded: ['none', 'C', 'AC', 'BC'] }, { marks: 2 }), 1);
+  t('venn: counts one wrong', sc('venn', { counts: { A: 11, AB: 7, B: 8, none: 4 } }, { counts: { A: '11', AB: '7', B: '8', none: '5' } }, { marks: 3 }), 2);
+  const HQ = { marks: 3, config: { axis: { max: 7, step: 1, minor: 5 } } };
+  t('bars: within half a small square', sc('bars', { heights: [2, 6, 1.6] }, { heights: [2.1, 6, 1.6] }, HQ), 3);
+  t('bars: frequency not density', sc('bars', { heights: [2, 6, 1.6] }, { heights: [20, 30, 24] }, HQ), 0);
+  const CQ = { marks: 2, config: { points: { A: [3, 2], B: [11, 2] } } }, CA = { points: { C: { at: [6.3125, 5.7453], tol: 0.2 } }, arcs: [{ center: 'A', r: 5 }, { center: 'B', r: 6 }], segments: [['A', 'C'], ['B', 'C']] };
+  const cv = { points: { C: [6.31, 5.75] }, arcs: [{ c: [3, 2], r: 5 }, { c: [11, 2], r: 6 }], segments: [[3, 2, 6.31, 5.75], [11, 2, 6.31, 5.75]] };
+  t('construct: triangle with arcs', sc('construct', CA, cv, CQ), 2);
+  t('construct: no arcs shown', sc('construct', CA, Object.assign({}, cv, { arcs: [] }), CQ), 1);
+  t('construct: bearing measured anticlockwise from east', sc('construct', { bearing: { from: 'A', to: 'B', deg: 60, tol: 2, dist: 4, dtol: 0.2 } }, { points: { B: [6, 5.96] } }, { marks: 2, config: { points: { A: [4, 2.5] } } }), 1);
+  const RQ = { marks: 3, config: { kind: 'lens', f: 2, object: { x: -6, h: 2 } } }, RA = { rays: 2, image: { x: 3, h: -1 } };
+  t('rays: parallel + centre ray and image', sc('rays', RA, { rays: [{ pts: [[-6, 2], [0, 2], [4, -2]] }, { pts: [[-6, 2], [6, -2]] }], image: { x: 3, h: -1 } }, RQ), 3);
+  t('rays: a ray that does not bend through F', sc('rays', RA, { rays: [{ pts: [[-6, 2], [0, 2], [4, -2]] }, { pts: [[-6, 2], [0, 2], [6, 2]] }], image: { x: 3, h: -1 } }, RQ), 2);
+  t('rays: mirror, angle of reflection right', sc('rays', { rays: 1, image: { x: 4, h: 2 } }, { rays: [{ pts: [[-4, 2], [0, 1], [-4, 0]] }], image: { x: 4, h: 2 } }, { marks: 2, config: { kind: 'mirror', object: { x: -4, h: 2 } } }), 2);
+  const FA = { arrows: [{ label: 'weight', dir: 270 }, { label: 'normal reaction', dir: 90 }], compare: [['weight', '=', 'normal reaction']] };
+  t('arrows: balanced forces', sc('arrows', FA, { arrows: [{ dir: 270, len: 2, label: 'weight' }, { dir: 90, len: 2, label: 'normal reaction' }] }, { marks: 2 }), 2);
+  t('arrows: unequal lengths', sc('arrows', FA, { arrows: [{ dir: 270, len: 2, label: 'weight' }, { dir: 90, len: 3, label: 'normal reaction' }] }, { marks: 2 }), 1);
+  t('ppc: shift out', sc('ppc', { shift: 'out' }, { shift: 'out', point: null, where: null }, { marks: 2 }), 2);
+  t('ppc: shift in when out asked', sc('ppc', { shift: 'out' }, { shift: 'in', point: null, where: null }, { marks: 2 }), 0);
+  t('price control: max price above equilibrium has no effect', sc('pricecontrol', { control: 'max' }, { price: 'above', gap: 'shortage' }, { marks: 2 }), 1);
+  t('minimum wage: surplus of labour', sc('pricecontrol', { control: 'min' }, { price: 'above', gap: 'surplus' }, { marks: 2 }), 2); }
+
 let fbOk = 0; const thin = [];
 cases.forEach(([ui, a, v, qq]) => { const question = Object.assign({ marks: 4 }, qq); const r = M.mark(ui, a, v, question); const fb = M.explain(ui, a, v, r, question); if (fb.length && fb.every(f => f.text && !/undefined|NaN|\[object/.test(f.text))) fbOk++; else thin.push(ui + ': ' + JSON.stringify(fb)); });
 t('feedback for all ' + cases.length + ' wrong-answer cases is readable', thin, []);

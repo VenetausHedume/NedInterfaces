@@ -2,7 +2,7 @@
    mode. Monospaced, line numbers, `<-` -> the ← assignment arrow.
    Registration NEVER touches CodeMirror at load time (so it can't fail to register);
    CodeMirror is only used inside the factory, with a plain-textarea fallback.
-   Saves { code } (plain text) or null.
+   Saves { code, lang? } (plain text; lang:'python' when written in Python) or null. config.langs limits the choice.
    A Run panel under the editor runs the pseudocode on test inputs (marking/pseudo.js).
    Marked by NedMark 'code': the program is run on the mark scheme's test cases; part marks for the features it shows. */
 
@@ -60,6 +60,19 @@
     },
     function (container, { question, value, onChange }) {
       const startCode = (value && value.code) || '';
+      const cfg = (question && question.config) || {};
+      const langs = cfg.langs || ['pseudo', 'python'];
+      let lang = (value && value.lang) || cfg.lang || langs[0];
+      const LANG_NAME = { pseudo: 'Pseudocode', python: 'Python' };
+      const pack = c => (c.trim() === '' ? null : Object.assign({ code: c }, lang !== 'pseudo' ? { lang } : {}));
+      let onLang = () => {};
+      if (langs.length > 1) {
+        const sel = Ned.el('select', { 'aria-label': 'Language', 'data-lang': '', style: 'font:inherit;padding:4px 6px;' }, langs.map(l => Ned.el('option', { value: l }, [LANG_NAME[l] || l])));
+        sel.value = lang;
+        sel.addEventListener('change', () => { lang = sel.value; onLang(); });
+        container.appendChild(Ned.el('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:14px;' }, ['Write your answer in', sel,
+          Ned.el('span', { style: 'color:var(--muted);font-size:13px;' }, ['(Java and Visual Basic answers are not run here)'])]));
+      }
 
       // plain-textarea fallback (also used if CodeMirror missing or errors)
       function buildTextarea() {
@@ -67,10 +80,11 @@
         ta.value = startCode; ta.spellcheck = false;
         ta.style.cssText = 'width:100%;min-height:300px;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;' +
           'padding:10px;border:1px solid var(--line);border-radius:8px;background:#fffdf7;resize:vertical;tab-size:4;';
-        const emitT = () => { const c = ta.value; onChange(c.trim() === '' ? null : { code: c }); };
+        const emitT = () => onChange(pack(ta.value));
+        onLang = emitT;
         ta.addEventListener('input', emitT);
         container.appendChild(ta);
-        if (Ned.runPanel) Ned.runPanel(container, 'code', () => ta.value, question);
+        if (Ned.runPanel) Ned.runPanel(container, 'code', () => ta.value, question, () => lang);
         return { update: (v) => { ta.value = (v && v.code) || ''; }, clear: () => { ta.value = ''; emitT(); }, destroy: () => { container.innerHTML = ''; } };
       }
 
@@ -81,10 +95,12 @@
         const host = document.createElement('div');
         host.style.cssText = 'border:1px solid var(--line);border-radius:8px;overflow:hidden;';
         container.appendChild(host);
-        container.appendChild(Ned.el('p', { class: 'ned-note' }, ['IGCSE pseudocode. Type "<-" to insert the \u2190 assignment arrow.']));
+        const note = Ned.el('p', { class: 'ned-note' }, ['']); container.appendChild(note);
+        const noteText = () => { note.textContent = lang === 'python' ? 'Python 3. input() takes the test inputs in order; open() reads the given files.' : 'IGCSE pseudocode. Type "<-" to insert the \u2190 assignment arrow.'; };
+        noteText();
 
         const cm = window.CodeMirror(host, {
-          value: startCode, mode: 'igcse-pseudocode',
+          value: startCode, mode: lang === 'python' ? 'python' : 'igcse-pseudocode',
           lineNumbers: true, indentUnit: 4, tabSize: 4, lineWrapping: true,
         });
         cm.setSize('100%', 320);
@@ -92,13 +108,14 @@
         cm.on('inputRead', (inst, ch) => {
           if (ch.text && ch.text[0] === '-') {
             const cur = inst.getCursor(), line = inst.getLine(cur.line);
-            if (line.slice(cur.ch - 2, cur.ch) === '<-') inst.replaceRange('\u2190', { line: cur.line, ch: cur.ch - 2 }, { line: cur.line, ch: cur.ch });
+            if (lang !== 'python' && line.slice(cur.ch - 2, cur.ch) === '<-') inst.replaceRange('\u2190', { line: cur.line, ch: cur.ch - 2 }, { line: cur.line, ch: cur.ch });
           }
         });
-        const emit = () => { const c = cm.getValue(); onChange(c.trim() === '' ? null : { code: c }); };
+        const emit = () => onChange(pack(cm.getValue()));
+        onLang = () => { cm.setOption('mode', lang === 'python' ? 'python' : 'igcse-pseudocode'); noteText(); emit(); };
         cm.on('change', emit);
         setTimeout(() => cm.refresh(), 0);
-        if (Ned.runPanel) Ned.runPanel(container, 'code', () => cm.getValue(), question);
+        if (Ned.runPanel) Ned.runPanel(container, 'code', () => cm.getValue(), question, () => lang);
 
         return { update: (v) => cm.setValue((v && v.code) || ''), clear: () => { cm.setValue(''); emit(); }, destroy: () => { container.innerHTML = ''; } };
       } catch (e) {

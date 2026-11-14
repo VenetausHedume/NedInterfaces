@@ -1,4 +1,4 @@
-const GRAPHS = !!process.env.NED_GRAPHS;
+const GRAPHS = !!(process.env.NED_DRAWING || process.env.NED_GRAPHS);   // drawing interfaces are set aside; NED_DRAWING=1 tests them
 /* Browser tests: every phase-1 interface is driven through its real controls, and the live mark panel is read back.
    Run: node tests/e2e.test.js            (needs Playwright; CDN libraries are served from ../vendor when offline) */
 const { chromium } = require('playwright');
@@ -20,7 +20,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await routeCdn(page, opts);
     const h = {
       page, errs,
-      open: async (ui, sample) => { await page.goto(`${BASE}?${GRAPHS ? "parked=1&" : ""}ui=${ui}&sample=${sample || 0}`); await page.waitForFunction(() => window.NedLab && document.getElementById('mount').children.length > 0); await page.waitForTimeout(150); },
+      open: async (ui, sample) => { await page.goto(`${BASE}?${GRAPHS ? "drawing=1&" : ""}ui=${ui}&sample=${sample || 0}`); await page.waitForFunction(() => window.NedLab && document.getElementById('mount').children.length > 0); await page.waitForTimeout(150); },
       score: () => page.getAttribute('#mark', 'data-score'),
       status: () => page.getAttribute('#mark', 'data-status'),
       value: () => page.evaluate(() => NedLab.value),
@@ -302,7 +302,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await h.reload();
     ok('plot sketch: labels survive reload', (await h.value()).lines.map(l => l.label).join('') === 'AB' && (await h.score()) === '2/2');
     // 1.19 student-chosen scale
-    await h.open('plot', 3);
+    await h.open('plot', 6);
     ok('plot scale: grid hidden until the scale is chosen', !(await page.locator('#mount svg').isVisible()));
     await page.click('#mount [data-act=drawaxes]');
     ok('plot scale: empty form is refused', !(await page.locator('#mount svg').isVisible()) && /Fill in/.test(await page.textContent('#mount [role=alert]')));
@@ -387,6 +387,19 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await page.fill('#mount [data-run=inputs]', '1\n2');
     await page.click('#mount [data-run=go]');
     ok('code: Run explains running out of input', /more input than it was given/.test(await page.textContent('#mount [data-run=output]')));
+    await page.selectOption('#mount [data-lang]', 'python');
+    ok('code: switching to Python is saved with the answer', (await h.value()).lang === 'python');
+    await writeCode('total = 0\nfor i in range(3):\n    total += int(input())\nprint("Total =", total)');
+    await page.fill('#mount [data-run=inputs]', '4\n5\n6');
+    await page.click('#mount [data-run=go]');
+    ok('code: Python runs in the browser', /Total = 15/.test(await page.textContent('#mount [data-run=output]')), await page.textContent('#mount [data-run=output]'));
+    ok('code: Python answer marked by the same test cases -> 5/5', (await h.score()) === '5/5', [await h.score(), await page.textContent('#mark')]);
+    await h.reload();
+    ok('code: Python answer survives reload', (await h.value()).lang === 'python' && (await page.inputValue('#mount [data-lang]')) === 'python' && (await h.score()) === '5/5');
+    await writeCode('total = 0\nfor i in range(3)\n    total += 1');
+    await page.click('#mount [data-run=go]');
+    ok('code: Python syntax error shown with its line', /Line 2/.test(await page.textContent('#mount [data-run=output]')), await page.textContent('#mount [data-run=output]'));
+    await page.selectOption('#mount [data-lang]', 'pseudo');
     await writeCode('OUTPUT 15');
     ok('code: a hard-coded answer does not pass -> 1/5', (await h.score()) === '1/5', await h.score());
     await h.reload();
@@ -408,7 +421,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
 
     if (GRAPHS) {
     // economics: label it yourself
-    await h.open('econ', 2);
+    await h.open('econ', 3);
     ok('econ labelling: the diagram starts unlabelled', (await page.textContent('#mount svg')).includes('?') && !/Price|Quantity/.test(await page.textContent('#mount svg')));
     for (const [k, val] of [['y', 'Price'], ['x', 'Quantity'], ['down', 'D'], ['up', 'S']]) await page.selectOption(`#mount [data-label=${k}]`, val);
     ok('econ labelling: labels alone -> 1/4', (await h.score()) === '1/4' && /Price/.test(await page.textContent('#mount svg')), await h.value());
@@ -522,6 +535,116 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await page.click('#mount [data-run=go]');
     ok('code: Run reads the file', (await page.textContent('#mount [data-run=output]')).trim() === '2', await page.textContent('#mount [data-run=output]'));
 
+    // nuclear equation boxes
+    await h.open('nuclide', 0);
+    ok('nuclide: the given particle is printed, not editable', await page.inputValue('#mount [data-nuc=left0A]') === '238' && await page.getAttribute('#mount [data-nuc=left0A]', 'readonly') !== null);
+    for (const [k, val] of [['right0A', '234'], ['right0Z', '90'], ['right0s', 'Th'], ['right1A', '4'], ['right1Z', '2'], ['right1s', 'α']]) await page.fill(`#mount [data-nuc=${k}]`, val);
+    ok('nuclide: alpha decay filled in -> 3/3', (await h.score()) === '3/3', [await h.score(), await h.value()]);
+    await page.fill('#mount [data-nuc=right0A]', '238');
+    ok('nuclide: wrong mass number -> 2/3 and the imbalance is explained', (await h.score()) === '2/3' && /238 before, 242 after/.test(await page.textContent('#mark')), await page.textContent('#mark'));
+    await h.reload();
+    ok('nuclide: survives reload', await page.inputValue('#mount [data-nuc=right1s]') === 'α' && (await h.score()) === '2/3');
+
+    if (GRAPHS) {
+      const P = (hook, ...a) => page.evaluate(([hook, a]) => document.getElementById('mount')[hook].screen(...a), [hook, a]);
+      const click = async (hook, ...a) => { const q = await P(hook, ...a); await page.mouse.click(q.x, q.y); await page.waitForTimeout(40); };
+      const dragFrom = async (a, b) => { await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 4 }); await page.mouse.move(b.x, b.y, { steps: 4 }); await page.mouse.up(); await page.waitForTimeout(60); };
+      // curves
+      await h.open('plot', 3);
+      for (const p of [[-2, 5], [-1, 0], [0, -3], [1, -4], [2, -3], [3, 0], [4, 5]]) await click('__nedPlot', p[0], p[1]);
+      ok('plot curve: a smooth curve is drawn through the points', await page.locator('#mount [data-curve]').count() === 1);
+      ok('plot curve: quadratic plotted -> 4/4', (await h.score()) === '4/4', [await h.score(), await h.value()]);
+      await h.open('plot', 4);
+      ok('plot tangent: the given curve is printed', await page.locator('#mount [data-given]').count() === 1);
+      await dragFrom(await P('__nedPlot', 0, -1), await P('__nedPlot', 2.5, 4));
+      ok('plot tangent: tangent at x = 1 -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+      // inequality regions
+      await h.open('plot', 5);
+      await dragFrom(await P('__nedPlot', 0, 1), await P('__nedPlot', 7, 1));
+      await dragFrom(await P('__nedPlot', 2, 0), await P('__nedPlot', 2, 7)); await page.click('#mount [data-act=dash]');
+      await dragFrom(await P('__nedPlot', 0, 6), await P('__nedPlot', 6, 0));
+      await page.click('#mount [data-tool=region]'); await click('__nedPlot', 3, 2);
+      ok('plot region: unwanted sides shaded', await page.locator('#mount [data-shade]').count() === 3);
+      ok('plot region: lines, broken line and R -> 4/4', (await h.score()) === '4/4', [await h.score(), await page.textContent('#mark')]);
+      await page.click('#mount [data-tool=select]'); await click('__nedPlot', 2, 5); await page.click('#mount [data-act=dash]');
+      ok('plot region: a solid line where it should be broken -> 3/4', (await h.score()) === '3/4', await h.score());
+      await h.reload();
+      ok('plot region: survives reload', (await h.score()) === '3/4' && await page.locator('#mount [data-shade]').count() === 3);
+      // transformations
+      await h.open('transform', 0);
+      for (const p of [[3, 1], [5, 1], [5, 2], [3, 1]]) await click('__nedGrid', p[0], p[1]);
+      ok('transform: reflection drawn -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+      await h.reload(); ok('transform: survives reload', (await h.score()) === '2/2');
+      await h.open('transform', 0);
+      for (const p of [[4, 1], [6, 1], [6, 2]]) await click('__nedGrid', p[0], p[1]); await page.click('#mount [data-act=finish]');
+      ok('transform: right shape, wrong place -> 1/2', (await h.score()) === '1/2', await h.score());
+      // number line
+      await h.open('numberline', 0);
+      await click('__nedLine', -2); await click('__nedLine', 3);
+      ok('numberline: both ends open -> 1/2', (await h.score()) === '1/2', [await h.score(), await h.value()]);
+      { const q = await page.evaluate(() => document.getElementById('mount').__nedLine.end(3)); await page.mouse.click(q.x, q.y); }
+      ok('numberline: −2 < x ≤ 3 -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+      await h.open('numberline', 1);
+      await page.click('#mount [data-mode=right]'); await click('__nedLine', 1); { const q = await page.evaluate(() => document.getElementById('mount').__nedLine.end(1)); await page.mouse.click(q.x, q.y); }
+      ok('numberline: x ≥ 1 with an arrow -> 1/1', (await h.score()) === '1/1', [await h.score(), await h.value()]);
+      // Venn
+      await h.open('venn', 1);
+      for (const k of ['none', 'C', 'AC', 'BC', 'ABC']) await click('__nedVenn', k);
+      ok('venn: (A ∪ B)′ ∪ C shaded -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+      await click('__nedVenn', 'ABC');
+      ok('venn: one region missing -> 1/2', (await h.score()) === '1/2', await h.score());
+      await h.open('venn', 2);
+      for (const [k, n] of [['A', '11'], ['AB', '7'], ['B', '8'], ['none', '4']]) await page.fill(`#mount input[data-region=${k}]`, n);
+      ok('venn: numbers in regions -> 3/3', (await h.score()) === '3/3', [await h.score(), await h.value()]);
+      // bars
+      await h.open('bars', 1);
+      for (const [i, v] of [[0, 2], [1, 6], [2, 1.6]]) await click('__nedBars', i, v);
+      ok('bars: histogram drawn by clicking -> 3/3', (await h.score()) === '3/3', [await h.score(), await h.value()]);
+      await h.open('bars', 2);
+      for (const [i, v] of [[0, 500], [1, 120], [2, 20], [3, 2]]) await page.fill(`#mount [data-bar="${i}"]`, String(v));
+      ok('bars: pyramid of numbers typed -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+      // ruler and compasses
+      await h.open('construct', 0);
+      await page.click('#mount [data-tool=compass]');
+      await dragFrom(await P('__nedPaper', 3, 2), await P('__nedPaper', 5.5, 6.33));
+      await dragFrom(await P('__nedPaper', 11, 2), await P('__nedPaper', 7.143, 6.596));
+      v = await h.value();
+      ok('construct: two arcs, radii 5 and 6', v.arcs.length === 2 && v.arcs[0].r === 5 && v.arcs[1].r === 6, v.arcs);
+      await page.click('#mount [data-tool=point]'); await click('__nedPaper', 6.35, 5.7);
+      v = await h.value();
+      ok('construct: C snaps to where the arcs cross', Math.abs(v.points.C[0] - 6.31) < 0.02 && Math.abs(v.points.C[1] - 5.75) < 0.02, v.points);
+      await page.click('#mount [data-tool=ruler]');
+      await dragFrom(await P('__nedPaper', 3, 2), await P('__nedPaper', 6.31, 5.75));
+      await dragFrom(await P('__nedPaper', 11, 2), await P('__nedPaper', 6.31, 5.75));
+      ok('construct: triangle constructed with arcs -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+      await page.click('#mount [data-tool=protractor]');
+      ok('construct: protractor appears', await page.locator('#mount [data-prot]').count() > 0);
+      await h.open('construct', 1);
+      await page.click('#mount [data-tool=point]'); await click('__nedPaper', 7.46, 4.5);
+      ok('construct: bearing 060°, 4 cm -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+      // ray diagrams
+      await h.open('rays', 0);
+      for (const p of [[-6, 2], [0, 2], [4, -2]]) await click('__nedRays', p[0], p[1]); await page.click('#mount [data-act=finish]');
+      for (const p of [[-6, 2], [0, 0], [6, -2]]) await click('__nedRays', p[0], p[1]); await page.click('#mount [data-act=finish]');
+      await page.click('#mount [data-tool=image]'); await dragFrom(await P('__nedRays', 3, 0), await P('__nedRays', 3, -1));
+      ok('rays: two rays and the image -> 3/3', (await h.score()) === '3/3', [await h.score(), await h.value()]);
+      await h.reload(); ok('rays: survives reload', (await h.score()) === '3/3');
+      // force arrows
+      await h.open('arrows', 0);
+      await dragFrom(await P('__nedArrows', 0), await P('__nedArrows', 270, 2)); await dragFrom(await P('__nedArrows', 0), await P('__nedArrows', 90, 2));
+      await page.selectOption('#mount [data-label="0"]', 'weight'); await page.selectOption('#mount [data-label="1"]', 'normal reaction');
+      ok('arrows: weight and normal reaction, equal -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+      // economics
+      await h.open('ppc', 0); await page.click('#mount [data-shift=out]');
+      ok('ppc: outward shift -> 2/2', (await h.score()) === '2/2', await h.score());
+      await h.open('ppc', 1); await click('__nedPpc', 0.4, 0.4);
+      ok('ppc: point inside the curve -> 1/1', (await h.score()) === '1/1', [await h.score(), await h.value()]);
+      await h.open('pricecontrol', 0);
+      { const q = await page.evaluate(() => document.getElementById('mount').__nedPc.screen(250)); await page.mouse.click(q.x, q.y); }
+      await page.selectOption('#mount [data-gap]', 'shortage');
+      ok('price control: maximum price below equilibrium, shortage -> 2/2', (await h.score()) === '2/2', [await h.score(), await h.value()]);
+    }
+
     // every interface (including the parked ones) still mounts, and every marked sample starts at 0
     const all = await page.evaluate(() => Object.keys(Ned.registry).map(id => [id, (Ned.registry[id].meta.samples || []).map(s => !!s.answer)]));
     let mounted = 0, zero = 0, marked = 0;
@@ -559,6 +682,11 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
       await h.open(ui, n);
       ok(`phone: ${ui}/${n} does not make the page scroll sideways`, await h.noOverflow(), await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]));
     }
+    if (GRAPHS) for (const [ui, n] of [['plot', 5], ['transform', 0], ['numberline', 0], ['venn', 1], ['venn', 2], ['bars', 1], ['bars', 2], ['construct', 0], ['rays', 0], ['arrows', 0], ['ppc', 0], ['pricecontrol', 0]]) {
+      await h.open(ui, n);
+      ok(`phone: ${ui}/${n} does not make the page scroll sideways`, await h.noOverflow(), await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]));
+    }
+    for (const [ui, n] of [['nuclide', 0], ['code', 2]]) { await h.open(ui, n); ok(`phone: ${ui}/${n} does not make the page scroll sideways`, await h.noOverflow(), await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth])); }
     await h.open('label', 0);
     ok('phone: label boxes move into a list under the figure', await page.evaluate(() => { const st = document.querySelector('#mount > div > div').getBoundingClientRect(); return [...document.querySelectorAll('#mount input')].every(i => i.getBoundingClientRect().top >= st.bottom - 1); }));
     for (let i = 0; i < 4; i++) await page.fill(`#mount [aria-label="Label ${i + 1}"]`, ['cell wall', 'nucleus', 'vacuole', 'chloroplast'][i]);

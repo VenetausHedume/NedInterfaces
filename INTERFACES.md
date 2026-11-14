@@ -44,13 +44,14 @@ Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowc
 | `logic` | builds a gate circuit | `{ gates, inputs, outputs, wires }` | `{ expr:"(A AND B) OR NOT C", output? }` | truth table; part marks per correct gate |
 | `flowfill` | completes blank flowchart boxes | `{ boxes:{id:"…"} }` | `{ boxes:{ id: spec } }` | each box as text (exact if chosen from a list) |
 | `order` | puts given lines of an algorithm in order, with indents (Parsons) | `{ order:[…], indent:[…] }` | `{ order:[…], indent? }` | longest run in the right order |
-| `code` | writes Cambridge pseudocode; **Run** button runs it on inputs they type (and on `config.files`) | `{ code }` | `{ tests:[{input,expect,files?,expectFiles?}], features? }` | runs the program on each test; part marks for loop / selection / totalling … |
+| `code` | writes Cambridge pseudocode **or Python**; **Run** runs it on inputs they type (and on `config.files`) | `{ code, lang? }` | `{ tests:[{input,expect,files?,expectFiles?}], features? }` | runs the program on each test; part marks for loop / selection / totalling … |
 | `sql` | writes a query; the table is shown and **Run query** shows the result | `{ code }` | `{ model, tables }` | runs both queries and compares the rows (ORDER BY needed if the model sorts) |
 | `flowchart` | builds a flowchart from shapes; **Run flowchart** steps through it | `{ nodes, edges }` | `{ tests, features? }` | runs the flowchart like a program; FDE-style diagrams use `config.run:false` |
 | `circuit` | clicks components in (all syllabus symbols, incl. thermistor, LDR, diode, LED, fuse, heater, motor), then terminal to terminal to wire | `{ components, wires }` | `{ components, arrangement, meters? }` | parts present, series/parallel, meters placed right |
 | `shells` | adds shells and electrons, nucleus and charge | `{ nucleus, charge, shells }` | `{ shells, charge? }` | electrons per shell, charge |
 | `structure` | builds a molecule from atoms and bonds | `{ atoms, bonds }` | `{ model }` | same molecule (atom-and-bond fingerprint) |
 | `lewis` | places dots and crosses around atoms; picks a charge to make an ion | `{ atoms }` | `{ bonds, lone }` or `{ ionic:true, ions, electrons }` | covalent: shared pairs, lone electrons; ionic: electrons, charges, gained electron shown |
+| `nuclide` | fills mass number, proton number and symbol boxes for a decay equation | `{ left:[{A,Z,s}], right }` | full equation, same shape | each box filled; α = He, β = e; sums explained |
 
 `spec` = a string or number, or `{ alts:[…], require?, reject?, exact? }`, or `{ final:[…] }` for a number with a unit.
 `scale` = marks for a count, e.g. `{ 5:4, 4:3, 3:2, 2:1 }`.
@@ -65,7 +66,7 @@ answer without brackets and no more terms (so copying the question, `3(x+2)` for
 
 **Equations.** `{ equation:'Zn(s) + 2HCl(aq) → ZnCl2(aq) + H2(g)', states?:true }`: one mark for the right formulae and
 charges, one for balancing (any multiple), one for state symbols when asked. Ionic and half-equations work (`Cu2+ + 2e- → Cu`).
-Word equations get one mark per side. Nuclide notation is not read: use table boxes for mass and proton numbers.
+Word equations get one mark per side. Nuclide notation is not read from typed text: use the `nuclide` interface.
 
 Typed boxes are MathLive fields (answers arrive as LaTeX; the markers convert it) with a plain-input fallback.
 
@@ -77,29 +78,42 @@ Typed boxes are MathLive fields (answers arrive as LaTeX; the markers convert it
 - `logic` on a phone is cramped: the canvas pans, but building is easier on a wider screen.
 - `flowfill` scrolls sideways inside its box on a phone.
 - `code`/`flowchart` marks depend on good test cases in the mark scheme; a program that prints extra words still passes if the numbers match.
-- `code` runs Cambridge pseudocode only. Answers written in Python, Java or Visual Basic are not run.
+- `code` runs Cambridge pseudocode and Python (Skulpt, Python 3, in the browser; `npm i skulpt@1.2.0` for marking on a server). Java and Visual Basic are not run.
 
-## Set aside for now: graph interfaces
+## Drawing interfaces (built, set aside until you decide)
 
-In `parked/`, not loaded by the lab. Open `index.html?parked=1` to use them; `NED_GRAPHS=1 node tests/e2e.test.js` tests them.
-Their marking stays in `marking/mark.js`.
+In `drawing/`, not loaded by the lab unless you open `index.html?drawing=1` (or use the "Show drawing interfaces" link).
+All are marked without AI; their markers live in `marking/mark.js` (plot) and `marking/builders.js` (the rest).
+`NED_DRAWING=1 node tests/e2e.test.js` tests them through their real controls.
 
 | id | Student does | Saves | Mark scheme (`answer`) | Marked by |
 |---|---|---|---|---|
 | `plot` | plots points, draws straight lines, may choose the scale | `{ axes, points, lines }` | `{ points?, line?, segments?, scale? }` | half a small square; gradient/intercept; segment shape + label |
 | `econ` | shifts D or S, marks the new equilibrium; with `config.labelling` also names the axes and curves | `{ shifts:{D:'right'}, equilibrium, labels? }` | `{ shifts:{…}, labels? }` | curve, direction, equilibrium, labels |
+| `plot` (more) | `config.curve`: smooth curve through the points, tangents with the line tool; `config.region`: broken/solid lines and R | `+ lines[].dashed, region` | `{ curve:{marks,min} }`, `{ region:{ lines:[{through,strict,keep}], marks } }` | curve once points are plotted; each boundary (and its style) + R in the right region |
+| `transform` | clicks corners of a shape on a grid (reflection, rotation, enlargement, translation) | `{ shapes:[{pts}] }` | `{ shape:[[x,y]…] }` | exact corners; right shape in the wrong place = 1 |
+| `numberline` | places ends, open/closed circles, join or arrow | `{ lo, hi }` | `{ lo:{v,closed}\|null, hi }` | each end |
+| `venn` | shades regions, or types the number in each region | `{ shaded }` or `{ counts }` | same shape | exact regions (one out = marks − 1); counts box by box |
+| `bars` | bar chart, histogram (frequency density), pyramid of numbers/biomass | `{ heights }` | `{ heights, tol? }` | each bar within half a small square |
+| `construct` | ruler (shows length), compasses (shows radius), point (snaps to crossings), 180° protractor | `{ points, segments, arcs }` (cm) | `{ points, arcs, segments }` or `{ bearing }` | arcs present; point within 2 mm; lines; bearing ±2°, distance ±2 mm |
+| `rays` | rays that bend at the lens/mirror, dashed traced-back rays, image arrow | `{ rays, image }` | `{ rays:n, image:{x,h} }` | any correct ray (leaves through the image tip) + image position |
+| `arrows` | drags force arrows out of an object (45° steps) and names them | `{ arrows:[{dir,len,label}] }` | `{ arrows:[{label,dir}], compare? }` | each force; arrow lengths compared |
+| `ppc` | shifts the PPC out/in, marks point X | `{ shift, point, where }` | `{ shift? , where? }` | shift; inside/on/beyond |
+| `pricecontrol` | places a max/min price (or minimum wage) line and names the gap | `{ price, gap }` | `{ control:'max'\|'min' }` | right side of equilibrium; shortage/surplus |
+
+Biology drawings of specimens stay out: a drawing's quality cannot be marked without AI. Food chains use `order`.
 
 ## Parked (no fair marking without AI)
 
-`graph` (free-hand curves, also in `parked/`) and `photo` (photo of working). `math` is the on-screen maths keyboard, not a question type.
+`graph` (free-hand curves, in `drawing/` but not marked) and `photo` (photo of working). `math` is the on-screen maths keyboard, not a question type.
 
 ## Testing
 
 ```
 npm install            # once, in ../vendor or anywhere: playwright, mathlive, konva (only needed for the tests)
 node tests/mark.test.js       # 182 marking checks
-node tests/builders.test.js   # 120 checks: pseudocode (incl. files), SQL, flowchart, ordering, science builders
-node tests/e2e.test.js        # 153 browser checks (194 with NED_GRAPHS=1): every interface driven through its real controls
+node tests/builders.test.js   # 160 checks: pseudocode (incl. files), Python, SQL, flowchart, ordering, science builders, drawing
+node tests/e2e.test.js        # 164 browser checks (247 with NED_DRAWING=1): every interface driven through its real controls
 ```
 
 The test page (`index.html`) marks every sample live in the right-hand panel and has a "Reload saved answer" button

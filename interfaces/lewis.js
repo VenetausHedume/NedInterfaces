@@ -85,7 +85,7 @@ function render(){
       });
     });
   });
-  layer.batchDraw();
+  layer.draw();   // drawn at once, so the next click finds the new shapes
 }
 
 function onSlot(a,side){

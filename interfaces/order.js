@@ -21,6 +21,10 @@
           question: { text: 'Put the stages of the fetch–decode–execute cycle in order.', marks: 3,
             config: { mono: false, lines: [{ id: 'd', text: 'The instruction is decoded by the control unit' }, { id: 'f', text: 'The instruction is fetched from memory' }, { id: 'p', text: 'The program counter is incremented' }, { id: 'e', text: 'The instruction is executed' }] } },
           answer: { order: ['f', 'p', 'd', 'e'], scale: null } },
+        { label: 'Food chain (2 marks)',
+          question: { text: 'Construct a food chain using four of these organisms. Start with the producer; each arrow points to the organism that eats it.', marks: 2,
+            config: { mono: false, lines: [{ id: 's', text: 'snake' }, { id: 'g', text: 'grass' }, { id: 'h', text: 'grasshopper' }, { id: 'x', text: 'sun' }, { id: 'f', text: 'frog' }] } },
+          answer: { order: ['g', 'h', 'f', 's'] } },
       ] },
     function (container, { question, value, onChange }) {
       const cfg = (question && question.config) || {};

@@ -1,9 +1,9 @@
 /* Ned marking, part 2 — the builders: code, flowchart, line ordering, SQL, and the chemistry / physics builders.
    Loads after mark.js (and pseudo.js, sql.js) and adds to NedMark.MARKERS. No AI, no network. */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./mark.js'), require('./pseudo.js'), require('./sql.js'));
-  else factory(root.NedMark, root.NedPseudo, root.NedSql);
-})(typeof self !== 'undefined' ? self : this, function (M, P, Q) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./mark.js'), require('./pseudo.js'), require('./sql.js'), require('./python.js'));
+  else factory(root.NedMark, root.NedPseudo, root.NedSql, root.NedPython);
+})(typeof self !== 'undefined' ? self : this, function (M, P, Q, Py) {
   'use strict';
   const un = (max) => ({ score: 0, max, status: 'unanswered', detail: {} });
   const FEATURE_NAMES = { loop: 'uses a loop', file: 'uses a text file', forLoop: 'uses a FOR loop', whileLoop: 'uses a WHILE loop', repeatLoop: 'uses a REPEAT loop', selection: 'uses IF or CASE', input: 'takes input', output: 'gives output',
@@ -17,15 +17,16 @@
   function markAlgo(kind) {
     return function (answer, value, max) {
       const code = kind === 'code' ? ((value && value.code) || '') : '';
+      const py = kind === 'code' && value && value.lang === 'python';
       if (kind === 'code' ? !code.trim() : !(value && (value.nodes || []).length)) return un(max);
       const tests = (answer.tests || []).map(t => {
-        const r = kind === 'code' ? P.run(code, t.input || [], undefined, t.files) : P.runFlowchart(value, t.input || []);
+        const r = kind === 'code' ? (py ? (Py ? Py.run(code, t.input || [], undefined, t.files) : { ok: false, output: [], error: { message: 'The Python runner did not load.' } }) : P.run(code, t.input || [], undefined, t.files)) : P.runFlowchart(value, t.input || []);
         const filesOk = !t.expectFiles || (r.ok && Object.keys(t.expectFiles).every(nm => JSON.stringify(((r.files || {})[nm] || []).map(x => String(x).trim())) === JSON.stringify(t.expectFiles[nm].map(x => String(x).trim()))));
         return { pass: r.ok && P.outputMatches(r.output, t.expect || []) && filesOk, filesOk, output: r.output, error: r.error || null, input: t.input || [], expect: t.expect || [] };
       });
       const passed = tests.filter(t => t.pass).length;
       const text = kind === 'code' ? code : (value.nodes || []).map(n => n.text || '').join('\n');
-      const f = P.features(text);
+      const f = py && Py ? Py.features(text) : P.features(text);
       if (kind === 'flowchart') f.decision = (value.nodes || []).some(n => n.type === 'decision');
       const feats = (answer.features || []).map(name => ({ name, label: FEATURE_NAMES[name] || name, ok: !!f[name] }));
       let score;
@@ -160,6 +161,164 @@
     return { score, max, status: 'marked', detail: { criteria: crit, have } };
   }
 
+  /* ───────── nuclear equations ─────────  value: { left:[{A,Z,s}], right:[…] }  answer: same shape, the full equation
+     Each box the student had to fill is one item; particles may be in any order on a side. Marks = share of items right. */
+  const NUC_ALIAS = { 'α': 'He', alpha: 'He', 'β': 'e', 'β-': 'e', 'β−': 'e', beta: 'e', 'e-': 'e', 'γ': 'γ', gamma: 'γ' };
+  const nucSym = s => { s = String(s == null ? '' : s).trim(); return NUC_ALIAS[s] || NUC_ALIAS[s.toLowerCase()] || s; };
+  const nucNum = x => { const n = String(x == null ? '' : x).trim().replace(/[−–]/g, '-'); return n === '' || isNaN(+n) ? null : +n; };
+  function perms(a) { if (a.length < 2) return [a]; const out = []; a.forEach((x, i) => perms(a.slice(0, i).concat(a.slice(i + 1))).forEach(p => out.push([x].concat(p)))); return out; }
+  function markNuclide(answer, value, max, opts, question) {
+    if (!value) return un(max);
+    const given = ((question && question.config && question.config.given) || []);
+    const isGiven = (side, i, k) => given.some(g => g.side === side && g.i === i && g[k] != null);
+    let right = 0, total = 0; const wrong = [];
+    ['left', 'right'].forEach(side => {
+      const want = answer[side] || [], got = value[side] || [];
+      const idx = want.map((_, i) => i);
+      let best = null;
+      perms(idx).forEach(order => {      // which expected particle each box is compared with
+        let r = 0, t = 0; const w = [];
+        order.forEach((wi, gi) => { const e = want[wi], g = got[gi] || {};
+          ['A', 'Z', 's'].forEach(k => { if (isGiven(side, gi, k)) return; t++;
+            const ok = k === 's' ? nucSym(g.s) === nucSym(e.s) && nucSym(g.s) !== '' : nucNum(g[k]) === e[k];
+            if (ok) r++; else w.push({ side, i: gi, field: k, want: e[k] }); }); });
+        if (!best || r > best.r) best = { r, t, w };
+      });
+      right += best.r; total += best.t; wrong.push(...best.w);
+    });
+    const sum = (side, k) => (value[side] || []).reduce((s, p, i) => { const g = given.find(x => x.side === side && x.i === i && x[k] != null); const n = nucNum(g ? g[k] : p[k]); return s == null || n == null ? null : s + n; }, 0);
+    const mass = [sum('left', 'A'), sum('right', 'A')], proton = [sum('left', 'Z'), sum('right', 'Z')];
+    const score = total ? Math.floor(max * right / total + 1e-9) : 0;
+    return { score, max, status: 'marked', detail: { right, total, wrong, mass, proton } };
+  }
+
+  /* ───────── shapes on a grid ─────────  value: { shapes:[{pts}] }   answer: { shape:[[x,y]…], tol? }
+     Full marks when a drawn shape has exactly the right corners. With 2+ marks, the right shape the right way round
+     in the wrong place earns 1 (the usual "correct size and orientation" special case). */
+  function samePts(a, b, tol) { if (a.length !== b.length) return false; const used = new Set();
+    return a.every(p => { const k = b.findIndex((q, i) => !used.has(i) && Math.abs(p[0] - q[0]) <= tol && Math.abs(p[1] - q[1]) <= tol); if (k < 0) return false; used.add(k); return true; }); }
+  function markTransform(answer, value, max) {
+    const shapes = ((value && value.shapes) || []).map(s => s.pts || []).filter(p => p.length);
+    if (!shapes.length) return un(max);
+    const want = answer.shape, tol = answer.tol || 0.01;
+    const exact = shapes.some(s => samePts(s, want, tol));
+    const shifted = !exact && shapes.some(s => { if (s.length !== want.length) return false;
+      const cs = s.reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]), cw = want.reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]);
+      const d = [(cw[0] - cs[0]) / s.length, (cw[1] - cs[1]) / s.length]; return samePts(s.map(p => [p[0] + d[0], p[1] + d[1]]), want, tol); });
+    const score = exact ? max : shifted && max >= 2 ? 1 : 0;
+    return { score, max, status: 'marked', detail: { exact, shifted, extra: shapes.length > 1 } };
+  }
+
+  /* ───────── number line ─────────  value/answer: { lo:{v,closed}|null, hi:{v,closed}|null }   each end is one item */
+  function markNumberline(answer, value, max) {
+    if (!value) return un(max);
+    const same = (a, b) => (a == null && b == null) || (a != null && b != null && Math.abs(a.v - b.v) < 1e-9 && !!a.closed === !!b.closed);
+    const lo = same(value.lo, answer.lo), hi = same(value.hi, answer.hi), n = (lo ? 1 : 0) + (hi ? 1 : 0);
+    return { score: n === 2 ? max : max >= 2 ? Math.min(max - 1, n) : 0, max, status: 'marked', detail: { lo, hi } };
+  }
+
+  /* ───────── Venn diagrams ─────────  value: { shaded:[regions] } | { counts:{region:n} }   answer: same shape */
+  function markVenn(answer, value, max) {
+    if (!value) return un(max);
+    if (answer.counts) {
+      const got = value.counts || {}, keys = Object.keys(answer.counts);
+      const right = keys.filter(k => got[k] != null && String(got[k]).trim() !== '' && Number(String(got[k]).trim()) === Number(answer.counts[k])).length;
+      return { score: right === keys.length ? max : answer.scale ? ladder(right, max, answer.scale) : Math.max(0, max - (keys.length - right)), max, status: 'marked', detail: { counts: true, right, of: keys.length, wrongKeys: keys.filter(k => Number(String(got[k] || '').trim()) !== Number(answer.counts[k]) || String(got[k] || '').trim() === '') } };
+    }
+    const got = new Set(value.shaded || []), want = new Set(answer.shaded);
+    const missing = [...want].filter(k => !got.has(k)), extra = [...got].filter(k => !want.has(k));
+    const off = missing.length + extra.length;
+    return { score: off === 0 ? max : off === 1 && max >= 2 ? max - 1 : 0, max, status: 'marked', detail: { missing, extra } };
+  }
+  const ladder = (n, max, scale) => M.ladder ? M.ladder(n, max, scale) : (scale ? Object.keys(scale).reduce((b, k) => (n >= +k ? Math.max(b, scale[k]) : b), 0) : Math.max(0, Math.min(max, n)));
+
+  /* ───────── bars: bar charts, histograms, pyramids ─────────  value/answer: { heights:[…] }, answer.tol optional */
+  function markBars(answer, value, max, opts, question) {
+    const h = (value && value.heights) || [];
+    if (!h.some(v => v != null)) return un(max);
+    const ax = Object.assign({ step: 1, minor: 5 }, (question && question.config && question.config.axis) || {});
+    const tol = answer.tol != null ? answer.tol : ax.step / ax.minor / 2 + 1e-9;
+    const wrong = answer.heights.map((w, i) => (h[i] == null || Math.abs(h[i] - w) > tol ? i : -1)).filter(i => i >= 0);
+    const score = answer.scale ? ladder(answer.heights.length - wrong.length, max, answer.scale) : Math.max(0, max - wrong.length);
+    return { score, max, status: 'marked', detail: { wrong, want: answer.heights } };
+  }
+
+  /* ───────── constructions, scale drawings, bearings ─────────
+     value : { points:{C:[x,y]}, segments:[[x1,y1,x2,y2]], arcs:[{c,r}] } in cm
+     answer: { points?:{ C:{ at, tol?, alt? } }, arcs?:[{ center, r }], segments?:[[p,q]], bearing?:{ from, to, deg, tol, dist, dtol } }
+     Criteria: the construction arcs; the finished figure (points + lines); a bearing's direction; its distance. */
+  function markConstruct(answer, value, max, opts, question) {
+    const v = value || {}; if (!Object.keys(v.points || {}).length && !(v.segments || []).length && !(v.arcs || []).length) return un(max);
+    const given = (question && question.config && question.config.points) || {};
+    const at = k => (Array.isArray(k) ? k : (v.points || {})[k] || given[k]);
+    const near = (a, b, t) => !!a && !!b && Math.hypot(a[0] - b[0], a[1] - b[1]) <= t;
+    const crit = [];
+    if (answer.arcs) crit.push({ name: 'arcs', ok: answer.arcs.every(A => (v.arcs || []).some(a => near(a.c, at(A.center), 0.15) && Math.abs(a.r - A.r) <= (A.tol || 0.15))) });
+    if (answer.points || answer.segments) {
+      const pOk = Object.keys(answer.points || {}).every(k => { const P = answer.points[k]; return near(at(k), P.at, P.tol || 0.2) || (P.alt || []).some(q => near(at(k), q, P.tol || 0.2)); });
+      const sOk = (answer.segments || []).every(([p, q]) => (v.segments || []).some(s => { const a = [s[0], s[1]], b = [s[2], s[3]]; return (near(a, at(p), 0.2) && near(b, at(q), 0.2)) || (near(a, at(q), 0.2) && near(b, at(p), 0.2)); }));
+      crit.push({ name: 'figure', ok: pOk && sOk, pOk, sOk });
+    }
+    if (answer.bearing) { const B = answer.bearing, a = at(B.from), b = at(B.to);
+      let deg = null, dist = null; if (a && b) { deg = (Math.atan2(b[0] - a[0], b[1] - a[1]) * 180 / Math.PI + 360) % 360; dist = Math.hypot(b[0] - a[0], b[1] - a[1]); }
+      const dd = deg == null ? 999 : Math.min(Math.abs(deg - B.deg), 360 - Math.abs(deg - B.deg));
+      crit.push({ name: 'bearing', ok: dd <= (B.tol || 2), measured: deg == null ? null : Math.round(deg) }); crit.push({ name: 'distance', ok: dist != null && Math.abs(dist - B.dist) <= (B.dtol || 0.2), measured: dist == null ? null : Math.round(dist * 10) / 10 }); }
+    const n = crit.filter(c => c.ok).length;
+    return { score: n === crit.length ? max : Math.min(Math.max(0, max - 1), n), max, status: 'marked', detail: { criteria: crit } };
+  }
+
+  /* ───────── ray diagrams ─────────  value: { rays:[{pts,dashed?}], image:{x,h} }   answer: { rays:n, image:{x,h} }
+     A ray counts when it starts at the top of the object, meets the lens or mirror, and leaves along a line that passes
+     through the top of the true image (forwards for a real image, traced back for a virtual one or a mirror). That is
+     true of every correctly drawn ray, so the parallel, centre and focal rays all count. */
+  function markRays(answer, value, max, opts, question) {
+    const v = value || {}; const rays = (v.rays || []).filter(r => !r.dashed && (r.pts || []).length >= 2);
+    if (!rays.length && !(v.image && v.image.h)) return un(max);
+    const obj = Object.assign({ x: -6, h: 2 }, (question && question.config && question.config.object) || {});
+    const tip = [obj.x, obj.h], img = [answer.image.x, answer.image.h], tol = answer.tol || 0.5;
+    const distLine = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], n = Math.hypot(dx, dy); return n < 1e-9 ? Infinity : Math.abs(dx * (p[1] - a[1]) - dy * (p[0] - a[0])) / n; };
+    const good = rays.filter(r => {
+      const P = r.pts; if (Math.hypot(P[0][0] - tip[0], P[0][1] - tip[1]) > tol) return false;
+      for (let i = 0; i < P.length - 1; i++) {              // the first place the ray reaches the lens / mirror plane (x = 0)
+        const a = P[i], c = P[i + 1];
+        if (Math.abs(c[0]) <= 0.25 && i + 2 < P.length) return distLine(img, c, P[i + 2]) <= tol && distLine(tip, a, c) <= 1e-9 + (i === 0 ? 0 : tol);
+        if ((a[0] < 0) !== (c[0] < 0) && Math.abs(a[0]) > 0.25) { const t = -a[0] / (c[0] - a[0]), m = [0, a[1] + t * (c[1] - a[1])]; return distLine(img, m, c) <= tol; }
+      }
+      return false; }).length;
+    const imageOk = !!(v.image && Math.abs(v.image.x - img[0]) <= tol && Math.abs(v.image.h - img[1]) <= tol);
+    const n = Math.min(answer.rays || 2, good) + (imageOk ? 1 : 0), need = (answer.rays || 2) + 1;
+    return { score: n >= need ? max : Math.min(Math.max(0, max - 1), n), max, status: 'marked', detail: { good, want: answer.rays || 2, imageOk } };
+  }
+
+  /* ───────── force arrows ─────────  value: { arrows:[{dir,len,label}] }
+     answer: { arrows:[{ label:'weight'|[alts], dir }], compare?:[[label, '>'|'<'|'=', label]] } */
+  function markArrows(answer, value, max) {
+    const got = (value && value.arrows) || []; if (!got.length) return un(max);
+    const alts = l => [].concat(l).map(x => String(x).toLowerCase());
+    const find = W => got.find(a => a.dir === W.dir && alts(W.label).includes(String(a.label || '').toLowerCase()));
+    const per = answer.arrows.map(W => ({ label: [].concat(W.label)[0], ok: !!find(W) }));
+    const byLabel = l => got.find(a => alts(l).includes(String(a.label || '').toLowerCase()));
+    const cmp = (answer.compare || []).map(([p, op, q]) => { const A = byLabel(p), B = byLabel(q); const ok = !!A && !!B && (op === '>' ? A.len > B.len : op === '<' ? A.len < B.len : A.len === B.len); return { p: [].concat(p)[0], op, q: [].concat(q)[0], ok }; });
+    const extra = got.filter(a => !answer.arrows.some(W => alts(W.label).includes(String(a.label || '').toLowerCase()) && W.dir === a.dir)).length;
+    const n = per.filter(x => x.ok).length + cmp.filter(x => x.ok).length, need = per.length + cmp.length;
+    return { score: n === need && !extra ? max : Math.min(Math.max(0, max - 1), Math.max(0, n - extra)), max, status: 'marked', detail: { per, cmp, extra } };
+  }
+
+  /* ───────── PPC and price controls ───────── */
+  function markPpc(answer, value, max) {
+    if (!value) return un(max);
+    const crit = []; if (answer.shift) crit.push({ name: 'shift', ok: value.shift === answer.shift }); if (answer.where) crit.push({ name: 'point', ok: value.where === answer.where });
+    const n = crit.filter(c => c.ok).length;
+    return { score: n === crit.length ? max : Math.min(Math.max(0, max - 1), n), max, status: 'marked', detail: { criteria: crit, got: value } };
+  }
+  function markPriceControl(answer, value, max) {
+    if (!value) return un(max);
+    const side = answer.control === 'max' ? 'below' : 'above', gap = answer.control === 'max' ? 'shortage' : 'surplus';
+    const crit = [{ name: 'line', ok: value.price === side }, { name: 'gap', ok: value.gap === gap }];
+    const n = crit.filter(c => c.ok).length;
+    return { score: n === 2 ? max : Math.min(Math.max(0, max - 1), n), max, status: 'marked', detail: { criteria: crit, side, gap } };
+  }
+
   /* ───────── feedback a student can read ─────────
      NedMark.explain(ui, answer, value, result, question) -> [{ kind:'good'|'bad'|'info', text }]
      Shown AFTER marking. It says what was right, what was missing and what the mark scheme wanted,
@@ -228,6 +387,9 @@
       case 'plot': {
         if (d.points) { (d.points.right === d.points.of && !d.points.extra) ? good('Every point is plotted correctly.') : bad(`${d.points.right} of ${d.points.of} points are within half a small square` + (d.points.extra ? `, and ${d.points.extra} point${d.points.extra === 1 ? ' is' : 's are'} in the wrong place.` : '.')); }
         if (d.line) d.line.ok ? good('Your line is a good fit.') : bad('Your line is not a good fit' + (d.line.gradient != null ? ` (its gradient is ${d.line.gradient})` : ': draw one straight line') + '.');
+        if (d.curve) d.curve.ok ? good('Your curve goes through your points.') : bad('Plot all the points first: the curve is drawn through them.');
+        if (d.region) { d.region.per.forEach((p, i) => (p.drawn ? (p.style || answer.region.style === false ? good(`Line ${i + 1} is right.`) : bad(`Line ${i + 1} is in the right place but should be ${answer.region.lines[i].strict ? 'broken (the inequality is strict: < or >)' : 'solid (≤ or ≥ includes the line)'}.`)) : bad(`Line ${i + 1} is missing or in the wrong place.`)));
+          d.region.inside ? good('R is in the right region.') : bad('R is not in the region that satisfies every inequality.'); }
         if (d.segments) d.segments.per.forEach(s => (s.ok ? good(`Line ${s.label} is right.`) : bad(`Line ${s.label} is missing, unlabelled or the wrong shape.`)));
         if (d.scale) d.scale.ok ? good('Your scales are sensible and the data fills more than half the grid.') : bad(!d.scale.covers ? 'Your scales do not fit all the data.' : (d.scale.usesX <= 0.5 || d.scale.usesY <= 0.5) ? 'Your data uses less than half of the grid. Choose a scale that spreads it out.' : 'Use steps of 1, 2 or 5 (or ten times those).');
         break; }
@@ -268,13 +430,62 @@
         d.loneOk ? good('The non-bonding electrons are right.') : bad('Check the electrons that are not shared: count each atom’s outer shell.');
         if (d.bondsOk && d.loneOk && !d.mixedOk) bad('Each shared pair should be one dot and one cross, to show an electron from each atom.');
         break; }
+      case 'nuclide': {
+        if (d.right === d.total) good('Every box is right.');
+        else { (d.right ? good : info)(`${d.right} of ${d.total} boxes right.`);
+          (d.wrong || []).slice(0, 4).forEach(w => bad(`${w.side === 'left' ? 'Before' : 'After'} the arrow, particle ${w.i + 1}: the ${w.field === 'A' ? 'mass number' : w.field === 'Z' ? 'proton number' : 'symbol'} should be ${w.want}.`)); }
+        if (d.mass[0] != null && d.mass[1] != null && d.mass[0] !== d.mass[1]) bad(`Mass numbers must add up to the same on both sides: ${d.mass[0]} before, ${d.mass[1]} after.`);
+        if (d.proton[0] != null && d.proton[1] != null && d.proton[0] !== d.proton[1]) bad(`Proton numbers must add up to the same on both sides: ${d.proton[0]} before, ${d.proton[1]} after.`);
+        break; }
+      case 'transform':
+        if (d.exact) good('Your image is in exactly the right place.');
+        else if (d.shifted) { info('Your shape is the right size and the right way round, but in the wrong place.'); bad('Check the line, centre or vector you used.'); }
+        else bad('Your image is not right. Check each corner: ' + answer.shape.map(p => '(' + p.join(', ') + ')').join(' ') + ' is where it should be.');
+        break;
+      case 'numberline': {
+        const say = (e, side) => e == null ? `an arrow running ${side === 'lo' ? 'left' : 'right'}` : `${e.closed ? 'a filled circle (●) at' : 'an open circle (○) at'} ${e.v}`;
+        ['lo', 'hi'].forEach(k => (d[k] ? good(`The ${k === 'lo' ? 'left' : 'right'} end is right.`) : bad(`The ${k === 'lo' ? 'left' : 'right'} end should be ${say(answer[k], k)}.`)));
+        info('Open circle: < or > (the value is not included). Filled circle: ≤ or ≥ (the value is included).');
+        break; }
+      case 'venn':
+        if (d.counts) { d.right === d.of ? good('Every region has the right number.') : bad(`${d.right} of ${d.of} regions are right. Start with the middle (both sets), then each set on its own, then outside.`); }
+        else { if (!d.missing.length && !d.extra.length) good('Exactly the right regions are shaded.');
+          if (d.missing.length) bad(`${d.missing.length} region${d.missing.length > 1 ? 's' : ''} should also be shaded.`);
+          if (d.extra.length) bad(`${d.extra.length} shaded region${d.extra.length > 1 ? 's are' : ' is'} not part of the set.`);
+          info('′ means "not in"; ∩ means "in both"; ∪ means "in either or both".'); }
+        break;
+      case 'bars': {
+        const names = cfg.kind === 'histogram' ? (cfg.classes || []).map(c => c.join('–')) : (cfg.labels || []);
+        if (!d.wrong.length) good('Every bar is the right height.');
+        d.wrong.slice(0, 5).forEach(i => bad(`${names[i] || 'Bar ' + (i + 1)}: should be ${d.want[i]}.`));
+        if (cfg.kind === 'histogram' && d.wrong.length) info('Histogram: height = frequency density = frequency ÷ class width.');
+        break; }
+      case 'construct': (d.criteria || []).forEach(c => {
+        if (c.name === 'arcs') (c.ok ? good('Your construction arcs are there, with the right radii.') : bad('Show the construction arcs: set the compasses to each length and draw an arc from each end.'));
+        if (c.name === 'figure') (c.ok ? good('The figure is in the right place.') : bad(!c.pOk ? 'The point is not where the arcs cross (allowed: 2 mm).' : 'Join the point to the ends with a ruler.'));
+        if (c.name === 'bearing') (c.ok ? good('The bearing is right.') : bad(`The bearing should be ${answer.bearing.deg}°${c.measured != null ? ` (yours is about ${c.measured}°)` : ''}. Measure clockwise from north.`));
+        if (c.name === 'distance') (c.ok ? good('The distance is right for the scale.') : bad(`The distance should be ${answer.bearing.dist} cm on the paper${c.measured != null ? ` (yours is ${c.measured} cm)` : ''}.`)); }); break;
+      case 'rays':
+        (d.good >= d.want ? good : bad)(`${d.good} correct ray${d.good === 1 ? '' : 's'} (${d.want} needed).`);
+        if (d.good < d.want) info(cfg.kind === 'mirror' ? 'At a mirror the angle of reflection equals the angle of incidence; trace the reflected ray back (dashed) behind the mirror.' : 'Easy rays: parallel to the axis then through F; straight through the centre of the lens.');
+        d.imageOk ? good('The image is in the right place and the right size.') : bad('The image should be where the rays meet' + (cfg.kind === 'mirror' ? ', as far behind the mirror as the object is in front.' : ' (or appear to come from).'));
+        break;
+      case 'arrows':
+        d.per.forEach(x => (x.ok ? good(`${x.label}: right direction and name.`) : bad(`${x.label}: missing, the wrong way, or not named.`)));
+        d.cmp.forEach(c => (c.ok ? good(`${c.p} ${c.op === '=' ? 'equals' : c.op === '>' ? 'is bigger than' : 'is smaller than'} ${c.q}: shown by the arrow lengths.`) : bad(`Show ${c.p} ${c.op === '=' ? 'equal to' : c.op === '>' ? 'bigger than' : 'smaller than'} ${c.q} by the arrow lengths.`)));
+        if (d.extra) bad(`${d.extra} arrow${d.extra > 1 ? 's' : ''} should not be there (or ${d.extra > 1 ? 'are' : 'is'} unnamed).`);
+        break;
+      case 'ppc': d.criteria.forEach(c => { if (c.name === 'shift') (c.ok ? good('The curve shifts the right way.') : bad(`The curve should shift ${answer.shift === 'out' ? 'outwards (more of both goods can be made)' : 'inwards (less can be made)'}.`));
+        if (c.name === 'point') (c.ok ? good('X is in the right place.') : bad(`X should be ${answer.where === 'inside' ? 'inside the curve (resources unused)' : answer.where === 'on' ? 'on the curve (all resources used)' : 'beyond the curve (not reachable now)'}.`)); }); break;
+      case 'pricecontrol': d.criteria.forEach(c => { if (c.name === 'line') (c.ok ? good('The line is on the right side of the equilibrium.') : bad(`A ${answer.control === 'max' ? 'maximum price only has an effect below' : 'minimum price only has an effect above'} the equilibrium.`));
+        if (c.name === 'gap') (c.ok ? good(`Right: it causes a ${d.gap}.`) : bad(`It causes a ${d.gap}: at that price the quantity ${d.gap === 'shortage' ? 'demanded is more than the quantity supplied' : 'supplied is more than the quantity demanded'}.`)); }); break;
       case 'circuit': (d.criteria || []).forEach(c => (c.ok ? good(c.name[0].toUpperCase() + c.name.slice(1) + ': right.') : bad(c.name[0].toUpperCase() + c.name.slice(1) + ': not right.'))); break;
     }
     return out;
   }
   M.explain = explain;
 
-  Object.assign(M.MARKERS, { code: markAlgo('code'), flowchart: markAlgo('flowchart'), order: markOrder, sql: markSql, shells: markShells, structure: markStructure, lewis: markLewis, circuit: markCircuit });
+  Object.assign(M.MARKERS, { code: markAlgo('code'), flowchart: markAlgo('flowchart'), order: markOrder, sql: markSql, shells: markShells, structure: markStructure, lewis: markLewis, circuit: markCircuit, nuclide: markNuclide, transform: markTransform, numberline: markNumberline, venn: markVenn, bars: markBars, construct: markConstruct, rays: markRays, arrows: markArrows, ppc: markPpc, pricecontrol: markPriceControl });
   M.FEATURE_NAMES = FEATURE_NAMES;
   return M;
 });

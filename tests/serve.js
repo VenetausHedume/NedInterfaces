@@ -17,7 +17,7 @@ function start(port) {
   });
 }
 async function routeCdn(page, opts) {
-  const map = [[/cdn\.jsdelivr\.net\/npm\/mathlive/, 'mathlive/mathlive.min.js'], [/konva/, 'konva/konva.min.js'], [/codemirror.*\.js/, 'codemirror/lib/codemirror.js'], [/codemirror.*\.css/, 'codemirror/lib/codemirror.css']];
+  const map = [[/skulpt-stdlib/, 'skulpt/dist/skulpt-stdlib.js'], [/skulpt\.min/, 'skulpt/dist/skulpt.min.js'], [/mode\/python/, 'codemirror/mode/python/python.js'], [/cdn\.jsdelivr\.net\/npm\/mathlive/, 'mathlive/mathlive.min.js'], [/konva/, 'konva/konva.min.js'], [/codemirror.*\.js/, 'codemirror/lib/codemirror.js'], [/codemirror.*\.css/, 'codemirror/lib/codemirror.css']];
   await page.route(/cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com/, route => {
     const u = route.request().url();
     if (opts && opts.noMath && /mathlive/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: '/* mathlive blocked for the fallback test */' });

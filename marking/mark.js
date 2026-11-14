@@ -558,7 +558,7 @@
   function markPlot(answer, value, max) {
     const v = value || {};
     const pts = v.points || [], lines = v.lines || [];
-    if (!pts.length && !lines.length) return { score: 0, max, status: 'unanswered', detail: {} };
+    if (!pts.length && !lines.length && !v.region) return { score: 0, max, status: 'unanswered', detail: {} };
     const ax = v.axes || {};
     const tol = (t) => t || [(ax.xstep || 1) / (ax.minor || 5) / 2, (ax.ystep || 1) / (ax.minor || 5) / 2];        // half a small square
     const detail = {}; let score = 0;
@@ -601,6 +601,22 @@
         per.push({ label: sp.label, ok }); if (ok) right++;
       });
       const s = ladder(right, S.marks, S.scale); detail.segments = { per, score: s }; score += s;
+    }
+    if (answer.curve) {            // the curve is drawn through the student's own points, so it is credited once enough points are plotted
+      const ok = pts.length >= (answer.curve.min || 3);
+      detail.curve = { ok }; if (ok) score += answer.curve.marks;
+    }
+    if (answer.region) {           // inequalities: each boundary drawn (solid or broken as asked), and R in the wanted region
+      const t = tol();
+      const onLine = (q, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], n = Math.hypot(dx / t[0], dy / t[1]); return Math.abs(((q[0] - a[0]) * dy - (q[1] - a[1]) * dx) / (t[0] * t[1])) / n <= 1.0001; };
+      const sideOf = (q, a, b) => Math.sign((b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0]));
+      const per = answer.region.lines.map(B => { const ln = lines.find(l => onLine(l.p1, B.through[0], B.through[1]) && onLine(l.p2, B.through[0], B.through[1]) && Math.hypot(l.p2[0] - l.p1[0], l.p2[1] - l.p1[1]) > 0);
+        return { drawn: !!ln, style: !!ln && !!ln.dashed === !!B.strict }; });
+      const R = v.region;
+      const inside = !!R && answer.region.lines.every(B => sideOf(R, B.through[0], B.through[1]) === sideOf(B.keep, B.through[0], B.through[1]) && sideOf(R, B.through[0], B.through[1]) !== 0);
+      const n = per.filter(p => p.drawn && (answer.region.style === false || p.style)).length + (inside ? 1 : 0);
+      const s = ladder(n, answer.region.marks, answer.region.scale);
+      detail.region = { per, inside, score: s }; score += s;
     }
     if (answer.scale) {
       const d = answer.scale.data;

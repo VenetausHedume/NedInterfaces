@@ -101,6 +101,8 @@
   };
 
   const qs = new URLSearchParams(location.search);
+  const tg = document.getElementById('drawing-toggle');
+  if (tg && window.NED_DRAWING) { tg.textContent = 'Hide drawing interfaces'; tg.href = location.pathname; }
   window.NedLab = { load, get value() { return lastValue; } };
   if (ids.length) load(qs.get('ui') && Ned.registry[qs.get('ui')] ? qs.get('ui') : ids[0], +(qs.get('sample') || 0));
   else sidebar.appendChild(Ned.el('p', { class: 'nav-sub' }, ['No interfaces registered yet.']));

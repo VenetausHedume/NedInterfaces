@@ -12,7 +12,7 @@
     rows.forEach(r => t.appendChild(Ned.el('tr', {}, r.map(v => Ned.el('td', { style: 'border:1px solid var(--line);padding:4px 9px;' }, [String(v)])))));
     return Ned.el('div', { style: 'overflow-x:auto;max-width:100%;' }, [t]);
   }
-  Ned.runPanel = function (container, kind, getCode, question) {
+  Ned.runPanel = function (container, kind, getCode, question, getLang) {
     const cfg = (question && question.config) || {};
     if (cfg.run === false) return;
     const out = Ned.el('div', { style: box, 'aria-live': 'polite', 'data-run': 'output' }, ['Press Run to try your ' + (kind === 'sql' ? 'query' : kind === 'flow' ? 'flowchart' : 'program') + '.']);
@@ -45,8 +45,11 @@
       inp.value = (cfg.tryInputs || []).join('\n');
       run.addEventListener('click', () => {
         if (!window.NedPseudo) { out.textContent = 'The pseudocode runner did not load.'; return; }
+        out.style.color = '';
         const inputs = inp.value.split('\n').map(s => s.trim()).filter(s => s !== '');
-        const r = kind === 'flow' ? NedPseudo.runFlowchart(getCode(), inputs) : NedPseudo.run(getCode(), inputs, undefined, cfg.files);
+        const py = kind === 'code' && getLang && getLang() === 'python';
+        if (py && !(window.NedPython && NedPython.available())) { out.innerHTML = ''; out.textContent = 'The Python runner did not load.'; return; }
+        const r = kind === 'flow' ? NedPseudo.runFlowchart(getCode(), inputs) : py ? NedPython.run(getCode(), inputs, undefined, cfg.files) : NedPseudo.run(getCode(), inputs, undefined, cfg.files);
         out.innerHTML = '';
         if (r.output.length) out.appendChild(Ned.el('div', {}, [r.output.join('\n')]));
         if (!r.ok) out.appendChild(Ned.el('div', { style: 'color:#b0413e;margin-top:' + (r.output.length ? '6px' : '0') + ';', 'data-run': 'error' }, [(r.error.line ? 'Line ' + r.error.line + ': ' : '') + r.error.message]));

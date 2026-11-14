@@ -10,6 +10,7 @@
 <body>
   <header>
     <strong>Ned Interfaces</strong> <span>· build & test lab</span>
+    <a id="drawing-toggle" href="?drawing=1" style="margin-left:auto;font-size:13px;">Show drawing interfaces (set aside)</a>
   </header>
 
   <div class="layout">
@@ -35,12 +36,16 @@
 
   <script src="https://cdn.jsdelivr.net/npm/mathlive"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/konva/10.6.0/konva.min.js"></script>
 
   <script src="marking/synonyms.js"></script>
   <script src="marking/mark.js"></script>
   <script src="marking/pseudo.js"></script>
   <script src="marking/sql.js"></script>
+  <script src="marking/python.js"></script>
   <script src="marking/builders.js"></script>
 
   <script src="interfaces/_contract.js"></script>
@@ -65,10 +70,12 @@
   <script src="interfaces/shells.js"></script>
   <script src="interfaces/structure.js"></script>
   <script src="interfaces/lewis.js"></script>
+  <script src="interfaces/nuclide.js"></script>
   <script src="interfaces/photo.js"></script>
   <script src="interfaces/math.js"></script>
-  <!-- set aside for now: graph interfaces (open index.html?parked=1 to see them) -->
-  <script>if (/[?&]parked=1/.test(location.search)) ['plot', 'econ', 'graph'].forEach(n => document.write('<script src="parked/' + n + '.js"><\/script>'));</script>
+  <!-- set aside for now: drawing interfaces (graphs, diagrams). Not on the site until decided; open index.html?drawing=1 -->
+  <script>window.NED_DRAWING = /[?&](drawing|parked)=1/.test(location.search);
+    if (NED_DRAWING) ['plot', 'transform', 'numberline', 'venn', 'bars', 'construct', 'rays', 'arrows', 'econ', 'econplus', 'graph'].forEach(n => document.write('<script src="drawing/' + n + '.js"><\/script>'));</script>
   <script src="app.js"></script>
 </body>
 </html>
