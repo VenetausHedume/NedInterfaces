@@ -1,0 +1,170 @@
+/* Pseudocode runner, SQL runner, and the builder markers. Run: node tests/builders.test.js */
+const M = require('../marking/builders.js'), P = require('../marking/pseudo.js'), Q = require('../marking/sql.js');
+let pass = 0, fail = 0;
+const t = (name, got, want) => { const ok = JSON.stringify(got) === JSON.stringify(want); ok ? pass++ : fail++; if (!ok || process.argv[2] === '-v') console.log((ok ? 'ok  ' : 'FAIL') + ' ' + name + (ok ? '' : `: got ${JSON.stringify(got)} want ${JSON.stringify(want)}`)); };
+const run = (code, inp) => { const r = P.run(code, inp || []); return r.ok ? r.output.join('|') : 'ERR' + (r.error.line ? ' L' + r.error.line : '') + ': ' + r.error.message; };
+const sc = (ui, a, v, marks, q) => M.mark(ui, a, v, Object.assign({ marks }, q || {})).score;
+const A = '←';
+
+// ── pseudocode: the constructs in the 0478 guide ──
+t('assign + output', run(`X ${A} 5\nOUTPUT X * 2`), '10');
+t('<- and = both assign', run('a <- 2\nb = a + 3\nOUTPUT b'), '5');
+t('for loop total', run(`Total ${A} 0\nFOR i ${A} 1 TO 3\n INPUT N\n Total ${A} Total + N\nNEXT i\nOUTPUT "Total is ", Total`, [4, 5, 6]), 'Total is 15');
+t('for with step', run(`FOR i ${A} 10 TO 1 STEP -3\n OUTPUT i\nNEXT`), '10|7|4|1');
+t('while', run('INPUT x\nWHILE x <> -1 DO\n OUTPUT x * x\n INPUT x\nENDWHILE', [2, 3, -1]), '4|9');
+t('repeat until', run('c <- 0\nREPEAT\n c <- c + 1\nUNTIL c >= 3\nOUTPUT c'), '3');
+t('if else', run('INPUT m\nIF m >= 50 THEN\n OUTPUT "Pass"\nELSE\n OUTPUT "Fail"\nENDIF', [49]), 'Fail');
+t('nested if', run('INPUT m\nIF m >= 50 THEN\n IF m >= 80 THEN\n  OUTPUT "A"\n ELSE\n  OUTPUT "C"\n ENDIF\nELSE\n OUTPUT "U"\nENDIF', [85]), 'A');
+t('THEN on its own line', run('INPUT x\nIF x > 5\n THEN\n  OUTPUT "hi"\n ELSE\n  OUTPUT "lo"\nENDIF', [2]), 'lo');
+t('one-line IF', run('INPUT x\nIF x > 5 THEN OUTPUT "hi"\nENDIF', [9]), 'hi');
+t('case', run('INPUT g\nCASE OF g\n "A" : OUTPUT "top"\n "B" : OUTPUT "ok"\n OTHERWISE OUTPUT "low"\nENDCASE', ['B']), 'ok');
+t('case otherwise', run('INPUT g\nCASE OF g\n 1 : OUTPUT "one"\n OTHERWISE : OUTPUT "many"\nENDCASE', [7]), 'many');
+t('array 1D', run(`DECLARE A : ARRAY[1:3] OF INTEGER\nFOR i ${A} 1 TO 3\n A[i] ${A} i * i\nNEXT\nOUTPUT A[1] + A[2] + A[3]`), '14');
+t('array 2D', run(`DECLARE G : ARRAY[1:2,1:2] OF INTEGER\nG[1,2] ${A} 7\nOUTPUT G[1,2]`), '7');
+t('undeclared array allowed', run('N[1] <- 4\nN[2] <- 6\nOUTPUT N[1] + N[2]'), '10');
+t('function', run('FUNCTION Sq(n : INTEGER) RETURNS INTEGER\n RETURN n * n\nENDFUNCTION\nOUTPUT Sq(7)'), '49');
+t('procedure with CALL', run('PROCEDURE Hi(n : STRING)\n OUTPUT "Hi ", n\nENDPROCEDURE\nCALL Hi("Sam")'), 'Hi Sam');
+t('MOD and DIV both styles', run('OUTPUT 17 MOD 5, " ", 17 DIV 5, " ", MOD(9,4), " ", DIV(9,4)'), '2 3 1 2');
+t('string functions', run('s <- "Hello"\nOUTPUT LENGTH(s), UCASE(s), SUBSTRING(s,2,3)'), '5HELLOell');
+t('string joined with &', run('OUTPUT "a" & "b" & 3'), 'ab3');
+t('boolean logic', run('x <- 5\nIF x > 1 AND NOT (x = 6) OR FALSE THEN\n OUTPUT "y"\nENDIF'), 'y');
+t('power and brackets', run('OUTPUT (2 + 3) ^ 2 - 1'), '24');
+t('real division', run('OUTPUT 7 / 2'), '3.5');
+t('ROUND', run('OUTPUT ROUND(3.14159, 2)'), '3.14');
+t('lower-case keywords', run('total = 0\nfor i = 1 to 3\n total = total + i\nnext i\nprint total'), '6');
+t('comments ignored', run('// set up\nx <- 1 // one\nOUTPUT x'), '1');
+t('string input kept when declared STRING', run('DECLARE n : STRING\nINPUT n\nOUTPUT n & "!"', ['007']), '007!');
+t('number input used as a number', run('INPUT a\nINPUT b\nOUTPUT a + b', ['3', '4']), '7');
+t('symbols ≠ ≤ ≥', run('x <- 3\nIF x ≠ 4 AND x ≤ 3 AND x ≥ 3 THEN\n OUTPUT "ok"\nENDIF'), 'ok');
+t('largest of four', run(`Largest ${A} 0\nCount ${A} 0\nREPEAT\n INPUT Number\n IF Number > Largest THEN\n  Largest ${A} Number\n ENDIF\n Count ${A} Count + 1\nUNTIL Count = 4\nOUTPUT Largest`, [3, 9, 2, 7]), '9');
+// errors a student can act on
+t('err: endless loop', run('x <- 1\nWHILE x > 0 DO\n x <- x + 1\nENDWHILE'), 'ERR L2: The program ran for too long. A loop probably never ends.');
+t('err: missing ENDIF', run('INPUT x\nIF x > 1 THEN\n OUTPUT x', [3]), 'ERR L3: IF (started on line 2) needs ENDIF to close it.');
+t('err: missing NEXT', run('FOR i <- 1 TO 3\n OUTPUT i'), 'ERR L2: FOR (started on line 1) needs NEXT to close it.');
+t('err: unset variable', run('OUTPUT Total'), 'ERR L1: "TOTAL" is used before it has been given a value.');
+t('err: out of input', run('INPUT a\nINPUT b', [1]), 'ERR L2: The program asked for more input than it was given.');
+t('err: array bounds', run('DECLARE A : ARRAY[1:3] OF INTEGER\nA[4] <- 1'), 'ERR L2: A[4] is outside the array (it goes from 1 to 3).');
+t('err: divide by zero', run('OUTPUT 4 / 0'), 'ERR L1: Division by zero.');
+t('err: stray ENDIF', run('ENDIF'), 'ERR L1: ENDIF has nothing to close. Check that the matching opening line is there.');
+t('err: condition not boolean', run('x <- 3\nIF x THEN\n OUTPUT 1\nENDIF'), 'ERR L2: A condition must be true or false, for example Count < 10.');
+t('err: text as number', run('OUTPUT "abc" * 2'), 'ERR L1: "abc" is not a number.');
+t('err: unknown function', run('OUTPUT Foo(2)'), 'ERR L1: There is no function or procedure called "FOO".');
+t('err: unclosed quote', run('OUTPUT "abc'), 'ERR L1: This text is missing its closing quote mark.');
+t('output kept up to the error', P.run('OUTPUT 1\nOUTPUT y', []).output, ['1']);
+t('never throws on junk', ['', '((((', 'FOR', 'IF THEN', 'x <-', '←←', 'CASE OF', 'OUTPUT ,', 'NEXT i', 'DECLARE', 'a[ <- 1'].map(c => { try { P.run(c, []); return 1; } catch (e) { return e.message; } }), [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+t('output match ignores prompts', P.outputMatches(['Enter a number', 'The total is 15.0'], [15]), true);
+t('output match needs the value', P.outputMatches(['14'], [15]), false);
+t('output match keeps order', [P.outputMatches(['3', '5'], [3, 5]), P.outputMatches(['5', '3'], [3, 5])], [true, false]);
+t('output match text', P.outputMatches(['PASS'], ['pass']), true);
+t('15 is not found inside 150', P.outputMatches(['150'], [15]), false);
+
+// ── marking code ──
+const SUM = { tests: [{ input: [4, 5, 6], expect: [15] }, { input: [1, 1, 1], expect: [3] }], features: ['loop', 'input', 'totalling', 'output'] };
+t('code: correct, FOR', sc('code', SUM, { code: 'Total <- 0\nFOR i <- 1 TO 3\nINPUT N\nTotal <- Total + N\nNEXT\nOUTPUT Total' }, 5), 5);
+t('code: correct, WHILE and different names', sc('code', SUM, { code: 'sum = 0\ncount = 0\nWHILE count < 3 DO\n INPUT num\n sum = sum + num\n count = count + 1\nENDWHILE\nPRINT "Sum: ", sum' }, 5), 5);
+t('code: correct without a loop still full marks', sc('code', SUM, { code: 'INPUT a\nINPUT b\nINPUT c\nOUTPUT a + b + c' }, 5), 5);
+t('code: loops twice only -> features', sc('code', SUM, { code: 'Total <- 0\nFOR i <- 1 TO 2\nINPUT N\nTotal <- Total + N\nNEXT\nOUTPUT Total' }, 5), 4);
+t('code: syntax slip keeps feature marks', sc('code', SUM, { code: 'Total <- 0\nFOR i <- 1 TO 3\nINPUT N\nTotal <- Total + N\nOUTPUT Total' }, 5), 4);
+t('code: only input and output', sc('code', SUM, { code: 'INPUT N\nOUTPUT N' }, 5), 2);
+t('code: hard-coded answer fails the second test', sc('code', SUM, { code: 'OUTPUT 15' }, 5), 1);
+t('code: nonsense', sc('code', SUM, { code: 'hello world' }, 5), 0);
+t('code: empty', M.mark('code', SUM, { code: '  ' }, { marks: 5 }).status, 'unanswered');
+t('code: no feature list -> share of tests', sc('code', { tests: SUM.tests.concat([{ input: [0, 0, 0], expect: [0] }]) }, { code: 'INPUT a\nINPUT b\nINPUT c\nIF a = 4 THEN\n OUTPUT 15\nELSE\n OUTPUT 0\nENDIF' }, 4), 2);
+
+// ── flowcharts are run too ──
+const fc = { nodes: [{ id: 1, type: 'start', text: 'START' }, { id: 2, type: 'process', text: `Total ${A} 0, Count ${A} 0` }, { id: 3, type: 'io', text: 'INPUT N' }, { id: 4, type: 'process', text: `Total ${A} Total + N\nCount ${A} Count + 1` }, { id: 5, type: 'decision', text: 'Is Count = 3?' }, { id: 6, type: 'io', text: 'OUTPUT Total' }, { id: 7, type: 'start', text: 'STOP' }],
+  edges: [{ from: 1, to: 2 }, { from: 2, to: 3 }, { from: 3, to: 4 }, { from: 4, to: 5 }, { from: 5, to: 6, label: 'Yes' }, { from: 5, to: 3, label: 'No' }, { from: 6, to: 7 }] };
+t('flowchart runs', P.runFlowchart(fc, [1, 2, 3]).output, ['6']);
+t('flowchart marked by tests', sc('flowchart', { tests: [{ input: [1, 2, 3], expect: [6] }, { input: [5, 5, 5], expect: [15] }], features: ['input', 'decision', 'counting', 'output'] }, fc, 5), 5);
+const swapped = JSON.parse(JSON.stringify(fc)); swapped.edges[4].label = 'No'; swapped.edges[5].label = 'Yes';
+t('flowchart Yes/No swapped -> features only', sc('flowchart', { tests: [{ input: [1, 2, 3], expect: [6] }], features: ['input', 'decision', 'counting', 'output'] }, swapped, 5), 4);
+t('flowchart missing branch label explains itself', /Yes and one labelled No/.test(P.runFlowchart(Object.assign({}, fc, { edges: fc.edges.map(e => Object.assign({}, e, { label: '' })) }), [1, 2, 3]).error.message), true);
+t('flowchart with no STOP', /without reaching STOP/.test(P.runFlowchart({ nodes: fc.nodes.slice(0, 2), edges: [{ from: 1, to: 2 }] }, []).error.message), true);
+t('flowchart endless loop stops', P.runFlowchart({ nodes: [{ id: 1, type: 'start', text: 'START' }, { id: 2, type: 'process', text: 'x <- 1' }], edges: [{ from: 1, to: 2 }, { from: 2, to: 2 }] }, []).ok, false);
+t('flowchart empty', M.mark('flowchart', { tests: [] }, { nodes: [], edges: [] }, { marks: 3 }).status, 'unanswered');
+
+// ── ordering ──
+const ORD = { order: ['init', 'for', 'in', 'add', 'next', 'out'], indent: { init: 0, for: 0, in: 1, add: 1, next: 0, out: 0 }, indentMarks: 1 };
+t('order: perfect with indent', sc('order', ORD, { order: ORD.order, indent: { in: 1, add: 1 } }, 5), 5);
+t('order: right order, no indent', sc('order', ORD, { order: ORD.order }, 5), 4);
+t('order: two lines swapped', sc('order', ORD, { order: ['init', 'for', 'add', 'in', 'next', 'out'], indent: { in: 1, add: 1 } }, 5), 3);
+t('order: distractor included', sc('order', ORD, { order: ['init', 'for', 'in', 'bad', 'add', 'next', 'out'] }, 5), 3);
+t('order: one line missing', sc('order', ORD, { order: ['init', 'for', 'in', 'add', 'out'] }, 5), 3);
+t('order: reversed', sc('order', ORD, { order: ORD.order.slice().reverse() }, 5), 0);
+t('order: alternatives accepted', sc('order', { orders: [['a', 'b', 'c'], ['b', 'a', 'c']] }, { order: ['b', 'a', 'c'] }, 3), 3);
+t('order: empty', M.mark('order', ORD, { order: [] }, { marks: 5 }).status, 'unanswered');
+
+// ── SQL ──
+const T = { Students: { columns: ['Name', 'Class', 'Mark'], rows: [['Dev', 10, 88], ['Asha', 10, 71], ['Ben', 9, 55], ['Chen', 10, 64], ['Eve', 9, 90]] } };
+const sql = q => { const r = Q.run(q, T); return r.ok ? r.rows.map(x => x.join(',')).join('|') : 'ERR: ' + r.error; };
+t('sql select where order', sql('SELECT Name FROM Students WHERE Class = 10 ORDER BY Name'), 'Asha|Chen|Dev');
+t('sql star', sql('select * from students where mark > 85'), 'Dev,10,88|Eve,9,90');
+t('sql and/or/not + brackets', sql("SELECT Name FROM Students WHERE (Class = 9 OR Mark > 80) AND NOT Name = 'Eve'"), 'Dev|Ben');
+t('sql order desc, two columns', sql('SELECT Name, Mark FROM Students ORDER BY Class DESC, Mark DESC'), 'Dev,88|Asha,71|Chen,64|Eve,90|Ben,55');
+t('sql count sum avg', [sql('SELECT COUNT(*) FROM Students WHERE Mark > 60'), sql('SELECT SUM(Mark) FROM Students WHERE Class = 9'), sql('SELECT MAX(Mark) FROM Students')], ['4', '145', '90']);
+t('sql like', sql("SELECT Name FROM Students WHERE Name LIKE 'C%'"), 'Chen');
+t('sql text compare ignores case', sql("SELECT Mark FROM Students WHERE Name = 'asha'"), '71');
+t('sql errors', [sql('SELECT Nme FROM Students'), sql('SELECT Name FROM Pupils'), sql('SELECT Name Students'), sql('Name FROM Students'), sql("SELECT Name FROM Students WHERE Class")],
+  ['ERR: The table has no column called "Nme".', 'ERR: There is no table called "Pupils".', 'ERR: Expected FROM but found "Students".', 'ERR: Expected SELECT but found "Name".', 'ERR: A WHERE condition needs a comparison such as = or >.']);
+const q = { config: { tables: T } }, MODEL = { query: 'SELECT Name FROM Students WHERE Class = 10 ORDER BY Name' };
+t('sql mark: same result, different spelling', sc('sql', MODEL, { code: 'select name from students where class=10 order by name asc;' }, 4, q), 4);
+t('sql mark: no ORDER BY', sc('sql', MODEL, { code: 'SELECT Name FROM Students WHERE Class = 10' }, 4, q), 3);
+t('sql mark: wrong WHERE', sc('sql', MODEL, { code: 'SELECT Name FROM Students WHERE Class = 9 ORDER BY Name' }, 4, q), 3);
+t('sql mark: extra column', sc('sql', MODEL, { code: 'SELECT Name, Mark FROM Students WHERE Class = 10 ORDER BY Name' }, 4, q), 3);
+t('sql mark: error still gets clause marks', sc('sql', MODEL, { code: 'SELECT Nme FROM Students WHERE Class = 10' }, 4, q), 2);
+t('sql mark: equivalent condition', sc('sql', { query: 'SELECT COUNT(*) FROM Students WHERE Mark > 60' }, { code: 'SELECT COUNT(Name) FROM Students WHERE Mark >= 61' }, 3, q), 3);
+
+// ── chemistry and physics builders ──
+t('shells atom', [sc('shells', { shells: [2, 8, 1] }, { shells: [2, 8, 1] }, 2), sc('shells', { shells: [2, 8, 1] }, { shells: [2, 9] }, 2), sc('shells', { shells: [2, 8, 1] }, { shells: [8, 2, 1] }, 2), sc('shells', { shells: [2, 8, 1] }, { shells: [2, 8, 2] }, 2)], [2, 1, 1, 1]);
+t('shells ion', [sc('shells', { shells: [2, 8], charge: '2-' }, { shells: [2, 8], charge: '2-' }, 3), sc('shells', { shells: [2, 8], charge: '2-' }, { shells: [2, 8], charge: '-2' }, 3), sc('shells', { shells: [2, 8], charge: '2-' }, { shells: [2, 8], charge: '^{2-}' }, 3), sc('shells', { shells: [2, 8], charge: '2-' }, { shells: [2, 8] }, 3), sc('shells', { shells: [2, 8], charge: '2-' }, { shells: [2, 8], charge: '2+' }, 3)], [3, 3, 3, 2, 2]);
+const eth = { atoms: [{ id: 1, element: 'C' }, { id: 2, element: 'C' }, { id: 3, element: 'H' }, { id: 4, element: 'H' }, { id: 5, element: 'H' }, { id: 6, element: 'H' }], bonds: [{ from: 1, to: 2, order: 2 }, { from: 1, to: 3, order: 1 }, { from: 1, to: 4, order: 1 }, { from: 2, to: 5, order: 1 }, { from: 2, to: 6, order: 1 }] };
+const eth2 = { atoms: [{ id: 'a', element: 'H' }, { id: 'b', element: 'C' }, { id: 'c', element: 'H' }, { id: 'd', element: 'C' }, { id: 'e', element: 'H' }, { id: 'f', element: 'H' }], bonds: [{ from: 'b', to: 'd', order: 2 }, { from: 'a', to: 'b', order: 1 }, { from: 'c', to: 'b', order: 1 }, { from: 'd', to: 'e', order: 1 }, { from: 'd', to: 'f', order: 1 }] };
+const single = JSON.parse(JSON.stringify(eth2)); single.bonds[0].order = 1;
+const lop = JSON.parse(JSON.stringify(eth2)); lop.bonds[4].from = 'b';
+t('structure: same molecule drawn differently', sc('structure', { model: eth }, eth2, 3), 3);
+t('structure: single bond where double needed', sc('structure', { model: eth }, single, 3), 1);
+t('structure: 3 H on one carbon', sc('structure', { model: eth }, lop, 3), 1);
+t('structure: wrong atoms', sc('structure', { model: eth }, { atoms: eth2.atoms.slice(0, 5), bonds: eth2.bonds.slice(0, 4) }, 3), 0);
+const dme = { atoms: [{ id: 1, element: 'C' }, { id: 2, element: 'O' }, { id: 3, element: 'C' }].concat([4, 5, 6, 7, 8, 9].map(i => ({ id: i, element: 'H' }))), bonds: [{ from: 1, to: 2, order: 1 }, { from: 2, to: 3, order: 1 }, { from: 1, to: 4, order: 1 }, { from: 1, to: 5, order: 1 }, { from: 1, to: 6, order: 1 }, { from: 3, to: 7, order: 1 }, { from: 3, to: 8, order: 1 }, { from: 3, to: 9, order: 1 }] };
+const etoh = { atoms: [{ id: 1, element: 'C' }, { id: 2, element: 'C' }, { id: 3, element: 'O' }].concat([4, 5, 6, 7, 8, 9].map(i => ({ id: i, element: 'H' }))), bonds: [{ from: 1, to: 2, order: 1 }, { from: 2, to: 3, order: 1 }, { from: 3, to: 9, order: 1 }, { from: 1, to: 4, order: 1 }, { from: 1, to: 5, order: 1 }, { from: 1, to: 6, order: 1 }, { from: 2, to: 7, order: 1 }, { from: 2, to: 8, order: 1 }] };
+t('structure: an isomer (right atoms and bonds, wrong arrangement) is not full marks', sc('structure', { model: etoh }, dme, 4), 2);
+const water = { atoms: [{ id: 'o', element: 'O', x: 200, y: 200, slots: { top: ['dot', 'dot'], bottom: ['dot', 'dot'], left: ['dot'], right: ['dot'] } }, { id: 'h1', element: 'H', x: 110, y: 200, slots: { top: [], bottom: [], left: [], right: ['cross'] } }, { id: 'h2', element: 'H', x: 290, y: 200, slots: { top: [], bottom: [], left: ['cross'], right: [] } }] };
+const WA = { bonds: [['O', 'H', 2], ['O', 'H', 2]], lone: { O: [4], H: [0, 0] } };
+const both = JSON.parse(JSON.stringify(water)); both.atoms[0].slots.left = ['dot', 'cross']; both.atoms[1].slots.right = [];
+const nol = JSON.parse(JSON.stringify(water)); nol.atoms[0].slots.top = [];
+const dots = JSON.parse(JSON.stringify(water)); dots.atoms[1].slots.right = ['dot'];
+t('lewis: water', sc('lewis', WA, water, 3), 3);
+t('lewis: pair drawn in one atom\'s slot', sc('lewis', WA, both, 3), 3);
+t('lewis: a lone pair missing', sc('lewis', WA, nol, 3), 1);
+t('lewis: pair not dot + cross', sc('lewis', WA, dots, 3), 2);
+t('circuit', [sc('circuit', { components: { cell: 1, switch: 1, lamp: 2 }, arrangement: 'series' }, { components: [{ type: 'cell' }, { type: 'switch' }, { type: 'bulb' }, { type: 'lamp' }], overall: 'series', meters: [] }, 4),
+  sc('circuit', { components: { cell: 1, switch: 1, lamp: 2 }, arrangement: 'series' }, { components: [{ type: 'cell' }, { type: 'switch' }, { type: 'lamp' }, { type: 'lamp' }], overall: 'parallel', meters: [] }, 4),
+  sc('circuit', { components: { cell: 1, resistor: 1, ammeter: 1, voltmeter: 1 }, meters: true }, { components: [{ type: 'cell' }, { type: 'resistor' }, { type: 'ammeter' }, { type: 'voltmeter' }], overall: 'parallel', meters: [{ type: 'ammeter', correct: true }, { type: 'voltmeter', correct: false }] }, 5)], [4, 2, 3]);
+
+// ── long answer sorted under headings; economics labels ──
+const PRO = { points: [{ alts: ['more sales'], require: [['sales', 'demand']] }, { alts: ['more revenue'], require: ['revenue'] }, { alts: ['lower price'], require: ['price'] }, { alts: ['diseconomies of scale'], require: ['diseconomies'] }], groups: [{ title: 'for', max: 5, points: [0, 1] }, { title: 'against', max: 5, points: [2, 3] }] };
+t('prose sides: points under the right heading', sc('prose', PRO, { points: ['more sales', 'price may be lower'], sides: [0, 1] }, 8), 2);
+t('prose sides: a point under the wrong heading earns nothing', sc('prose', PRO, { points: ['more sales', 'price may be lower'], sides: [1, 0] }, 8), 0);
+t('prose without sides still works', sc('prose', PRO, { points: ['more sales', 'price may be lower'] }, 8), 2);
+const EL = { shifts: { D: 'left' }, labels: { y: 'Price', x: 'Quantity', down: 'D', up: 'S' } };
+t('econ labels: all right', sc('econ', EL, { shifts: { D: 'left' }, equilibrium: 'D1S', labels: { y: 'Price', x: 'Quantity', down: 'D', up: 'S' } }, 4), 4);
+t('econ labels: axes swapped', sc('econ', EL, { shifts: { D: 'left' }, equilibrium: 'D1S', labels: { y: 'Quantity', x: 'Price', down: 'D', up: 'S' } }, 4), 3);
+t('econ labels: only labels done', sc('econ', EL, { shifts: {}, equilibrium: null, labels: { y: 'Price', x: 'Quantity', down: 'D', up: 'S' } }, 4), 1);
+
+// ── feedback exists for every marker and never throws ──
+const cases = [['text', { points: [{ alts: ['refinery gas'] }, { alts: ['bitumen'] }], need: 1 }, { latex: 'petrol' }, {}], ['formula', { final: [{ value: '9000', unit: 'N s' }], method: ['1200 x 7.5'] }, { answer: '900' }, {}], ['mcq', { key: 'C' }, { choice: 'A' }, {}], ['mcq', { keys: ['A', 'B'] }, { choices: ['A', 'C'] }, {}],
+  ['match', { pairs: { a: '1', b: '2' } }, { pairs: { a: '2' } }, { config: { left: [{ id: 'a', text: 'Evaporation' }, { id: 'b', text: 'Melting' }], right: [{ id: '1', text: 'liquid to gas' }, { id: '2', text: 'solid to liquid' }] } }],
+  ['table', { cells: { r1c1: { alts: ['starch'] } } }, { cells: { r1c1: 'fat' } }, { config: { table: [['enzyme', 'substrate'], ['amylase', null]] } }], ['prose', PRO, { points: ['more sales', 'nothing'], sides: [0, 1] }, {}], ['label', { labels: { n: { alts: ['nucleus'] } } }, { labels: { n: 'wall' } }, { config: { labels: [{ id: 'n' }] } }],
+  ['place', { spots: { s: 'ammeter' } }, { spots: { s: 'voltmeter' } }, { config: { spots: [{ id: 's' }] } }], ['flowfill', { boxes: { c: { alts: ['Mark >= 50'] } } }, { boxes: { c: 'Mark > 60' } }, {}],
+  ['logic', { expr: 'A AND B' }, { gates: [{ id: 'g1', gate: 'OR' }], inputs: [{ id: 't1', label: 'A' }, { id: 't2', label: 'B' }], outputs: [{ id: 't3', label: 'Q' }], wires: [{ from: { id: 't1', pin: 'out' }, to: { id: 'g1', pin: 'in0' } }, { from: { id: 't2', pin: 'out' }, to: { id: 'g1', pin: 'in1' } }, { from: { id: 'g1', pin: 'out' }, to: { id: 't3', pin: 'in' } }] }, {}],
+  ['plot', { points: { list: [[1, 2], [2, 4]], marks: 2 }, line: { gradient: [1.8, 2.2], marks: 1 }, scale: { data: { xmin: 0, xmax: 2, ymin: 0, ymax: 4 }, marks: 1 } }, { axes: { xmin: 0, xmax: 20, xstep: 2, ymin: 0, ymax: 40, ystep: 5, chosen: true }, points: [[1, 2]], lines: [{ p1: [0, 0], p2: [2, 1] }] }, {}],
+  ['econ', EL, { shifts: { S: 'left' }, equilibrium: null, labels: { y: 'Quantity' } }, {}], ['code', SUM, { code: 'INPUT N\nOUTPUT N' }, {}], ['flowchart', { tests: [{ input: [1, 2, 3], expect: [6] }], features: ['decision'] }, swapped, {}],
+  ['order', ORD, { order: ['init', 'for'] }, {}], ['sql', MODEL, { code: 'SELECT Nme FROM Students' }, q], ['sql', MODEL, { code: 'SELECT Name FROM Students' }, q], ['shells', { shells: [2, 8], charge: '2-' }, { shells: [2, 6] }, {}], ['structure', { model: eth }, single, {}], ['lewis', WA, nol, {}],
+  ['circuit', { components: { cell: 1 }, arrangement: 'series', meters: true }, { components: [{ type: 'lamp' }], overall: 'open', meters: [] }, {}]];
+let fbOk = 0; const thin = [];
+cases.forEach(([ui, a, v, qq]) => { const question = Object.assign({ marks: 4 }, qq); const r = M.mark(ui, a, v, question); const fb = M.explain(ui, a, v, r, question); if (fb.length && fb.every(f => f.text && !/undefined|NaN|\[object/.test(f.text))) fbOk++; else thin.push(ui + ': ' + JSON.stringify(fb)); });
+t('feedback for all ' + cases.length + ' wrong-answer cases is readable', thin, []);
+t('feedback for a blank answer', M.explain('text', { points: [] }, null, M.mark('text', { points: [] }, null, { marks: 1 }), {})[0].text, 'Nothing to mark yet.');
+if (process.argv[2] === '-fb') cases.forEach(([ui, a, v, qq]) => { const question = Object.assign({ marks: 4 }, qq); const r = M.mark(ui, a, v, question); console.log('\n' + ui + ' ' + r.score + '/' + r.max); M.explain(ui, a, v, r, question).forEach(f => console.log('   ' + { good: '+', bad: 'x', info: 'i' }[f.kind] + ' ' + f.text)); });
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);

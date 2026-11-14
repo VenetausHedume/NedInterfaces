@@ -2,20 +2,20 @@
    ammeter,voltmeter,bulb,variable) with a rotation handle; wires (2 ends + 1 bend)
    that snap to terminals and can be moved. Analyses series/parallel + checks meters
    (ammeter=series, voltmeter=parallel). Saves circuit + analysis, or null.
+   Marked by NedMark 'circuit': the right components, a complete circuit in the right arrangement, meters connected correctly.
    Requires Konva (index.html). */
 (function () {
   if (typeof Konva === 'undefined') { Ned.register('circuit', { name:'Circuit (build)', unlocks:'physics circuits', samples:[{label:'Circuit', question:{text:'Konva failed to load.',marks:0,config:{}}}] }, function(c){ c.textContent='Konva library not loaded — check the CDN <script> in index.html.'; return {update(){},clear(){},destroy(){c.innerHTML='';}}; }); return; }
   Ned.register('circuit',
     { name:'Circuit (build)', unlocks:'physics circuits',
       samples:[
-        { label:'Series circuit', question:{ text:'Draw a series circuit with a cell, a switch and two lamps.', marks:4, config:{} } },
-        { label:'Meters', question:{ text:'Draw a circuit with a cell and a resistor. Add an ammeter to measure the current and a voltmeter to measure the p.d. across the resistor.', marks:5, config:{} } },
+        { label:'Series circuit', question:{ text:'Draw a series circuit with a cell, a switch and two lamps.', marks:4, config:{} }, answer:{ components:{ cell:1, switch:1, lamp:2 }, arrangement:'series' } },
+        { label:'Meters', question:{ text:'Draw a circuit with a cell and a resistor. Add an ammeter to measure the current and a voltmeter to measure the p.d. across the resistor.', marks:5, config:{} }, answer:{ components:{ cell:1, resistor:1, ammeter:1, voltmeter:1 }, meters:true } },
       ] },
     function (container, { question, value, onChange }) {
       const tb = document.createElement('div');
       tb.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;';
       tb.innerHTML = `<button data-tool="select" class="on">Select / Move</button>
-    <button data-tool="wire">+ Wire</button>
     <span class="sep"></span>
     <button data-comp="cell" title="Cell"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="17" y2="13"/><line x1="17" y1="6" x2="17" y2="20"/><line x1="24" y1="9" x2="24" y2="17" stroke-width="5"/><line x1="24" y1="13" x2="42" y2="13"/></svg></button>
     <button data-comp="battery" title="Battery"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="8" y2="13"/><line x1="8" y1="6" x2="8" y2="20"/><line x1="14" y1="9" x2="14" y2="17" stroke-width="5"/><line x1="20" y1="6" x2="20" y2="20"/><line x1="26" y1="9" x2="26" y2="17" stroke-width="5"/><line x1="26" y1="13" x2="42" y2="13"/></svg></button>
@@ -32,7 +32,7 @@
       const wrap = document.createElement('div'); wrap.style.cssText='position:relative;width:100%;max-width:980px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fffdf7;touch-action:none;';
       const statusEl = document.createElement('div'); statusEl.style.cssText='font:13px ui-monospace,Menlo,Consolas,monospace;margin-top:8px;color:#555;';
       container.append(tb, wrap, statusEl);
-      container.appendChild(Ned.el('p',{class:'ned-note'},['Click a component icon to drop it (select it to rotate); draw wires end-to-end, drag to move. Scroll=zoom, drag empty=pan.']));
+      container.appendChild(Ned.el('p',{class:'ned-note'},['Click a component to add it. To wire: click one blue terminal, then the terminal to join it to. Select a component to turn it; select a wire to delete it or drag its corner.']));
       tb.querySelectorAll('button').forEach(b=>{ b.style.cssText='padding:4px 7px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;'; });
       tb.querySelectorAll('.sep').forEach(x=>{ x.style.cssText='width:1px;height:24px;background:var(--line);margin:0 4px;'; });
       tb.querySelectorAll('button svg').forEach(sv=>{ sv.style.display='block'; });
@@ -44,7 +44,7 @@ const stage=new Konva.Stage({container:wrap,width:W,height:H,draggable:true});
 const layer=new Konva.Layer(); stage.add(layer);
 // statusEl provided by scaffold
 
-let uid=1, tool='select', selected=null, wireFrom=null;
+let uid=1, tool='select', selected=null, wireFrom=null, loading=false;
 let comps=[];   // {id,type,node(Group),rot}
 let wires=[];   // {id, a:{x,y,snap}, mid:{x,y}, b:{x,y,snap}}  drawn segments; snap = terminal key or null
 
@@ -86,15 +86,15 @@ function drawComp(type){
 // terminal local positions (two ends)
 function termLocals(){ return [{term:'a',x:-LEAD,y:0},{term:'b',x:LEAD,y:0}]; }
 
-function addComp(type,x,y){
-  const id='c'+(uid++);
+function addComp(type,x,y,fixedId,rot){
+  const id=fixedId||('c'+(uid++));
   const g=new Konva.Group({x,y,draggable:true});
   g.add(drawComp(type));
-  const rec={id,type,node:g,rot:0};
+  const rec={id,type,node:g,rot:rot||0}; if(rot) g.rotation(rot);
   g.on('dragmove',()=>{ drawTerms(); drawWires(); if(selected===rec) showRot(rec); });
   g.on('dragend',()=>emit());
   g.on('mousedown touchstart',(e)=>{ if(tool==='select'){ e.cancelBubble=true; select(rec); } });
-  comps.push(rec); layer.add(g); drawTerms(); layer.batchDraw(); emit();
+  comps.push(rec); layer.add(g); if(!loading){ drawTerms(); layer.batchDraw(); emit(); }
   return rec;
 }
 
@@ -111,9 +111,24 @@ function drawTerms(){
   termShapes.forEach(s=>s.destroy()); termShapes=[];
   allTerms().forEach(t=>{ const c=new Konva.Circle({x:t.x,y:t.y,radius:5,fill:(wireFrom&&wireFrom.key===t.key)?'#4682b4':'#fff',stroke:'#4682b4',strokeWidth:1.5,hitStrokeWidth:14});
     c.on('mousedown touchstart',(e)=>{ e.cancelBubble=true; onTerm(t); }); layer.add(c); termShapes.push(c); });
-  layer.batchDraw();
+  layer.draw();   // drawn at once, so a terminal can be clicked the moment it appears
 }
-// (terminals are snap targets for drawn wires; clicking them directly does nothing now)
+/* wiring: click one terminal, then another. The wire is fixed to both and bends once, like a drawn circuit.
+   Several wires may meet at one terminal (that is how a parallel branch is made). */
+function onTerm(t){
+  if(!wireFrom){ wireFrom=t; drawTerms(); return; }
+  if(wireFrom.key===t.key){ wireFrom=null; drawTerms(); return; }
+  const dup=wires.some(w=>(w.a.snap===wireFrom.key&&w.b.snap===t.key)||(w.a.snap===t.key&&w.b.snap===wireFrom.key));
+  if(!dup) wires.push({id:'w'+(uid++),a:{x:wireFrom.x,y:wireFrom.y,snap:wireFrom.key},b:{x:t.x,y:t.y,snap:t.key},pts:[],auto:true});
+  wireFrom=null; drawWires(); drawTerms(); emit();
+}
+/* the corner of an automatic wire: the one of the two possible corners that keeps clear of the components */
+function autoCorner(a,b){
+  if(Math.abs(a.x-b.x)<6||Math.abs(a.y-b.y)<6) return [];
+  const c1={x:b.x,y:a.y}, c2={x:a.x,y:b.y};
+  const clear=c=>Math.min.apply(null,comps.map(k=>Math.hypot(k.node.x()-c.x,k.node.y()-c.y)).concat([1e9]));
+  return [clear(c1)>=clear(c2)?c1:c2];
+}
 const SNAP=22;
 function nearestTerm(x,y){ let best=null,bd=SNAP; allTerms().forEach(t=>{ const d=Math.hypot(t.x-x,t.y-y); if(d<bd){bd=d;best=t;} }); return best; }
 let wireShapes=[];
@@ -121,7 +136,7 @@ function wpt(p){ // resolve a wire endpoint's position: snapped terminal positio
   if(p.snap){ const t=termByKey(p.snap); if(t) return {x:t.x,y:t.y}; }
   return {x:p.x,y:p.y};
 }
-function wirePolyline(w){ const a=wpt(w.a), b=wpt(w.b); const pts=[a.x,a.y]; (w.pts||[]).forEach(p=>{pts.push(p.x,p.y);}); pts.push(b.x,b.y); return pts; }
+function wirePolyline(w){ const a=wpt(w.a), b=wpt(w.b); const pts=[a.x,a.y]; (w.auto?autoCorner(a,b):(w.pts||[])).forEach(p=>{pts.push(p.x,p.y);}); pts.push(b.x,b.y); return pts; }
 function drawWires(){
   wireShapes.forEach(s=>s.destroy()); wireShapes=[];
   wires.forEach(w=>{
@@ -130,6 +145,7 @@ function drawWires(){
     // ---- move the whole wire by dragging its body (pointer-delta) ----
     let dragging=false, last=null;
     ln.on('mousedown touchstart',(e)=>{ if(tool!=='select') return; e.cancelBubble=true; selected=w;
+      if(w.auto){ clearRot(); drawWires(); return; }          // a terminal-to-terminal wire stays attached: select it to delete it
       dragging=true; last=stage.getPointerPosition();
       // detach snapped endpoints so the whole wire moves
       const A=wpt(w.a), B=wpt(w.b); w.a.x=A.x; w.a.y=A.y; w.b.x=B.x; w.b.y=B.y; w.a.snap=null; w.b.snap=null;
@@ -145,7 +161,7 @@ function drawWires(){
       drawWires(); emit();
     }});
 
-    if(selected===w){
+    if(selected===w && !w.auto){
       const relive=()=>{ ln.points(wirePolyline(w)); layer.batchDraw(); };
       const mkEnd=(role)=>{ const pos=wpt(w[role]); const h=new Konva.Circle({x:pos.x,y:pos.y,radius:6,fill:w[role].snap?'#4caf50':'#fff',stroke:w[role].snap?'#2e7d32':'#4682b4',strokeWidth:2,draggable:true,hitStrokeWidth:16});
         h.on('dragmove',()=>{ const near=nearestTerm(h.x(),h.y()); if(near){ w[role].snap=near.key; w[role].x=near.x; w[role].y=near.y; } else { w[role].snap=null; w[role].x=h.x(); w[role].y=h.y(); } relive(); });
@@ -158,6 +174,7 @@ function drawWires(){
         layer.add(h); wireShapes.push(h); });
     }
   });
+  termShapes.forEach(t=>t.moveToTop());          // terminals stay clickable even when a wire runs over them
   layer.batchDraw();
 }
 // ---- selection + rotate ----
@@ -189,12 +206,7 @@ function deselect(){ selected=null; clearRot(); drawWires(); }
 
 // ---- board ----
 stage.on('mousedown touchstart',(e)=>{ if(e.target===stage){
-  if(tool==='wire'){ const p=toWorld(stage.getPointerPosition());
-    const a={x:p.x-40,y:p.y,snap:null}, b={x:p.x+40,y:p.y,snap:null};
-    const na=nearestTerm(a.x,a.y); if(na){a.snap=na.key;a.x=na.x;a.y=na.y;}
-    const nb=nearestTerm(b.x,b.y); if(nb){b.snap=nb.key;b.x=nb.x;b.y=nb.y;}
-    const bendPts=[{x:(a.x+b.x)/2, y:(a.y+b.y)/2}];   // single middle bend
-    const w={id:'w'+(uid++),a,b,pts:bendPts}; wires.push(w); selected=w; setTool('select'); drawWires(); drawTerms(); emit(); return; }
+  if(wireFrom){ wireFrom=null; }
   deselect(); drawTerms();
 }});
 function toWorld(p){ const t=stage.getAbsoluteTransform().copy(); t.invert(); return t.point(p); }
@@ -229,9 +241,10 @@ function analyzeCircuit(){
 }
 function emit(){
   drawTerms(); drawWires();
-  const cs=comps.map(c=>({id:c.id,type:c.type,rot:c.rot||0}));
+  if(loading) return;
+  const cs=comps.map(c=>({id:c.id,type:c.type,rot:c.rot||0,x:Math.round(c.node.x()),y:Math.round(c.node.y())}));
   const A=analyzeCircuit();
-  const wiresOut=wires.map(w=>({a:w.a.snap||null,b:w.b.snap||null,bends:(w.pts||[]).map(p=>({x:Math.round(p.x),y:Math.round(p.y)}))}));
+  const wiresOut=wires.map(w=>({a:w.a.snap||null,b:w.b.snap||null,bends:w.auto?[]:(w.pts||[]).map(p=>({x:Math.round(p.x),y:Math.round(p.y)}))}));
   const empty = cs.length===0 && wires.length===0;
   onChange(empty ? null : {components:cs,wires:wiresOut,
     spans:A.spans.map(s=>({id:s.id,type:s.type,node1:s.n1,node2:s.n2})),
@@ -251,18 +264,29 @@ function emit(){
 // ---- toolbar ----
 function setTool(t){ tool=t; tb.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t)); }
 tb.querySelectorAll('[data-tool]').forEach(b=>{ b.onclick=()=>setTool(b.dataset.tool); });
-tb.querySelectorAll('[data-comp]').forEach(b=> b.onclick=()=>{ addComp(b.dataset.comp, 130+Math.random()*300, 120+Math.random()*220); setTool('select'); });
+function freeSlot(){ const taken=(x,y)=>comps.some(c=>Math.abs(c.node.x()-x)<110&&Math.abs(c.node.y()-y)<70);
+  for(let r=0;r<5;r++) for(let c=0;c<5;c++){ const x=120+c*150, y=80+r*95; if(x<W-70&&y<H-40&&!taken(x,y)) return {x,y}; } return {x:130+Math.random()*300,y:120+Math.random()*220}; }
+tb.querySelectorAll('[data-comp]').forEach(b=> b.onclick=()=>{ const p=toWorld(freeSlot()); addComp(b.dataset.comp, p.x, p.y); setTool('select'); });
 tb.querySelector('#del').onclick=()=>{ if(!selected) return;
   if(selected.id&&selected.a){ wires=wires.filter(w=>w!==selected); }
-  else if(selected.type){ wires=wires.filter(w=>w.from.id!==selected.id&&w.to.id!==selected.id); selected.node.destroy(); comps=comps.filter(c=>c!==selected); }
+  else if(selected.type){ wires=wires.filter(w=>!(String(w.a.snap||'').startsWith(selected.id+':')||String(w.b.snap||'').startsWith(selected.id+':'))); selected.node.destroy(); comps=comps.filter(c=>c!==selected); clearRot(); }
   selected=null; drawTerms(); drawWires(); emit(); };
 tb.querySelector('#clear').onclick=()=>{ comps.forEach(c=>c.node.destroy()); comps=[];wires=[];wireFrom=null;selected=null;
   termShapes.forEach(s=>s.destroy()); wireShapes.forEach(s=>s.destroy()); termShapes=[];wireShapes=[]; layer.draw(); emit(); };
 
-emit();
+function loadValue(v){
+  loading=true;
+  try{ comps.forEach(c=>c.node.destroy()); termShapes.forEach(s=>s.destroy()); wireShapes.forEach(s=>s.destroy()); clearRot(); }catch(e){}
+  comps=[];wires=[];termShapes=[];wireShapes=[];wireFrom=null;selected=null; let n=0;
+  ((v&&v.components)||[]).forEach((c,i)=>{ addComp(c.type, c.x!=null?c.x:120+(i%5)*150, c.y!=null?c.y:80+Math.floor(i/5)*95, c.id, c.rot||0); n=Math.max(n,+String(c.id).replace(/\D/g,'')||0); });
+  ((v&&v.wires)||[]).forEach(w=>{ if(!w.a||!w.b) return; const A=termByKey(w.a), B=termByKey(w.b); if(!A||!B) return;
+    wires.push({id:'w'+(++n),a:{x:A.x,y:A.y,snap:w.a},b:{x:B.x,y:B.y,snap:w.b},pts:(w.bends||[]).map(p=>({x:p.x,y:p.y})),auto:!(w.bends&&w.bends.length)}); });
+  uid=n+1; loading=false; drawTerms(); drawWires(); layer.draw(); emit();
+}
+loadValue(value);
 
       return {
-        update: () => {},
+        update: (v) => { loadValue(v); },
         clear: () => { try{ comps.forEach(c=>c.node.destroy()); }catch(e){} comps=[];wires=[];wireFrom=null;selected=null; try{termShapes.forEach(s=>s.destroy());wireShapes.forEach(s=>s.destroy());clearRot&&clearRot();}catch(e){} termShapes=[];wireShapes=[]; layer.draw(); emit(); },
         destroy: () => { try{ stage.destroy(); }catch(e){} container.innerHTML=''; },
       };

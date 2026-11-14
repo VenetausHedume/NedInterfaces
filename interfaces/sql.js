@@ -1,7 +1,9 @@
 /* SQL editor (IGCSE) — CodeMirror with a SQL highlighting mode. Monospaced,
    line numbers. Registration never touches CodeMirror at load (can't fail to
    register); CodeMirror is only used inside the factory, with a textarea
-   fallback. Saves { code } (plain text) or null. */
+   fallback. Saves { code } (plain text) or null.
+   config.tables is shown above the editor; Run executes the query on it (marking/sql.js).
+   Marked by NedMark 'sql': the query's result is compared with the model query's result. */
 
 (function () {
 
@@ -43,10 +45,12 @@
       name: 'SQL editor',
       unlocks: 'CS databases',
       samples: [
-        { label: 'SELECT query',
-          question: { text: 'Write an SQL query to list all students in class 10 ordered by name.', marks: 4, config: {} } },
+        { label: 'SELECT query (run + marked by result)',
+          question: { text: 'Write an SQL query to list the names of all students in class 10, in alphabetical order.', marks: 4, config: { tables: { Students: { columns: ['Name', 'Class', 'Mark'], rows: [['Dev', 10, 88], ['Asha', 10, 71], ['Ben', 9, 55], ['Chen', 10, 64], ['Eve', 9, 90]] } } } },
+          answer: { query: 'SELECT Name FROM Students WHERE Class = 10 ORDER BY Name' } },
         { label: 'Aggregate',
-          question: { text: 'Write an SQL query to count how many books cost more than 20.', marks: 3, config: {} } },
+          question: { text: 'Write an SQL query to count how many students have a mark above 60.', marks: 3, config: { tables: { Students: { columns: ['Name', 'Class', 'Mark'], rows: [['Dev', 10, 88], ['Asha', 10, 71], ['Ben', 9, 55], ['Chen', 10, 64], ['Eve', 9, 90]] } } } },
+          answer: { query: 'SELECT COUNT(*) FROM Students WHERE Mark > 60' } },
       ],
     },
     function (container, { question, value, onChange }) {
@@ -60,6 +64,7 @@
         const emitT = () => { const c = ta.value; onChange(c.trim() === '' ? null : { code: c }); };
         ta.addEventListener('input', emitT);
         container.appendChild(ta);
+        if (Ned.runPanel) Ned.runPanel(container, 'sql', () => ta.value, question);
         return { update: (v) => { ta.value = (v && v.code) || ''; }, clear: () => { ta.value = ''; emitT(); }, destroy: () => { container.innerHTML = ''; } };
       }
 
@@ -81,6 +86,7 @@
         const emit = () => { const c = cm.getValue(); onChange(c.trim() === '' ? null : { code: c }); };
         cm.on('change', emit);
         setTimeout(() => cm.refresh(), 0);
+        if (Ned.runPanel) Ned.runPanel(container, 'sql', () => cm.getValue(), question);
 
         return { update: (v) => cm.setValue((v && v.code) || ''), clear: () => { cm.setValue(''); emit(); }, destroy: () => { container.innerHTML = ''; } };
       } catch (e) {

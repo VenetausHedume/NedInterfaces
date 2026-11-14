@@ -25,6 +25,9 @@
     </main>
 
     <aside>
+      <div class="aside-head">Mark</div>
+      <div id="mark" class="markbox" aria-live="polite">No mark scheme for this sample.</div>
+      <button id="restore" type="button" class="ned-mode" style="margin:10px 0 16px;">Reload saved answer</button>
       <div class="aside-head">Saved value</div>
       <pre id="json"></pre>
     </aside>
@@ -34,21 +37,37 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/konva/10.6.0/konva.min.js"></script>
 
+  <script src="marking/synonyms.js"></script>
+  <script src="marking/mark.js"></script>
+  <script src="marking/pseudo.js"></script>
+  <script src="marking/sql.js"></script>
+  <script src="marking/builders.js"></script>
+
   <script src="interfaces/_contract.js"></script>
+  <script src="interfaces/_field.js"></script>
+  <script src="interfaces/_run.js"></script>
+  <!-- phase 1: the interfaces the question bank uses -->
   <script src="interfaces/text.js"></script>
-  <script src="interfaces/prose.js"></script>
-  <script src="interfaces/table.js"></script>
   <script src="interfaces/formula.js"></script>
-  <script src="interfaces/graph.js"></script>
+  <script src="interfaces/mcq.js"></script>
+  <script src="interfaces/match.js"></script>
+  <script src="interfaces/table.js"></script>
+  <script src="interfaces/prose.js"></script>
+  <script src="interfaces/label.js"></script>
+  <script src="interfaces/logic.js"></script>
+  <script src="interfaces/flowfill.js"></script>
+  <script src="interfaces/order.js"></script>
   <script src="interfaces/code.js"></script>
   <script src="interfaces/sql.js"></script>
   <script src="interfaces/flowchart.js"></script>
-  <script src="interfaces/logic.js"></script>
+  <script src="interfaces/plot.js"></script>
+  <script src="interfaces/econ.js"></script>
+  <!-- science builders (now marked) and parked ones -->
+  <script src="interfaces/graph.js"></script>
   <script src="interfaces/circuit.js"></script>
   <script src="interfaces/shells.js"></script>
   <script src="interfaces/structure.js"></script>
   <script src="interfaces/lewis.js"></script>
-  <script src="interfaces/econ.js"></script>
   <script src="interfaces/photo.js"></script>
   <script src="interfaces/math.js"></script>
   <script src="app.js"></script>

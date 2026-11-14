@@ -1,143 +1,87 @@
 # Ned Interfaces — Reference
 
-The tools a student uses to *write* the exam on screen. Each one captures the
-answer as **structured data** — not a picture — so that marking later is a
-comparison against the mark scheme, not an interpretation.
-
-This repo (**NedInterfaces**) is the lab: build an interface, test it on the
-preview page, and only once it works copy it into the main **Ned** project.
-
----
-
-## The one rule
-
-Every interface saves the *smallest structured thing* that captures the
-answer. A typed formula is stored as text, not an image of the formula. A
-plotted graph is stored as its points, not a screenshot. If an interface can't
-capture something structurally, it falls back to a photo — never a dead end.
+The tools a student uses to answer on screen. Each one saves the answer as **structured data** (never a picture),
+so marking is a comparison against the mark scheme. No AI and no API key is used anywhere.
 
 ## The contract
 
-Every interface is a factory with the same signature:
-
 ```
-createX(container, { question, value, onChange })  →  { update, clear, destroy }
-```
-
-- **container** — the DOM node to render into.
-- **question** — `{ text, marks, config }`. `config` is interface-specific.
-- **value** — the previously saved value, or `null` (used to restore).
-- **onChange(value)** — call whenever the answer changes. Emit **only the
-  value**; the wrapper adds `ui` and `meta`.
-
-Returned object:
-- **update(value)** — reload a saved value.
-- **clear()** — reset to empty.
-- **destroy()** — tear down.
-
-Two rules that hold for all of them:
-- **Empty is `null`**, never an empty shape like `{ text: "" }`. "Skipped" and
-  "answered blank" must be distinguishable.
-- **The component never sees timing, scores, or the envelope.** It only knows
-  its question and its value.
-
-Saved to the database, a value looks like:
-
-```json
-{ "ui": "text", "value": { "text": "36 g" }, "meta": {} }
+Ned.register(id, meta, factory)
+factory(container, { question, value, onChange })  →  { update(value), clear(), destroy() }
 ```
 
----
+- `question` is `{ text, marks, config }`; `config` is interface-specific.
+- `value` is the saved answer or `null`; `onChange(value)` is called on every change.
+- **Empty is `null`**, never an empty shape.
+- Saved in the database as `{ "ui": "<id>", "value": { … }, "meta": {} }`.
 
-## The set
+## Marking
 
-| id | Interface | What the student does | Status |
-|----|-----------|-----------------------|--------|
-| `text`    | Text box            | Types a value, term, or a few lines | stub |
-| `prose`   | Structured prose    | Writes point-by-point, optional conclusion | stub |
-| `table`   | Table entry         | Fills the editable cells of a table | stub |
-| `formula` | Formula / answer / unit | Enters working, final answer, unit | stub |
-| `graph`   | Graph (draw)        | Plots points / shades regions on a grid | stub |
-| `circuit` | Circuit (build)     | Places components on a grid and wires them | stub |
-| `econ`    | Economics diagram   | Picks a figure, shifts curves, shades an area | stub |
-| `photo`   | Photo upload        | Photographs a drawing, tags the question | stub |
+```
+NedMark.mark(ui, answer, value, question, opts)  →  { score, max, status, detail }
+```
 
-We build these roughly in that order — the top ones unlock the most marks for
-the least work.
+`answer` is the mark-scheme side for that question. `status` is `marked`, `unsure` (keyword-marked text below full
+marks: unusual wording may have been missed), `self_check` (long writing: the score is a floor), or `unanswered`.
+Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowchart, order and the science builders),
+`marking/pseudo.js` (pseudocode and flowchart runner), `marking/sql.js` (small SQL engine), `marking/synonyms.js` (starter list).
 
----
+`NedMark.explain(ui, answer, value, result, question)` turns a result into lines a student can read
+("Gradient: right.", "Test 2 printed 7, expected 9."), shown under the score so a wrong answer still teaches something.
 
-## Each interface
+## Phase 1 interfaces (used by the question bank)
 
-Config keys and saved shapes below are the **starting point** — we'll firm
-each one up as we build it. Nothing here is locked.
+| id | Student does | Saves | Mark scheme (`answer`) | Marked by |
+|---|---|---|---|---|
+| `text` | types a short answer | `{ latex }` | `{ points:[{alts,require?,reject?}], need }` | keyword match per point |
+| `formula` | working, answer, unit (unit always shown) | `{ formula, answer, unit }` | `{ final:[{value,unit,units?,abs?} \| {lo,hi} \| {expr}], method:[…] }` | number within 0.5 %, unit check, method marks |
+| `mcq` | picks one / several / a picture | `{ choice }` or `{ choices:[…] }` | `{ key }` or `{ keys:[…], scale? }` | exact; several = right ticks − wrong ticks |
+| `match` | picks a partner for each item | `{ pairs:{left:right} }` | `{ pairs:{…}, scale? }` | one per correct pair |
+| `table` | fills blank cells | `{ cells:{ r1c2:"…" } }` | `{ cells:{ r1c2: spec }, scheme?:'row', scale? }` | each cell as text or number |
+| `prose` | one box per point | `{ points:[…], conclusion? }` | `{ points:[…], groups?:[{title,max,points:[i]}] }` | one point per box, each point once, caps per group |
+| `label` | types labels on a figure | `{ labels:{id:"…"} }` | `{ labels:{ id: spec } }` | each label as text |
+| `place` | picks what goes at each spot | `{ spots:{id:"…"} }` | `{ spots:{ id: spec } }` | exact per spot |
+| `logic` | builds a gate circuit | `{ gates, inputs, outputs, wires }` | `{ expr:"(A AND B) OR NOT C", output? }` | truth table; part marks per correct gate |
+| `flowfill` | completes blank flowchart boxes | `{ boxes:{id:"…"} }` | `{ boxes:{ id: spec } }` | each box as text (exact if chosen from a list) |
+| `plot` | plots points, draws straight lines, may choose the scale | `{ axes, points, lines }` | `{ points?, line?, segments?, scale? }` | half a small square; gradient/intercept; segment shape + label |
+| `econ` | shifts D or S, marks the new equilibrium; with `config.labelling` also names the axes and curves | `{ shifts:{D:'right'}, equilibrium, labels? }` | `{ shifts:{…}, labels? }` | curve, direction, equilibrium, labels |
+| `order` | puts given lines of an algorithm in order, with indents (Parsons) | `{ order:[…], indent:[…] }` | `{ order:[…], indent? }` | longest run in the right order |
+| `code` | writes Cambridge pseudocode; **Run** button runs it on inputs they type | `{ code }` | `{ tests:[{input,expect}], features? }` | runs the program on each test; part marks for loop / selection / totalling … |
+| `sql` | writes a query; the table is shown and **Run query** shows the result | `{ code }` | `{ model, tables }` | runs both queries and compares the rows (ORDER BY needed if the model sorts) |
+| `flowchart` | builds a flowchart from shapes; **Run flowchart** steps through it | `{ nodes, edges }` | `{ tests, features? }` | runs the flowchart like a program; FDE-style diagrams use `config.run:false` |
+| `circuit` | clicks components in, then terminal to terminal to wire | `{ components, wires }` | `{ components, arrangement, meters? }` | parts present, series/parallel, meters placed right |
+| `shells` | adds shells and electrons, nucleus and charge | `{ nucleus, charge, shells }` | `{ shells, charge? }` | electrons per shell, charge |
+| `structure` | builds a molecule from atoms and bonds | `{ atoms, bonds }` | `{ model }` | same molecule (atom-and-bond fingerprint) |
+| `lewis` | places dots and crosses around atoms | `{ atoms }` | `{ … }` | shared pairs, lone electrons, full shells |
 
-### `text` — Text box
-The workhorse: single values, chemical names, short explanations.
-- **config** — `{ multiline, size }`  ·  size = `"short" | "medium" | "long"`
-- **saves** — `{ text }`  ·  or `null`
-- **note** — a symbol bar for `₂ ³ ⁺ → ⇌ °` etc. Store exactly what's typed;
-  let the marker normalise `H2SO4` → `H₂SO₄`.
+`spec` = a string or number, or `{ alts:[…], require?, reject?, exact? }`, or `{ final:[…] }` for a number with a unit.
+`scale` = marks for a count, e.g. `{ 5:4, 4:3, 3:2, 2:1 }`.
+`require` = words that must be present (an inner list means "any of"); `reject` = words that cancel the point.
 
-### `prose` — Structured prose
-For multi-mark written answers (chains of reasoning, 6+ mark questions).
-- **config** — `{ conclusion }` — show a conclusion box (for longer answers)
-- **saves** — `{ points: ["…", "…"], conclusion }`  ·  or `null`
-- **note** — start with one empty point visible; "add point" for more.
+Typed boxes are MathLive fields (answers arrive as LaTeX; the markers convert it) with a plain-input fallback.
 
-### `table` — Table entry
-Completing a given table (results tables, trace tables).
-- **config** — `{ table }` — a 2D array; a `null` cell is editable, a string is
-  a fixed label.
-- **saves** — `{ cells: { "r0c2": "36" } }` keyed by position  ·  or `null`
-- **note** — cap trace tables around 20 rows.
+## Limits you should know
 
-### `formula` — Formula / answer / unit
-Calculations where working and units matter.
-- **config** — `{ requireUnit }`
-- **saves** — `{ formula, answer, unit }` (only the filled keys)  ·  or `null`
-- **note** — the unit field is **always visible**; showing it only when
-  required would leak the mark scheme.
+- Keyword marking cannot judge how well a point is argued and can miss a correct point in unusual wording. It never
+  gives marks for a point that is not there, so scores are a safe floor.
+- A typo is forgiven only in words of five letters or more.
+- `logic` on a phone is cramped: the canvas pans, but building is easier on a wider screen.
+- `flowfill` scrolls sideways inside its box on a phone.
+- `code`/`flowchart` marks depend on good test cases in the mark scheme; a program that prints extra words still passes if the numbers match.
+- `plot` covers points and straight lines only. Curves, shading, ray diagrams and constructions are not here.
 
-### `graph` — Graph (draw)
-A coordinate grid. For now: **plot points and shade cells** (curves and
-transforms come later).
-- **config** — `{ xRange, yRange, mode }`  ·  mode = `"plot" | "shade" | "both"`
-- **saves** — `{ points: [[x,y]], cells: [[cx,cy]] }` (used keys only)  ·  or `null`
+## Parked (no fair marking without AI)
 
-### `circuit` — Circuit (build)
-- **config** — `{ cols, rows }`
-- **saves** — `{ components: [{ id, type, pos }], wires: [...] }`  ·  or `null`
-- **note** — stores the *connection graph*; marked on topology, not neatness.
+`graph` (free-hand curves) and `photo` (photo of working). `math` is the on-screen maths keyboard, not a question type.
 
-### `econ` — Economics diagram
-A picker, not a freehand tool: choose a base figure, then adjust it.
-- **config** — `{ diagram }` — which parametric figure (supply/demand, etc.)
-- **saves** — `{ diagram, shifts, shaded }`  ·  or `null`
+## Testing
 
-### `photo` — Photo upload
-The catch-all so nothing is ever unanswerable.
-- **config** — `{}`
-- **saves** — `{ image, tagged: true }`  ·  or `null`
-- **note** — the **student tags which question** it answers; marks show as
-  **provisional** (a vision model reads structure but miscounts).
+```
+npm install            # once, in ../vendor or anywhere: playwright, mathlive, konva (only needed for the tests)
+node tests/mark.test.js       # 150 marking checks
+node tests/builders.test.js   # 108 checks: pseudocode, SQL, flowchart, ordering, science builders
+node tests/e2e.test.js        # 185 browser checks: every interface driven through its real controls
+```
 
----
-
-## Later (not in the first pass)
-
-Deliberately deferred so the first pass stays light: symbol/atom canvas,
-flowchart builder, code editor (with a sandboxed Run button), transformation
-form, key-features form, and graph curve-drawing/transforms. Added once the
-core set is sittable.
-
----
-
-## Build & test workflow
-
-1. Open `interfaces/<id>.js` — the stub is already registered.
-2. Paste the built version in (we go through them one at a time).
-3. Test on the preview page (`index.html`): pick the interface, try empty /
-   partial / full, watch the **Saved value** panel.
-4. When it behaves, copy the file into the **Ned** project and add its
-   `<script>` line there.
+The test page (`index.html`) marks every sample live in the right-hand panel and has a "Reload saved answer" button
+that rebuilds the interface from its saved value. Open `index.html?ui=plot&sample=1` to jump to one sample.

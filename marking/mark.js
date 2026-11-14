@@ -1,0 +1,470 @@
+/* Ned marking — marks one saved answer against one mark-scheme answer. No AI, no network, no DOM.
+   Browser: window.NedMark     Node: require('./marking/mark.js')
+
+   NedMark.mark(ui, answer, value, question, opts) -> { score, max, status, detail }
+     ui       the interface id that produced the value ('text', 'formula', 'mcq', ...)
+     answer   the mark-scheme side (shapes documented above each marker below)
+     value    exactly what the interface saved (or null)
+     question { marks, config }
+     opts     { exclude:[point indexes already credited elsewhere], synonyms:{word:[...]} }
+   status: 'marked' | 'unsure' (free text below full marks: unusual wording may have been missed)
+           | 'self_check' (long writing: keyword score is a floor) | 'unanswered' | 'no_answer_key'            */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(typeof require === 'function' ? (function () { try { return require('./synonyms.js'); } catch (e) { return {}; } })() : {});
+  else root.NedMark = factory(root.NedSynonyms || {});
+})(typeof self !== 'undefined' ? self : this, function (DEFAULT_SYN) {
+  'use strict';
+
+  /* ───────────── text clean-up ───────────── */
+  const SUP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '-', '⁺': '+' };
+  const SUBS = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const CMD = { times: '×', cdot: '×', div: '/', le: '≤', leq: '≤', ge: '≥', geq: '≥', ne: '≠', neq: '≠', pm: '±', rightarrow: '→', to: '→', longrightarrow: '→',
+    rightleftharpoons: '⇌', leftrightarrow: '↔', degree: '°', circ: '°', pi: 'π', Omega: 'Ω', omega: 'ω', mu: 'µ', theta: 'θ', lambda: 'λ', Delta: 'Δ', alpha: 'α', beta: 'β', gamma: 'γ',
+    approx: '≈', infty: '∞', lt: '<', gt: '>', '%': '%', '$': '$', '&': '&', '#': '#', '_': '_', '{': '(', '}': ')' };
+
+  /* MathLive saves LaTeX ("refinery\;gas", "\frac{1}{2}mv^2"). Turn it into plain text the markers can read. */
+  function latexToText(s) {
+    if (s == null) return '';
+    s = String(s);
+    if (!/[\\{}^_]/.test(s)) return s;
+    s = s.replace(/\\(?:text|mathrm|mathit|mathbf|operatorname|textbf|textit|mathsf)\s*\{([^{}]*)\}/g, '$1');
+    s = s.replace(/\\[,;:!]/g, ' ').replace(/\\(?:quad|qquad)(?![a-zA-Z])/g, ' ').replace(/\\(?:left|right|displaystyle)(?![a-zA-Z])/g, '');
+    s = s.replace(/\\ /g, ' ').replace(/\\placeholder\s*(\{[^{}]*\})?/g, '');
+    for (let i = 0; i < 6 && /\\(?:d|t)?frac/.test(s); i++) s = s.replace(/\\(?:d|t)?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (m, a, b) => `${wrap(a)}/${wrap(b)}`);
+    for (let i = 0; i < 4 && /\\sqrt/.test(s); i++) s = s.replace(/\\sqrt\s*\{([^{}]*)\}/g, 'sqrt($1)');
+    s = s.replace(/\^\s*\{\s*\\circ\s*\}|\^\s*\\circ/g, '°');
+    s = s.replace(/\^\s*\{([^{}]*)\}/g, (m, a) => '^' + wrap(a)).replace(/_\s*\{([^{}]*)\}/g, '$1').replace(/_([0-9a-zA-Z])/g, '$1');
+    s = s.replace(/\\([a-zA-Z]+|[%$&#_{}])/g, (m, c) => (CMD[c] != null ? CMD[c] : c));
+    s = s.replace(/[{}]/g, '').replace(/~/g, ' ');
+    return s.replace(/\s+/g, ' ').trim();
+    function wrap(a) { a = a.trim(); return /^[\w.]+$/.test(a) ? a : '(' + a + ')'; }
+  }
+  function norm(s) {
+    return latexToText(s).toLowerCase()
+      .replace(/[−–—]/g, '-').replace(/[×]/g, 'x').replace(/[‘’·]/g, "'")
+      .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, m => '^' + [...m].map(c => SUP[c]).join(''))
+      .replace(/[₀-₉]/g, c => SUBS[c])
+      .replace(/\s+/g, ' ').trim();
+  }
+  const STOP = new Set(('a an the of to in on at for and or is are was be it its this that with by as from into than then so occur occurs happen happens take takes place ' +
+    'their there they which when will can may would should has have had do does more most very each other some any because').split(' '));
+  function stem(w) {
+    if (w.length > 5) w = w.replace(/(isation|ization)$/, 'ise');
+    if (w.length > 4) w = w.replace(/(ing|ed|ly)$/, '');
+    if (w.length > 4 && /(ch|sh|ss|x)es$/.test(w)) w = w.slice(0, -2);
+    else if (w.length > 3 && !/ss$/.test(w)) w = w.replace(/s$/, '');
+    if (w.length > 5) w = w.replace(/(er|est)$/, '');
+    if (w.length > 6) w = w.replace(/al$/, '');
+    if (w.length >= 4) w = w.replace(/e$/, '');
+    return w.replace(/z/g, 's');
+  }
+  function rawTokens(s) {
+    return norm(s).replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9.\-^+ ]/g, ' ').split(' ').map(w => w.replace(/^[.\-]+|[.\-]+$/g, '')).filter(Boolean);
+  }
+  function tokens(s) { return rawTokens(s).filter(w => !STOP.has(w)).map(stem); }
+  function lev1(a, b) {
+    if (a === b) return true;
+    if (Math.abs(a.length - b.length) > 1) return false;
+    let i = 0, j = 0, d = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      if (++d > 1) return false;
+      if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+    }
+    return d + (a.length - i) + (b.length - j) <= 1;
+  }
+  function buildSyn(extra) {                      // stem -> Set(stems that mean the same)
+    const map = {};
+    const add = (obj) => { for (const k in obj || {}) { const group = [k].concat(obj[k]).map(w => tokens(w).join(' ')).filter(Boolean);
+      group.forEach(a => { map[a] = map[a] || new Set(); group.forEach(b => map[a].add(b)); }); } };
+    add(DEFAULT_SYN.general); add(extra);
+    return map;
+  }
+  function hasTok(set, text, t, syn) {
+    const cands = syn && syn[t] ? [...syn[t]] : [t];
+    for (const c of cands) {
+      if (c.includes(' ')) { if ((' ' + text + ' ').includes(' ' + c + ' ')) return true; continue; }
+      if (set.has(c)) return true;
+      if (c.length >= 5 && !/\d/.test(c)) for (const s of set) if (lev1(s, c)) return true;
+    }
+    return false;
+  }
+  /* does the student's text contain this alternative?  all key words for short ones, most for long ones */
+  function matchAlt(ctx, alt) {
+    const need = tokens(alt);
+    if (!need.length) {                                  // nothing but stop-words or symbols: a letter answer ("A"), "+2", "→"
+      const rawNeed = rawTokens(alt);
+      if (rawNeed.length) return rawNeed.every(w => ctx.raw.has(w));
+      const a = norm(alt).replace(/\s+/g, ''); return !!a && ctx.compact.includes(a);
+    }
+    if (need.length === 1 && need[0].length <= 2) return ctx.raw.has(need[0]);       // single letters / "pH" must be whole words
+    const hits = need.filter(t => hasTok(ctx.set, ctx.text, t, ctx.syn)).length;
+    const frac = hits / need.length;
+    return need.length <= 2 ? frac === 1 : need.length <= 4 ? frac >= 0.75 : frac >= 0.6;
+  }
+  function context(text, syn) {
+    const toks = tokens(text);
+    return { set: new Set(toks), text: toks.join(' '), raw: new Set(rawTokens(text)), compact: norm(text).replace(/\s+/g, ''), syn };
+  }
+  function wordPresent(ctx, w) { const t = tokens(w); return t.length ? t.every(x => hasTok(ctx.set, ctx.text, x, ctx.syn)) : ctx.compact.includes(norm(w).replace(/\s+/g, '')); }
+  /* one mark-scheme point: { alts:[...], require:[word | [any of]], reject:[word] } */
+  function pointHit(ctx, p) {
+    if (!p || !p.alts) return false;
+    if ((p.reject || []).some(w => wordPresent(ctx, w))) return false;
+    if (!(p.require || []).every(r => (Array.isArray(r) ? r : [r]).some(w => wordPresent(ctx, w)))) return false;
+    return p.alts.some(a => matchAlt(ctx, a));
+  }
+  function valueText(v) {
+    if (v == null) return '';
+    if (typeof v === 'string') return latexToText(v);
+    return [v.latex, v.text, v.answer, v.working, v.formula].concat(v.points || [], [v.conclusion]).filter(Boolean).map(latexToText).join('\n');
+  }
+
+  /* ───────────── text / written points ─────────────
+     answer: { points:[{alts,require?,reject?}], need }      value: { latex } | { text } | string */
+  function markPoints(answer, value, max, opts) {
+    const text = valueText(value);
+    if (!text.trim()) return { score: 0, max, status: 'unanswered', detail: {} };
+    const ctx = context(text, buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms)));
+    const exclude = new Set((opts && opts.exclude) || []);
+    const awarded = [], missed = [];
+    (answer.points || []).forEach((p, i) => { if (!p.alts || exclude.has(i)) return; (pointHit(ctx, p) ? awarded : missed).push(i); });
+    const need = Math.min(max, answer.need || max);
+    const score = Math.min(need, awarded.length);
+    return { score, max, status: score >= max ? 'marked' : 'unsure', detail: { awarded, missed } };
+  }
+
+  /* ───────────── long answer, one box per point ─────────────
+     answer: { points:[...], groups?:[{title,max,points:[indexes]}], need? }   value: { points:[latex...], conclusion? }
+     Each box can earn at most one point; each point is credited once; a group never earns more than its max. */
+  function markProse(answer, value, max, opts) {
+    const boxes = ((value && value.points) || []).concat(value && value.conclusion ? [value.conclusion] : []).map(latexToText).filter(b => b.trim());
+    if (typeof value === 'string' && value.trim()) boxes.push(latexToText(value));
+    if (!boxes.length) return { score: 0, max, status: 'unanswered', detail: {} };
+    const syn = buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms));
+    const pts = answer.points || [];
+    const taken = new Set((opts && opts.exclude) || []);
+    const perBox = [];
+    /* when the student sorted their points under headings, a point only counts under the heading it belongs to */
+    const sideOf = value && value.sides && answer.groups ? value.sides : null;
+    boxes.forEach((b, bi) => {
+      const ctx = context(b, syn);
+      let got = -1;
+      const allowed = sideOf && answer.groups[sideOf[bi]] ? answer.groups[sideOf[bi]].points : null;
+      for (let i = 0; i < pts.length; i++) if (pts[i].alts && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, pts[i])) { got = i; break; }
+      if (got >= 0) taken.add(got);
+      perBox.push(got);
+    });
+    let awarded = perBox.filter(i => i >= 0);
+    let score = awarded.length;
+    const groupScores = [];
+    if (answer.groups && answer.groups.length) {
+      score = 0;
+      answer.groups.forEach(g => { const n = Math.min(g.max, awarded.filter(i => g.points.includes(i)).length); groupScores.push({ title: g.title, score: n, max: g.max }); score += n; });
+      score += awarded.filter(i => !answer.groups.some(g => g.points.includes(i))).length;
+    }
+    score = Math.min(max, answer.need || max, score);
+    return { score, max, status: score >= max ? 'marked' : 'self_check', detail: { perBox, awarded, groups: groupScores, missed: pts.map((p, i) => i).filter(i => pts[i].alts && !awarded.includes(i)) } };
+  }
+
+  /* ───────────── numbers ───────────── */
+  function parseNumber(s) {
+    s = norm(s).replace(/(?<![\d.])\d{1,3}(?:[ ,]\d{3})+\b/g, m => m.replace(/[ ,]/g, '')).replace(/^[a-z]\s*=\s*/, '').replace(/^[$£€]\s*/, '');
+    let m = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*(?:x|\*)\s*10\s*\^?\s*\(?(-?\d+)\)?\s*(.*)$/);
+    if (m) return { n: parseFloat(m[1]) * Math.pow(10, parseInt(m[2], 10)), unit: m[3], sig: sig(m[1]) };
+    m = s.match(/^\s*(-?\d+(?:\.\d+)?)e(-?\d+)\s*(.*)$/);
+    if (m) return { n: parseFloat(m[1] + 'e' + m[2]), unit: m[3], sig: sig(m[1]) };
+    m = s.match(/^\s*(-?\d+)\s+(\d+)\s*\/\s*(\d+)\s*(.*)$/);
+    if (m && +m[3] !== 0) return { n: (m[1].startsWith('-') ? -1 : 1) * (Math.abs(+m[1]) + m[2] / m[3]), unit: m[4], sig: 9 };
+    m = s.match(/^\s*\(?(-?\d+(?:\.\d+)?)\)?\s*\/\s*\(?(\d+(?:\.\d+)?)\)?(?![\d.])\s*(.*)$/);
+    if (m && +m[2] !== 0) return { n: m[1] / m[2], unit: m[3], sig: 9 };
+    m = s.match(/^\s*(-?\d*\.?\d+)\s*(.*)$/);
+    if (m) return { n: parseFloat(m[1]), unit: m[2], sig: sig(m[1]) };
+    return null;
+  }
+  function sig(d) { const t = d.replace('-', '').replace('.', '').replace(/^0+/, ''); return Math.max(1, t.length); }
+  function unitNorm(u) {
+    return norm(u).replace(/\s+/g, '').replace(/per/g, '/').replace(/[°º]/g, 'deg').replace(/\^/g, '').replace(/[.;,()]+/g, '')
+      .replace(/^(newtons?)$/, 'n').replace(/^(joules?)$/, 'j').replace(/^(amps?|amperes?)$/, 'a').replace(/^(volts?)$/, 'v')
+      .replace(/^(watts?)$/, 'w').replace(/^(ohms?|Ω|ω)$/, 'ohm').replace(/^(metres?|meters?)$/, 'm').replace(/^(seconds?|secs?)$/, 's')
+      .replace(/^years?$/, 'year').replace(/^(percent|percentage)$/, '%').replace(/^(grams?)$/, 'g').replace(/^(moles?|mols)$/, 'mol');
+  }
+  const PRE = { k: 1e3, m: 1e-3, c: 1e-2, 'µ': 1e-6, 'μ': 1e-6 };
+  const BASE = new Set(['n', 'j', 'w', 'v', 'a', 'm', 'g', 'pa', 'hz', 'ohm', 's', 'c', 'l', 'nm', 'mol']);
+  function prefixFactor(su, eu) {
+    const split = u => (u.length > 1 && PRE[u[0]] && BASE.has(u.slice(1))) ? [PRE[u[0]], u.slice(1)] : [1, u];
+    const a = split(su), b = split(eu);
+    return a[1] === b[1] && a[0] !== b[0] ? a[0] / b[0] : 0;
+  }
+  function numEqual(student, expected) {
+    if (student.n === expected.n) return true;
+    if (Math.abs(student.n - expected.n) <= Math.abs(expected.n) * 0.005) return true;       // 0.5 %
+    const s = Math.min(student.sig, 3);
+    return student.sig >= 2 && student.sig <= 3 && Number(student.n.toPrecision(s)) === Number(expected.n.toPrecision(s));
+  }
+  function exprCanon(s) {
+    s = norm(s).replace(/\s+/g, '').replace(/\*/g, '').replace(/^[a-z]=(?!=)/, '').replace(/×/g, '');
+    return s.replace(/-/g, '+-').split('+').filter(Boolean).sort().join('+');
+  }
+  function numbersIn(s) { return (norm(s).replace(/(?<![\d.])\d{1,3}(?:[ ,]\d{3})+\b/g, m => m.replace(/[ ,]/g, '')).match(/\d+(?:\.\d+)?/g) || []).map(Number); }
+
+  /* answer: { final:[{value,unit?,units?,abs?} | {lo,hi,unit?} | {expr}], method:[lines] }
+     value : { formula?, working?, answer, unit } (latex or plain)  — or a bare string
+     Full marks for a correct final answer. Otherwise 1 mark per method line whose numbers all appear in the working (max-1). */
+  function markNumeric(answer, value, max) {
+    const v = typeof value === 'string' ? { answer: value } : (value || {});
+    const raw = latexToText(v.answer != null ? v.answer : (v.latex || '')).trim();
+    const working = latexToText([v.working, v.formula].filter(Boolean).join(' '));
+    if (!raw && !working.trim()) return { score: 0, max, status: 'unanswered', detail: {} };
+    let correct = false, unitWrong = false;
+    const st0 = parseNumber(raw);
+    for (const f of answer.final || []) {
+      if (f.expr != null) { if (raw && exprCanon(raw) === exprCanon(f.expr)) correct = true; continue; }
+      if (!st0) continue;
+      const su = unitNorm(latexToText(v.unit || '') || st0.unit);
+      const eus = (f.units || [f.unit || '']).map(unitNorm).filter(Boolean);
+      let st = st0, unitOk = !su || !eus.length || eus.includes(su);
+      if (!unitOk) for (const eu of eus) { const k = prefixFactor(su, eu); if (k) { st = Object.assign({}, st0, { n: st0.n * k }); unitOk = true; break; } }
+      if (f.abs) st = Object.assign({}, st, { n: Math.abs(st.n) });
+      let hit;
+      if (f.lo != null) { const lo = parseNumber(String(f.lo)), hi = parseNumber(String(f.hi)); hit = lo && hi && st.n >= lo.n - 1e-9 && st.n <= hi.n + 1e-9; }
+      else { const exp = parseNumber(String(f.value)); hit = exp && numEqual(st, f.abs ? Object.assign({}, exp, { n: Math.abs(exp.n) }) : exp); }
+      if (hit) { if (unitOk) correct = true; else unitWrong = true; }
+    }
+    if (correct) return { score: max, max, status: 'marked', detail: { final: true } };
+    let method = 0;
+    const have = new Set(numbersIn(working + ' ' + raw));
+    for (const line of answer.method || []) {
+      if (line.split(/\s+OR\s+|\s+or\s+/).some(alt => { const ns = numbersIn(alt); return ns.length >= 2 && ns.every(n => have.has(n)); })) method++;
+    }
+    const cap = Math.max(0, max - 1);
+    const score = Math.min(cap, method + (unitWrong ? Math.max(0, cap - method) : 0));
+    return { score, max, status: 'marked', detail: { final: false, method, unitWrong } };
+  }
+
+  /* how many marks for n right (minus wrong)?  scale: {"3":2,"2":1}; default 1 each, capped at max */
+  function ladder(n, max, scale) {
+    if (scale) { let best = 0; for (const k in scale) if (n >= +k) best = Math.max(best, scale[k]); return Math.min(max, best); }
+    return Math.max(0, Math.min(max, n));
+  }
+  /* one small answer: text point(s), number, or exact string */
+  function cellRight(spec, text, syn) {
+    text = latexToText(text || '');
+    if (!text.trim()) return false;
+    if (typeof spec === 'string' || typeof spec === 'number') spec = { alts: [String(spec)], exact: typeof spec === 'number' || /^[-+]?[\d.]+$/.test(String(spec)) };
+    if (spec.final) return markNumeric(spec, { answer: text }, 1).score === 1;
+    if (spec.exact) {
+      const a = norm(text).replace(/\s+/g, '');
+      return spec.alts.some(x => { const b = norm(String(x)).replace(/\s+/g, ''); if (a === b) return true; const p = parseNumber(text), q = parseNumber(String(x)); return !!(p && q && !p.unit && !q.unit && p.n === q.n); });
+    }
+    return pointHit(context(text, syn), spec);
+  }
+
+  /* ───────────── mcq ─────────────
+     answer: { key:'B' } or { keys:['A','C'], scale? }     value: { choice } | { choices:[...] }
+     several: marks = (right ticks − wrong ticks), through the scale if given */
+  function markMcq(answer, value, max) {
+    const up = x => String(x).toUpperCase();
+    if (answer.keys) {
+      const ch = (value && value.choices) || (value && value.choice ? [value.choice] : []);
+      if (!ch.length) return { score: 0, max, status: 'unanswered', detail: {} };
+      const keys = new Set(answer.keys.map(up)), got = ch.map(up);
+      const right = got.filter(k => keys.has(k)).length, wrong = got.length - right;
+      return { score: ladder(right - wrong, max, answer.scale), max, status: 'marked', detail: { right, wrong, correct: answer.keys } };
+    }
+    const k = value && (value.choice || (value.choices && value.choices[0]));
+    if (!k) return { score: 0, max, status: 'unanswered', detail: {} };
+    return { score: up(k) === up(answer.key) ? max : 0, max, status: 'marked', detail: { correct: answer.key } };
+  }
+
+  /* ───────────── match list ─────────────  answer: { pairs:{leftId:rightId}, scale? }   value: { pairs:{...} } */
+  function markMatch(answer, value, max) {
+    const got = (value && value.pairs) || {};
+    if (!Object.keys(got).length) return { score: 0, max, status: 'unanswered', detail: {} };
+    const right = Object.keys(answer.pairs).filter(k => String(got[k]) === String(answer.pairs[k]));
+    return { score: ladder(right.length, max, answer.scale), max, status: 'marked', detail: { right, total: Object.keys(answer.pairs).length } };
+  }
+
+  /* ───────────── keyed small answers: table cells, figure labels, spots, flowchart boxes ─────────────
+     answer: { <field>:{ key: spec }, scheme?:'each'|'row', scale? }   spec = 'text' | number | {alts,...} | {final:[...]} | {exact:true,alts}
+     scheme 'row' (tables): a row scores only if every answer cell in it is right.  */
+  function markKeyed(field, answer, value, max, opts) {
+    const got = (value && value[field]) || {};
+    if (!Object.keys(got).some(k => latexToText(got[k] || '').trim())) return { score: 0, max, status: 'unanswered', detail: {} };
+    const syn = buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms));
+    const spec = answer[field] || {};
+    const right = [], wrong = [];
+    Object.keys(spec).forEach(k => (cellRight(spec[k], got[k], syn) ? right : wrong).push(k));
+    let n = right.length;
+    if (answer.scheme === 'row') {
+      const rows = {};
+      Object.keys(spec).forEach(k => { const r = (k.match(/^r(\d+)/) || [])[1]; (rows[r] = rows[r] || []).push(k); });
+      n = Object.keys(rows).filter(r => rows[r].every(k => right.includes(k))).length;
+    }
+    return { score: ladder(n, max, answer.scale), max, status: 'marked', detail: { right, wrong, counted: n } };
+  }
+
+  /* ───────────── logic circuits ─────────────
+     answer: { expr:'(A AND B) OR NOT C', output?:'Q' }
+     value : { gates:[{id,gate}], inputs:[{id,label}], outputs:[{id,label}], wires:[{from:{id,pin},to:{id,pin}}] }
+     Full marks when the circuit's truth table equals the expression's. Otherwise one mark for each gate of the
+     expected expression whose output function appears somewhere in the student's circuit (max − 1). */
+  const GATE = { AND: (a, b) => a & b, OR: (a, b) => a | b, XOR: (a, b) => a ^ b, NAND: (a, b) => 1 - (a & b), NOR: (a, b) => 1 - (a | b), NOT: a => 1 - a };
+  function parseExpr(src) {
+    const toks = String(src).replace(/[()]/g, ' $& ').replace(/[·.∧]/g, ' AND ').replace(/[+∨]/g, ' OR ').replace(/[⊕]/g, ' XOR ').replace(/[¬~!]/g, ' NOT ').trim().split(/\s+/).filter(Boolean);
+    let i = 0;
+    const peek = () => (toks[i] || '').toUpperCase();
+    function prim() {
+      const t = toks[i++];
+      if (t === '(') { const e = or(); if (toks[i++] !== ')') throw new Error('missing )'); return e; }
+      if (t.toUpperCase() === 'NOT') return { op: 'NOT', a: prim() };
+      if (!/^[A-Za-z]\w*$/.test(t || '')) throw new Error('bad token ' + t);
+      return { v: t.toUpperCase() };
+    }
+    function and() { let e = prim(); while (['AND', 'NAND'].includes(peek())) { const op = toks[i++].toUpperCase(); e = { op, a: e, b: prim() }; } return e; }
+    function or() { let e = and(); while (['OR', 'NOR', 'XOR'].includes(peek())) { const op = toks[i++].toUpperCase(); e = { op, a: e, b: and() }; } return e; }
+    const e = or(); if (i < toks.length) throw new Error('unexpected ' + toks[i]); return e;
+  }
+  function exprVars(e, out) { out = out || new Set(); if (e.v) out.add(e.v); else { exprVars(e.a, out); if (e.b) exprVars(e.b, out); } return out; }
+  function evalExpr(e, env) { return e.v ? env[e.v] : e.op === 'NOT' ? GATE.NOT(evalExpr(e.a, env)) : GATE[e.op](evalExpr(e.a, env), evalExpr(e.b, env)); }
+  function subExprs(e, out) { out = out || []; if (!e.v) { subExprs(e.a, out); if (e.b) subExprs(e.b, out); out.push(e); } return out; }
+  function rows(vars) { const out = []; for (let m = 0; m < (1 << vars.length); m++) { const env = {}; vars.forEach((v, k) => { env[v] = (m >> (vars.length - 1 - k)) & 1; }); out.push(env); } return out; }
+  function circuitTables(value, vars) {            // signature (truth-table string) at every gate output and at each output terminal
+    const gates = {}; (value.gates || []).forEach(g => { gates[g.id] = g; });
+    const ins = {}; (value.inputs || []).forEach(t => { ins[t.id] = String(t.label).toUpperCase(); });
+    const feed = {}; (value.wires || []).forEach(w => { feed[w.to.id + ':' + w.to.pin] = w.from.id; });
+    const envs = rows(vars), memo = {};
+    function sigOf(id, depth) {
+      if (id in memo) return memo[id];
+      if (depth > 40) return null;                 // loop
+      let r = null;
+      if (id in ins) r = vars.includes(ins[id]) ? envs.map(e => e[ins[id]]) : null;
+      else if (gates[id]) {
+        const g = gates[id], n = g.gate === 'NOT' ? 1 : 2, args = [];
+        for (let k = 0; k < n; k++) { const src = feed[id + ':in' + k]; const s = src == null ? null : sigOf(src, depth + 1); if (!s) { args.length = 0; break; } args.push(s); }
+        if (args.length === n) r = envs.map((e, x) => (n === 1 ? GATE.NOT(args[0][x]) : GATE[g.gate](args[0][x], args[1][x])));
+      }
+      memo[id] = r; return r;
+    }
+    const gateSigs = Object.keys(gates).map(id => sigOf(id, 0)).filter(Boolean).map(s => s.join(''));
+    const outs = (value.outputs || []).map(o => { const src = feed[o.id + ':in']; const s = src == null ? null : sigOf(src, 0); return { label: o.label, sig: s ? s.join('') : null }; });
+    return { gateSigs, outs };
+  }
+  function markLogic(answer, value, max) {
+    if (!value || !(value.gates || []).length) return { score: 0, max, status: 'unanswered', detail: {} };
+    const e = parseExpr(answer.expr), vars = [...exprVars(e)].sort();
+    const want = rows(vars).map(env => evalExpr(e, env)).join('');
+    const c = circuitTables(value, vars);
+    const out = c.outs.find(o => !answer.output || String(o.label).toUpperCase() === String(answer.output).toUpperCase()) || c.outs[0];
+    if (out && out.sig === want) return { score: max, max, status: 'marked', detail: { table: out.sig, expected: want, match: true } };
+    const subs = subExprs(e).map(s => rows(vars).map(env => evalExpr(s, env)).join(''));
+    const pool = c.gateSigs.slice();
+    let credit = 0;
+    subs.forEach(s => { const k = pool.indexOf(s); if (k >= 0) { credit++; pool.splice(k, 1); } });
+    const perGate = max / Math.max(1, subs.length);
+    return { score: Math.min(Math.max(0, max - 1), Math.floor(credit * perGate + 1e-9)), max, status: 'marked', detail: { table: out ? out.sig : null, expected: want, match: false, gatesRight: credit, gatesExpected: subs.length, outputWired: !!(out && out.sig) } };
+  }
+
+  /* ───────────── plotting ─────────────
+     value : { axes:{xmin,xmax,ymin,ymax,xstep,ystep,chosen?}, points:[[x,y]], lines:[{p1,p2,label?}] }
+     answer: { points?:{ list:[[x,y]], tol?:[tx,ty], marks, scale? },
+               line?:  { gradient:[lo,hi], intercept:[lo,hi], marks } | { through:[[x,y],...], tol?, marks },
+               segments?:{ list:[{label, shape:'up'|'down'|'flat', from?:[x,y], to?:[x,y], tol?}], marks, scale? },
+               scale?: { data:{xmin,xmax,ymin,ymax}, marks } }       tol default = half the grid step (Cambridge: half a small square) */
+  function markPlot(answer, value, max) {
+    const v = value || {};
+    const pts = v.points || [], lines = v.lines || [];
+    if (!pts.length && !lines.length) return { score: 0, max, status: 'unanswered', detail: {} };
+    const ax = v.axes || {};
+    const tol = (t) => t || [(ax.xstep || 1) / (ax.minor || 5) / 2, (ax.ystep || 1) / (ax.minor || 5) / 2];        // half a small square
+    const detail = {}; let score = 0;
+    if (answer.points) {
+      const t = tol(answer.points.tol), used = new Set();
+      const right = answer.points.list.filter(p => { const k = pts.findIndex((q, i) => !used.has(i) && Math.abs(q[0] - p[0]) <= t[0] + 1e-9 && Math.abs(q[1] - p[1]) <= t[1] + 1e-9); if (k >= 0) used.add(k); return k >= 0; }).length;
+      const extra = pts.length - used.size;
+      const m = answer.points.marks;
+      const s = answer.points.scale ? ladder(right - extra, m, answer.points.scale) : Math.max(0, m - Math.max(answer.points.list.length - right, extra))        // a misplaced point is one error, not two;
+      detail.points = { right, of: answer.points.list.length, extra, score: s }; score += s;
+    }
+    if (answer.line) {
+      const L = answer.line; let ok = false, info = {};
+      for (const ln of lines) {
+        const dx = ln.p2[0] - ln.p1[0], dy = ln.p2[1] - ln.p1[1];
+        if (Math.abs(dx) < 1e-9) continue;
+        const g = dy / dx, c = ln.p1[1] - g * ln.p1[0];
+        if (L.through) { const t = tol(L.tol); if (L.through.every(p => Math.abs(g * p[0] + c - p[1]) <= t[1] + 1e-9) && (!L.span || (Math.min(ln.p1[0], ln.p2[0]) <= L.span[0] + t[0] && Math.max(ln.p1[0], ln.p2[0]) >= L.span[1] - t[0]))) ok = true; }
+        else if (g >= L.gradient[0] - 1e-9 && g <= L.gradient[1] + 1e-9 && (!L.intercept || (c >= L.intercept[0] - 1e-9 && c <= L.intercept[1] + 1e-9))) ok = true;
+        info = { gradient: +g.toFixed(3), intercept: +c.toFixed(3) };
+        if (ok) break;
+      }
+      detail.line = Object.assign({ ok }, info); if (ok) score += L.marks;
+    }
+    if (answer.segments) {
+      const S = answer.segments; let right = 0; const per = [];
+      const flatTol = ((ax.ymax - ax.ymin) || 10) * 0.03;
+      S.list.forEach(sp => {
+        const ln = lines.find(l => String(l.label || '').trim().toUpperCase() === String(sp.label).toUpperCase());
+        let ok = false;
+        if (ln) {
+          const a = ln.p1[0] <= ln.p2[0] ? ln.p1 : ln.p2, b = ln.p1[0] <= ln.p2[0] ? ln.p2 : ln.p1, dy = b[1] - a[1];
+          const shape = Math.abs(dy) <= flatTol ? 'flat' : dy > 0 ? 'up' : 'down';
+          ok = shape === sp.shape && b[0] - a[0] > 1e-9;
+          const t = tol(sp.tol);
+          if (ok && sp.from) ok = Math.abs(a[0] - sp.from[0]) <= t[0] && Math.abs(a[1] - sp.from[1]) <= t[1];
+          if (ok && sp.to) ok = Math.abs(b[0] - sp.to[0]) <= t[0] && Math.abs(b[1] - sp.to[1]) <= t[1];
+          if (ok && sp.level != null) ok = Math.abs(a[1] - sp.level) <= t[1];
+        }
+        per.push({ label: sp.label, ok }); if (ok) right++;
+      });
+      const s = ladder(right, S.marks, S.scale); detail.segments = { per, score: s }; score += s;
+    }
+    if (answer.scale) {
+      const d = answer.scale.data;
+      const fx = (d.xmax - d.xmin) / (ax.xmax - ax.xmin), fy = (d.ymax - d.ymin) / (ax.ymax - ax.ymin);
+      const covers = ax.xmin <= d.xmin && ax.xmax >= d.xmax && ax.ymin <= d.ymin && ax.ymax >= d.ymax;
+      const nice = s => { const m = s / Math.pow(10, Math.floor(Math.log10(s) + 1e-9)); return [1, 2, 5, 10].some(k => Math.abs(m - k) < 1e-6); };
+      const ok = !!ax.chosen && covers && fx > 0.5 && fy > 0.5 && nice(ax.xstep) && nice(ax.ystep);
+      detail.scale = { ok, covers, usesX: +fx.toFixed(2), usesY: +fy.toFixed(2) }; if (ok) score += answer.scale.marks;
+    }
+    return { score: Math.min(max, score), max, status: 'marked', detail };
+  }
+
+  /* ───────────── economics: adjust a ready diagram ─────────────
+     value : { shifts:{D:'left'|'right', S:...}, equilibrium:'D1S' | null }     answer: { shifts:{D:'right'}, marks?:{shift,direction,equilibrium} }
+     1 mark right curve(s) and no other, 1 mark direction, 1 mark new equilibrium marked at the right crossing. */
+  function markEcon(answer, value, max) {
+    const sh = (value && value.shifts) || {};
+    if (!Object.keys(sh).length && !(value && value.equilibrium) && !(value && value.labels && Object.keys(value.labels).length)) return { score: 0, max, status: 'unanswered', detail: {} };
+    const want = answer.shifts || {};
+    const curveOk = Object.keys(want).length === Object.keys(sh).length && Object.keys(want).every(k => k in sh);
+    const dirOk = curveOk && Object.keys(want).every(k => sh[k] === want[k]);
+    const eqWant = (want.D ? 'D1' : 'D') + (want.S ? 'S1' : 'S');
+    const eqOk = curveOk && !!value.equilibrium && value.equilibrium === eqWant;
+    const m = Object.assign({ shift: 1, direction: 1, equilibrium: 1, labels: answer.labels ? 1 : 0 }, answer.marks);
+    let labelsOk = null;
+    if (answer.labels) { const L = (value && value.labels) || {}; labelsOk = Object.keys(answer.labels).every(k => L[k] === answer.labels[k]); }
+    const score = (curveOk ? m.shift : 0) + (dirOk ? m.direction : 0) + (eqOk ? m.equilibrium : 0) + (labelsOk ? m.labels : 0);
+    return { score: Math.min(max, score), max, status: 'marked', detail: { curveOk, dirOk, eqOk, labelsOk } };
+  }
+
+  const MARKERS = {
+    text: markPoints, short: markPoints,
+    prose: markProse,
+    formula: markNumeric, numeric: markNumeric, math: markNumeric,
+    mcq: markMcq, match: markMatch,
+    table: (a, v, m, o) => markKeyed('cells', a, v, m, o),
+    label: (a, v, m, o) => markKeyed('labels', a, v, m, o),
+    place: (a, v, m, o) => markKeyed('spots', a, v, m, o),
+    flowfill: (a, v, m, o) => markKeyed('boxes', a, v, m, o),
+    logic: markLogic, plot: markPlot, econ: markEcon,
+  };
+  function mark(ui, answer, value, question, opts) {
+    const max = (question && question.marks) || 0;
+    if (!answer) return { score: 0, max, status: 'no_answer_key', detail: {} };
+    const fn = MARKERS[ui];
+    if (!fn) return { score: 0, max, status: 'no_marker', detail: {} };
+    if (value == null) return { score: 0, max, status: 'unanswered', detail: {} };
+    return fn(answer, value, max, opts || {}, question);
+  }
+  return { mark, latexToText, norm, tokens, parseNumber, exprCanon, parseExpr, markPoints, markProse, markNumeric, markMcq, markMatch, markKeyed, markLogic, markPlot, markEcon, MARKERS };
+});

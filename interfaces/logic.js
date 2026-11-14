@@ -1,14 +1,17 @@
 /* Logic circuit (ready-made IGCSE gates) — Konva palette + terminals + wiring.
    Drop AND/OR/NOT/NAND/NOR/XOR, add Inputs (A,B..) + Output (Q), wire output->input.
-   Saves { gates:[{id,gate}], inputs, outputs, wires:[{from,to}] } or null.
+   Saves { gates:[{id,gate,x,y}], inputs:[{id,label,x,y}], outputs:[…], wires:[{from:{k,id,pin},to:{k,id,pin}}] } or null.
+   x, y are only there so a saved circuit can be shown again; marking ignores them.
+   Marked by NedMark 'logic': the truth table of the student's circuit is compared with the expected one.
+   Wiring: click any pin, then the pin to join it to (either order). An input pin holds one wire; a new wire replaces the old one.
    Requires Konva (loaded via index.html). */
 (function () {
   if (typeof Konva === 'undefined') { Ned.register('logic', { name:'Logic gates', unlocks:'boolean logic', samples:[{label:'Circuit', question:{text:'Konva failed to load.',marks:0,config:{}}}] }, function(c){ c.textContent='Konva library not loaded — check the CDN <script> in index.html.'; return {update(){},clear(){},destroy(){c.innerHTML='';}}; }); return; }
   Ned.register('logic',
     { name:'Logic gates', unlocks:'boolean logic',
       samples:[
-        { label:'Build a circuit', question:{ text:'Draw a logic circuit for Q = (A AND B) OR (NOT C).', marks:6, config:{} } },
-        { label:'Single gate', question:{ text:'Draw a NAND gate with inputs A and B, output Q.', marks:3, config:{} } },
+        { label:'Build a circuit', question:{ text:'Draw a logic circuit for Q = (A AND B) OR (NOT C).', marks:6, config:{} }, answer:{ expr:'(A AND B) OR (NOT C)', output:'Q' } },
+        { label:'Single gate', question:{ text:'Draw a NAND gate with inputs A and B, output Q.', marks:3, config:{} }, answer:{ expr:'A NAND B', output:'Q' } },
       ] },
     function (container, { question, value, onChange }) {
       // ---- scaffold ----
@@ -30,7 +33,7 @@
     <button id="clear">Clear</button>`;
       const wrap = document.createElement('div'); wrap.style.cssText='position:relative;width:100%;max-width:960px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fffdf7;touch-action:none;';
       container.append(tb, wrap);
-      const note = Ned.el('p',{class:'ned-note'},['Click a gate icon to drop it, add Inputs/Output, then wire output pin \u2192 input pin. Scroll=zoom, drag empty=pan.']);
+      const note = Ned.el('p',{class:'ned-note'},['Click a gate to add it, add Inputs and an Output, then click one pin and the pin to join it to. Scroll to zoom, drag the background to move.']);
       container.appendChild(note);
       // style the icon buttons + tool buttons
       tb.querySelectorAll('button').forEach(b=>{ b.style.cssText='padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;'; });
@@ -43,7 +46,7 @@ const stage=new Konva.Stage({container:wrap,width:W,height:H,draggable:true});
 const layer=new Konva.Layer(); stage.add(layer);
 // statusEl provided by scaffold
 
-let uid=1, tool='select', selected=null, inLetter=65, wireFrom=null;
+let uid=1, tool='select', selected=null, inLetter=65, wireFrom=null, loading=false;
 let gates=[];     // {id, type, node(Group), inN}
 let terms=[];     // {id, kind:'in'|'out', label, node(Group)}
 let wires=[];     // {fromKey,toKey, from:{k,id,pin}, to:{k,id,pin}}
@@ -87,12 +90,13 @@ function drawGateShape(type){
   return g;
 }
 function inputsFor(type){ return type==='NOT'?1:2; }
+function nextInputLabel(){ const used=new Set(terms.filter(t=>t.kind==='in').map(t=>t.label)); for(let c=65;c<91;c++){ const L=String.fromCharCode(c); if(L!=='Q'&&!used.has(L)) return L; } return 'A'; }
 // pin local positions relative to gate group origin
 function gatePinLocals(type){
   const bw=64, hw=bw/2; const n=inputsFor(type);
   let outX;
-  if(type==='AND') outX=hw+27;               // + semicircle bulge (~hh)
-  else if(type==='NAND') outX=hw+27+12;       // + bubble
+  if(type==='AND') outX=27+6;                // body ends where the semicircle ends (x = hh); the pin sits just outside it
+  else if(type==='NAND') outX=27+6+5+6;       // + bubble
   else if(type==='OR'||type==='XOR') outX=hw+8;
   else if(type==='NOR') outX=hw+8+12;
   else outX=hw-6+12;                          // NOT triangle tip + bubble
@@ -102,8 +106,8 @@ function gatePinLocals(type){
   return pins;
 }
 
-function addGate(type,x,y){
-  const id='g'+(uid++);
+function addGate(type,x,y,fixedId){
+  const id=fixedId||('g'+(uid++));
   const g=new Konva.Group({x,y,draggable:true});
   const shape=drawGateShape(type); g.add(shape);
   const rec={id,type,node:g,inN:inputsFor(type)};
@@ -113,8 +117,8 @@ function addGate(type,x,y){
   gates.push(rec); layer.add(g); drawPins(); layer.batchDraw(); emitStruct();
   return rec;
 }
-function addTerminal(kind,x,y){
-  const id='t'+(uid++); const label= kind==='in'?String.fromCharCode(inLetter++):'Q';
+function addTerminal(kind,x,y,fixedId,fixedLabel){
+  const id=fixedId||('t'+(uid++)); const label= fixedLabel || (kind==='in'?nextInputLabel():'Q');
   const g=new Konva.Group({x,y,draggable:true});
   g.add(new Konva.Circle({radius:16,fill:'#fff',stroke:'#2b2b2b',strokeWidth:2}));
   const t=new Konva.Text({text:label,fontSize:13,fontStyle:'bold',fill:'#2b2b2b'}); t.offsetX(t.width()/2); t.offsetY(t.height()/2); g.add(t);
@@ -138,21 +142,30 @@ function pinByKey(k){ return allPins().find(p=>p.key===k); }
 let pinShapes=[];
 function drawPins(){
   pinShapes.forEach(s=>s.destroy()); pinShapes=[];
-  allPins().forEach(p=>{ const c=new Konva.Circle({x:p.x,y:p.y,radius:5,fill:(wireFrom&&wireFrom.key===p.key)?'#4682b4':'#fff',stroke:'#4682b4',strokeWidth:1.5,hitStrokeWidth:14});
+  allPins().forEach(p=>{ const c=new Konva.Circle({x:p.x,y:p.y,radius:(wireFrom&&wireFrom.key===p.key)?7:5,fill:(wireFrom&&wireFrom.key===p.key)?'#4682b4':'#fff',stroke:'#4682b4',strokeWidth:1.5,hitStrokeWidth:14});
     c.on('mousedown touchstart',(e)=>{ e.cancelBubble=true; onPin(p); }); layer.add(c); pinShapes.push(c); });
   layer.batchDraw();
 }
 function onPin(p){
-  if(p.kind==='out'){ wireFrom=p; drawPins(); return; }
-  if(p.kind==='in'&&wireFrom){ wires.push({fromKey:wireFrom.key,toKey:p.key,from:{k:wireFrom.ownerK,id:wireFrom.ownerId,pin:wireFrom.pin},to:{k:p.ownerK,id:p.ownerId,pin:p.pin}}); wireFrom=null; drawWires(); drawPins(); emitStruct(); }
+  if(!wireFrom){ wireFrom=p; drawPins(); return; }
+  if(wireFrom.key===p.key){ wireFrom=null; drawPins(); return; }          // same pin again = cancel
+  if(wireFrom.kind===p.kind){ wireFrom=p; drawPins(); return; }           // two outputs / two inputs: start again from this pin
+  const out = wireFrom.kind==='out' ? wireFrom : p, inp = wireFrom.kind==='out' ? p : wireFrom;
+  if(out.ownerId===inp.ownerId){ wireFrom=null; drawPins(); return; }     // a gate cannot feed itself directly
+  wires = wires.filter(w=>w.toKey!==inp.key);                             // an input pin holds one wire
+  wires.push({fromKey:out.key,toKey:inp.key,from:{k:out.ownerK,id:out.ownerId,pin:out.pin},to:{k:inp.ownerK,id:inp.ownerId,pin:inp.pin}});
+  wireFrom=null; drawWires(); drawPins(); emitStruct();
 }
 let wireShapes=[];
 function drawWires(){
   wireShapes.forEach(s=>s.destroy()); wireShapes=[];
   wires.forEach(w=>{ const a=pinByKey(w.fromKey), b=pinByKey(w.toKey); if(!a||!b) return; const mx=(a.x+b.x)/2;
-    const ln=new Konva.Line({points:[a.x,a.y,mx,a.y,mx,b.y,b.x,b.y],stroke:(selected===w?'#4682b4':'#2b2b2b'),strokeWidth:2,tension:0.25,hitStrokeWidth:12});
+    const back = b.x < a.x + 16;                                             // target is behind the source: route around instead of doubling back
+    const pts = back ? [a.x,a.y, a.x+18,a.y, a.x+18,(a.y+b.y)/2+(Math.abs(a.y-b.y)<40?46:0), b.x-18,(a.y+b.y)/2+(Math.abs(a.y-b.y)<40?46:0), b.x-18,b.y, b.x,b.y] : [a.x,a.y,mx,a.y,mx,b.y,b.x,b.y];
+    const ln=new Konva.Line({points:pts,stroke:(selected===w?'#4682b4':'#2b2b2b'),strokeWidth:2,lineJoin:'round',hitStrokeWidth:12});
     ln.on('mousedown touchstart',(e)=>{ if(tool==='select'){ e.cancelBubble=true; selected=w; drawWires(); } });
     layer.add(ln); wireShapes.push(ln); });
+  pinShapes.forEach(s=>s.moveToTop());          // pins stay clickable even when a wire runs over them
   layer.batchDraw();
 }
 
@@ -176,9 +189,11 @@ stage.on('wheel',(e)=>{ e.evt.preventDefault(); const old=stage.scaleX(); const 
 // ---------- structure + status ----------
 function emitStruct(){
   drawPins(); drawWires();
-  const gs=gates.map(g=>({id:g.id,gate:g.type}));
-  const ins=terms.filter(t=>t.kind==='in').map(t=>({id:t.id,label:t.label}));
-  const outs=terms.filter(t=>t.kind==='out').map(t=>({id:t.id,label:t.label}));
+  if(loading) return;
+  const R=n=>Math.round(n);
+  const gs=gates.map(g=>({id:g.id,gate:g.type,x:R(g.node.x()),y:R(g.node.y())}));
+  const ins=terms.filter(t=>t.kind==='in').map(t=>({id:t.id,label:t.label,x:R(t.node.x()),y:R(t.node.y())}));
+  const outs=terms.filter(t=>t.kind==='out').map(t=>({id:t.id,label:t.label,x:R(t.node.x()),y:R(t.node.y())}));
   const empty = gs.length===0 && ins.length===0 && outs.length===0 && wires.length===0;
   onChange(empty ? null : {gates:gs,inputs:ins,outputs:outs,wires:wires.map(w=>({from:w.from,to:w.to}))});
 }
@@ -186,7 +201,10 @@ function emitStruct(){
 // ---------- toolbar ----------
 function setTool(t){ tool=t; tb.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t)); }
 tb.querySelectorAll('[data-tool]').forEach(b=> b.onclick=()=>setTool(b.dataset.tool));
-tb.querySelectorAll('[data-gate]').forEach(b=> b.onclick=()=>{ addGate(b.dataset.gate, 120+Math.random()*260, 120+Math.random()*200); });
+// new gates go to the first free slot of a tidy grid (never on top of another part)
+function freeSlot(){ const taken=(x,y)=>gates.some(g=>Math.abs(g.node.x()-x)<90&&Math.abs(g.node.y()-y)<70)||terms.some(t=>Math.abs(t.node.x()-x)<60&&Math.abs(t.node.y()-y)<50);
+  for(let r=0;r<6;r++) for(let c=0;c<4;c++){ const x=230+c*150, y=80+r*105; if(x<W-90&&y<H-40&&!taken(x,y)) return {x,y}; } return {x:230+Math.random()*200,y:80+Math.random()*300}; }
+tb.querySelectorAll('[data-gate]').forEach(b=> b.onclick=()=>{ const p=toWorld(freeSlot()); addGate(b.dataset.gate, p.x, p.y); });
 tb.querySelector('#del').onclick=()=>{ if(!selected) return;
   if(selected.fromKey){ wires=wires.filter(w=>w!==selected); }
   else if(selected.type){ wires=wires.filter(w=>w.from.id!==selected.id&&w.to.id!==selected.id); selected.node.destroy(); gates=gates.filter(g=>g!==selected); }
@@ -195,10 +213,26 @@ tb.querySelector('#del').onclick=()=>{ if(!selected) return;
 tb.querySelector('#clear').onclick=()=>{ gates.forEach(g=>g.node.destroy()); terms.forEach(t=>t.node.destroy()); gates=[];terms=[];wires=[];inLetter=65;wireFrom=null;selected=null;
   pinShapes.forEach(s=>s.destroy()); wireShapes.forEach(s=>s.destroy()); pinShapes=[];wireShapes=[]; layer.draw(); emitStruct(); };
 
+function wipe(){ try{ gates.forEach(g=>g.node.destroy()); terms.forEach(t=>t.node.destroy()); }catch(e){} gates=[];terms=[];wires=[];wireFrom=null;selected=null;
+  try{pinShapes.forEach(s=>s.destroy());wireShapes.forEach(s=>s.destroy());}catch(e){} pinShapes=[];wireShapes=[]; }
+function loadValue(v){
+  loading=true; wipe();
+  if(v){
+    let n=0;
+    (v.gates||[]).forEach((g,i)=>{ addGate(g.gate, g.x!=null?g.x:260+(i%3)*150, g.y!=null?g.y:110+Math.floor(i/3)*110, g.id); n=Math.max(n, +String(g.id).replace(/\D/g,'')||0); });
+    (v.inputs||[]).forEach((t,i)=>{ addTerminal('in', t.x!=null?t.x:70, t.y!=null?t.y:90+i*90, t.id, t.label); n=Math.max(n, +String(t.id).replace(/\D/g,'')||0); });
+    (v.outputs||[]).forEach((t,i)=>{ addTerminal('out', t.x!=null?t.x:W-70, t.y!=null?t.y:200+i*90, t.id, t.label); n=Math.max(n, +String(t.id).replace(/\D/g,'')||0); });
+    uid=n+1;
+    const key=(e)=>e.id+':'+e.pin;
+    (v.wires||[]).forEach(w=>{ const from=Object.assign({k:String(w.from.id)[0]==='g'?'gate':'term'},w.from), to=Object.assign({k:String(w.to.id)[0]==='g'?'gate':'term'},w.to); wires.push({fromKey:key(from),toKey:key(to),from,to}); });
+  }
+  loading=false; drawPins(); drawWires(); layer.batchDraw();
+}
+if(value) loadValue(value);
 emitStruct();
 
       return {
-        update: () => {},
+        update: (v) => { loadValue(v); },
         clear: () => { try{ gates.forEach(g=>g.node.destroy()); terms.forEach(t=>t.node.destroy()); }catch(e){} gates=[];terms=[];wires=[];inLetter=65;wireFrom=null;selected=null; try{pinShapes.forEach(s=>s.destroy());wireShapes.forEach(s=>s.destroy());}catch(e){} pinShapes=[];wireShapes=[]; layer.draw(); emitStruct(); },
         destroy: () => { try{ stage.destroy(); }catch(e){} container.innerHTML=''; },
       };

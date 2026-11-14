@@ -1,14 +1,14 @@
 /* Electron shell builder (chem) — Konva. Nucleus + Charge are MathLive text-box
    fields (reusing the text component + math keyboard). Add concentric shells, set
    electrons per shell (auto-spaced), add labels. Saves { nucleus, charge, shells:[...],
-   labels } or null. Requires Konva + MathLive (index.html). */
+   labels } or null. Marked by NedMark 'shells': the arrangement and, for ions, the charge. Requires Konva + MathLive (index.html). */
 (function () {
   if (typeof Konva === 'undefined') { Ned.register('shells', { name:'Electron shells', unlocks:'chem structure', samples:[{label:'Atom', question:{text:'Konva failed to load.',marks:0,config:{}}}] }, function(c){ c.textContent='Konva not loaded — check the CDN <script> in index.html.'; return {update(){},clear(){},destroy(){c.innerHTML='';}}; }); return; }
   Ned.register('shells',
     { name:'Electron shells', unlocks:'chem atoms',
       samples:[
-        { label:'Draw an atom', question:{ text:'Draw the electron arrangement of a sodium atom (2,8,1).', marks:3, config:{} } },
-        { label:'Draw an ion', question:{ text:'Draw the electron arrangement of an oxide ion, O²⁻.', marks:3, config:{} } },
+        { label:'Draw an atom', question:{ text:'Draw the electron arrangement of a sodium atom.', marks:2, config:{} }, answer:{ shells:[2,8,1] } },
+        { label:'Draw an ion', question:{ text:'Draw the electron arrangement of an oxide ion, O²⁻. Show the charge.', marks:3, config:{} }, answer:{ shells:[2,8], charge:'2-' } },
       ] },
     function (container, { question, value, onChange }) {
       // ---- scaffold ----
@@ -110,6 +110,7 @@ function rebuildShellBar(){
   shells.forEach((sh,i)=>{ const wrapEl=document.createElement('label'); wrapEl.className='inl shellinp'; wrapEl.style.marginLeft='6px';
     wrapEl.innerHTML='Shell '+(i+1)+': ';
     const inp=document.createElement('input'); inp.type='number'; inp.min='0'; inp.max='32'; inp.value=sh.count;
+    inp.setAttribute('aria-label','Electrons in shell '+(i+1)); inp.style.cssText='width:4rem;padding:5px;border:1px solid var(--line);border-radius:6px;background:#fffdf7;font:inherit;';
     inp.oninput=()=>{ sh.count=Math.max(0,Math.min(32, parseInt(inp.value||'0'))); render(); emit(); };
     wrapEl.appendChild(inp); shellbar.appendChild(wrapEl); });
 }
@@ -140,10 +141,20 @@ stage.on('wheel',(e)=>{ e.evt.preventDefault(); const old=stage.scaleX(); const 
   const m={x:(ptr.x-stage.x())/old,y:(ptr.y-stage.y())/old}; const dir=e.evt.deltaY>0?-1:1; const f=1.08; const k=Math.max(0.5,Math.min(2.2,dir>0?old*f:old/f));
   stage.scale({x:k,y:k}); stage.position({x:ptr.x-m.x*k,y:ptr.y-m.y*k}); stage.batchDraw(); });
 
-shells=[]; rebuildShellBar(); render(); emit();
+/* show a saved answer again */
+function loadValue(v){
+  shells=((v&&v.shells)||[]).map(n=>({count:n|0}));
+  labels=((v&&v.labels)||[]).map(L=>({id:uid++,text:L.text,x:L.x,y:L.y}));
+  nucleusText=(v&&v.nucleus)||''; chargeText=(v&&v.charge)||'';
+  try{ nucField.value=nucleusText; chgField.value=chargeText; }catch(e){}
+  rebuildShellBar(); render(); emit();
+}
+if(Ned.plainTyping && hasMath){ Ned.plainTyping(nucField); Ned.plainTyping(chgField); }
+nucField.setAttribute('aria-label','Nucleus (element symbol)'); chgField.setAttribute('aria-label','Charge');
+loadValue(value);
 
       return {
-        update: () => {},
+        update: (v) => { loadValue(v); },
         clear: () => { shells=[]; labels=[]; nucleusText=''; chargeText=''; try{nucField.value='';chgField.value='';}catch(e){} rebuildShellBar(); render(); emit(); },
         destroy: () => { try{ stage.destroy(); }catch(e){} container.innerHTML=''; },
       };

@@ -2,7 +2,9 @@
    mode. Monospaced, line numbers, `<-` -> the ← assignment arrow.
    Registration NEVER touches CodeMirror at load time (so it can't fail to register);
    CodeMirror is only used inside the factory, with a plain-textarea fallback.
-   Saves { code } (plain text) or null. */
+   Saves { code } (plain text) or null.
+   A Run panel under the editor runs the pseudocode on test inputs (marking/pseudo.js).
+   Marked by NedMark 'code': the program is run on the mark scheme's test cases; part marks for the features it shows. */
 
 (function () {
 
@@ -45,10 +47,12 @@
       name: 'Code editor',
       unlocks: 'CS pseudocode',
       samples: [
-        { label: 'Write an algorithm',
-          question: { text: 'Write pseudocode that outputs the numbers 1 to 10.', marks: 4, config: {} } },
-        { label: 'Procedure',
-          question: { text: 'Write a procedure that takes a name and outputs a greeting.', marks: 3, config: {} } },
+        { label: 'Total of three numbers (run + marked by test cases)',
+          question: { text: 'Write an algorithm, using pseudocode, that inputs three numbers and outputs their total.', marks: 5, config: { tryInputs: [4, 5, 6] } },
+          answer: { tests: [{ input: [4, 5, 6], expect: [15] }, { input: [10, 0, -3], expect: [7] }, { input: [1, 1, 1], expect: [3] }], features: ['loop', 'input', 'totalling', 'output'] } },
+        { label: 'Largest of five',
+          question: { text: 'Write an algorithm that inputs five positive numbers and outputs the largest.', marks: 6, config: { tryInputs: [3, 9, 2, 7, 5] } },
+          answer: { tests: [{ input: [3, 9, 2, 7, 5], expect: [9] }, { input: [8, 1, 1, 1, 1], expect: [8] }, { input: [1, 2, 3, 4, 50], expect: [50] }], features: ['loop', 'input', 'selection', 'output'] } },
       ],
     },
     function (container, { question, value, onChange }) {
@@ -63,6 +67,7 @@
         const emitT = () => { const c = ta.value; onChange(c.trim() === '' ? null : { code: c }); };
         ta.addEventListener('input', emitT);
         container.appendChild(ta);
+        if (Ned.runPanel) Ned.runPanel(container, 'code', () => ta.value, question);
         return { update: (v) => { ta.value = (v && v.code) || ''; }, clear: () => { ta.value = ''; emitT(); }, destroy: () => { container.innerHTML = ''; } };
       }
 
@@ -90,6 +95,7 @@
         const emit = () => { const c = cm.getValue(); onChange(c.trim() === '' ? null : { code: c }); };
         cm.on('change', emit);
         setTimeout(() => cm.refresh(), 0);
+        if (Ned.runPanel) Ned.runPanel(container, 'code', () => cm.getValue(), question);
 
         return { update: (v) => cm.setValue((v && v.code) || ''), clear: () => { cm.setValue(''); emit(); }, destroy: () => { container.innerHTML = ''; } };
       } catch (e) {

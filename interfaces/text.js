@@ -1,7 +1,8 @@
 /* Text box — now a MathLive math field so the math keyboard renders properly.
    Type normally with your system keyboard (spaces work); use the floating math
    widget for x², H₂, √, fractions, ∫, etc. Saves { latex } or null.
-   config.multiline : taller field   config.size : "short" | "medium" | "long" */
+   config.multiline : taller field   config.size : "short" | "medium" | "long"
+   Marked by NedMark 'text': keyword match against the mark scheme's points (with their alternatives). */
 
 (function () {
   Ned.register('text',
@@ -9,15 +10,19 @@
       name: 'Text box',
       unlocks: '~55–65% of marks',
       samples: [
-        { label: 'Recall (single line)',
-          question: { text: 'Name the gas produced.', marks: 1,
-                      config: { multiline: false, size: 'short' } } },
-        { label: 'Formula (single line)',
-          question: { text: 'Give the formula of sulfuric acid.', marks: 1,
-                      config: { multiline: false, size: 'medium' } } },
-        { label: 'Short explanation (multi-line)',
-          question: { text: 'Explain why the rate of reaction increases.', marks: 3,
-                      config: { multiline: true, size: 'long' } } },
+        { label: 'Recall (1 mark)',
+          question: { text: 'Name the fraction with the smallest molecules.', marks: 1, config: { multiline: false, size: 'medium' } },
+          answer: { points: [{ alts: ['refinery gas'] }], need: 1 } },
+        { label: 'One of a list (1 mark)',
+          question: { text: 'Give one example of a change of state which does not involve boiling or evaporation.', marks: 1, config: { multiline: false, size: 'medium' } },
+          answer: { points: [{ alts: ['condensation', 'freezing', 'solidification', 'melting', 'sublimation'] }], need: 1 } },
+        { label: 'Two points (2 marks)',
+          question: { text: 'State two ways in which evaporation is different from boiling.', marks: 2, config: { multiline: true, size: 'long' } },
+          answer: { points: [{ alts: ['evaporation takes place at any temperature', 'boiling occurs at a fixed temperature'] }, { alts: ['evaporation takes place at the surface', 'boiling occurs throughout the liquid'] },
+            { alts: ['no bubbles in evaporation', 'bubbles in boiling'], require: ['bubbles'] }], need: 2 } },
+        { label: 'Formula (1 mark)',
+          question: { text: 'Give the formula of sulfuric acid.', marks: 1, config: { multiline: false, size: 'medium' } },
+          answer: { points: [{ alts: ['H2SO4'] }], need: 1 } },
       ],
     },
     function (container, { question, value, onChange }) {
@@ -52,6 +57,7 @@
       mf.addEventListener('input', emit);
 
       container.appendChild(mf);
+      if (Ned.plainTyping) Ned.plainTyping(mf);
       try { mf.inlineShortcuts = {}; } catch (e) {}       // typing "sqrt" stays letters
       try { mf.mathModeSpace = '\\;'; } catch (e) {}       // spacebar works for word answers
 

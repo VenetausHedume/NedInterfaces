@@ -31,9 +31,11 @@ nav { border-right: 1px solid var(--line); background: var(--paper); padding: 8p
 .nav-sub { font-size: 12px; color: var(--muted); }
 
 /* main */
-main { padding: 18px 22px; }
-.bar { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
-.bar select { padding: 4px 6px; }
+main { padding: 18px 22px; min-width: 0; }
+.mount { min-width: 0; max-width: 100%; }
+.bar { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.bar label { min-width: 0; max-width: 100%; }
+.bar select { padding: 4px 6px; max-width: 100%; }
 .bar button, .ned-mode, .ned-part {
   padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
   background: var(--paper); cursor: pointer;
@@ -76,3 +78,18 @@ math-field { --selection-background-color: transparent; --contains-highlight-bac
 /* kill MathLive's blue text-run / selection wash while typing */
 math-field { --selection-background-color: transparent; --contains-highlight-background-color: transparent; --highlight-text: inherit; }
 math-field::part(content) { background: transparent !important; }
+
+/* live mark panel */
+.markbox { font-size: 13px; color: var(--muted); }
+.mark-score { font-size: 26px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.mark-status { margin: 2px 0 8px; }
+.mark-detail { margin: 0; font-size: 11px; white-space: pre-wrap; word-break: break-word; color: #444; max-height: 220px; overflow: auto; }
+button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mark-fb { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 5px; font-size: 13px; color: var(--ink); }
+.mark-fb li { padding: 5px 8px 5px 26px; border-radius: 6px; position: relative; background: #f6f1e3; }
+.mark-fb li::before { position: absolute; left: 8px; top: 5px; font-weight: 700; }
+.mark-fb .fb-good { background: #e9f4ea; } .mark-fb .fb-good::before { content: "\2713"; color: #2f7d4f; }
+.mark-fb .fb-bad { background: #fbecea; } .mark-fb .fb-bad::before { content: "\2717"; color: #b0413e; }
+.mark-fb .fb-info::before { content: "i"; color: #7d7566; }
+details > summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.CodeMirror { max-width: 100%; }

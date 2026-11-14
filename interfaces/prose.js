@@ -1,7 +1,9 @@
 /* Structured prose — the SAME text-box field, repeated as an array of points.
    Each point is one MathLive field (identical to the text box): type words,
    use the ∑ widget for math. Add / remove / reorder points. Optional
-   conclusion (config.conclusion). Saves { points:[latex...], conclusion } or null. */
+   conclusion (config.conclusion). Saves { points:[latex...], conclusion } or null.
+   Marked by NedMark 'prose': each box can earn one mark-scheme point, each point counts once, and a group
+   (e.g. "why it might" / "why it might not") never earns more than its cap. The score is a floor, shown as provisional. */
 
 (function () {
 
@@ -18,6 +20,7 @@
       try { mf.style.setProperty('--keyboard-toggle-display','none'); } catch (e) {}
       try { mf.inlineShortcuts = {}; } catch (e) {}
       try { mf.mathModeSpace = '\\;'; } catch (e) {}
+      if (Ned.plainTyping) Ned.plainTyping(mf);
       if (initial) mf.value = initial;
       mf.addEventListener('input', () => onInput(mf.value));
       return mf;
@@ -34,15 +37,55 @@
       name: 'Structured prose',
       unlocks: 'multi-mark written',
       samples: [
-        { label: 'Explain (6 marks)',
-          question: { text: 'Explain how the kinetic energy of the ball changes as it falls.',
-                      marks: 6, config: { conclusion: true } } },
-        { label: 'Short explain (3 marks)',
-          question: { text: 'Explain why the rate of reaction increases with temperature.',
-                      marks: 3, config: { conclusion: false } } },
+        { label: 'Economics, two sides (8 marks)',
+          question: { text: 'Discuss whether an increase in output will increase the profits that firms receive.', marks: 8, config: { sides: ['Why it might', 'Why it might not'] } },
+          answer: { points: [
+              { alts: ['higher output may be a response to higher demand', 'more sales'], require: [['demand', 'sales', 'sell']] },
+              { alts: ['raise revenue', 'more revenue'], require: ['revenue'] },
+              { alts: ['take advantage of economies of scale'], require: ['economies of scale'], reject: ['diseconomies'] },
+              { alts: ['lower average costs', 'average cost falls'], require: ['average'], reject: ['diseconomies'] },
+              { alts: ['widen the gap between revenue and cost', 'profit margin rises'] },
+              { alts: ['price may have to fall to sell the extra output', 'lower price'], require: ['price'] },
+              { alts: ['demand may be inelastic so revenue falls'], require: ['inelastic'] },
+              { alts: ['diseconomies of scale'], require: ['diseconomies'] },
+              { alts: ['average costs may rise', 'higher average cost'], require: ['average', ['rise', 'higher', 'increase']] },
+              { alts: ['costs may rise by more than revenue'] }],
+            groups: [{ title: 'Why it might', max: 5, points: [0, 1, 2, 3, 4] }, { title: 'Why it might not', max: 5, points: [5, 6, 7, 8, 9] }] } },
+        { label: 'Biology (5 marks)',
+          question: { text: 'Describe how bile helps in the digestion of fat. Write each point in its own box.', marks: 4, config: { conclusion: false } },
+          answer: { points: [{ alts: ['emulsification', 'emulsifies fat'] }, { alts: ['increases the surface area of fat'], require: ['surface area'] }, { alts: ['faster digestion', 'faster breakdown by enzymes'], require: [['faster', 'quicker', 'speeds']] },
+            { alts: ['by lipase'], require: ['lipase'] }, { alts: ['neutralises stomach acid'], require: [['neutralise', 'neutralize', 'neutralises', 'neutralizes']] }] } },
       ],
     },
     function (container, { question, value, onChange }) {
+      /* Two-sided answers ("discuss whether…"): the student sorts their own points under each heading.
+         Saves { points:[…], sides:[0,0,1,…] } — sides[i] says which heading point i was written under. */
+      const cfg0 = (question && question.config) || {};
+      if (cfg0.sides && cfg0.sides.length && Ned.field) {
+        const sides = cfg0.sides;
+        const lists = sides.map(() => []);
+        const v0 = value || {};
+        (v0.points || []).forEach((p, i) => { const k = (v0.sides || [])[i] || 0; if (lists[k]) lists[k].push(p); });
+        const wrap = Ned.el('div', { style: 'display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;max-width:900px;' });
+        container.appendChild(wrap);
+        const emitS = () => { const pts = [], sd = []; lists.forEach((L, k) => L.forEach(t => { if (t && t.trim()) { pts.push(t); sd.push(k); } })); onChange(pts.length ? { points: pts, sides: sd } : null); };
+        const cols = sides.map((title, k) => {
+          const body = Ned.el('div', { style: 'display:grid;gap:8px;' });
+          const add = Ned.el('button', { type: 'button', class: 'ned-mode', 'data-add': String(k), style: 'margin-top:8px;' }, ['+ Add point']);
+          const col = Ned.el('div', { 'data-side': String(k), style: 'flex:1 1 300px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);' },
+            [Ned.el('div', { style: 'font-weight:600;margin-bottom:8px;' }, [title]), body, add]);
+          const draw = () => { body.innerHTML = ''; if (!lists[k].length) lists[k].push('');
+            lists[k].forEach((t, i) => { const f = Ned.field({ multiline: false, label: title + ', point ' + (i + 1), placeholder: 'one point', value: t, onInput: (val) => { lists[k][i] = val; emitS(); } }); body.appendChild(f.el); }); };
+          add.addEventListener('click', () => { lists[k].push(''); draw(); const fs = body.children; if (fs.length) fs[fs.length - 1].focus(); });
+          wrap.appendChild(col); draw(); return { draw };
+        });
+        container.appendChild(Ned.el('p', { class: 'ned-note' }, ['Write one point in each box, under the heading it supports.']));
+        return {
+          update: (v) => { lists.forEach(L => { L.length = 0; }); ((v && v.points) || []).forEach((p, i) => { const k = ((v && v.sides) || [])[i] || 0; if (lists[k]) lists[k].push(p); }); cols.forEach(c => c.draw()); },
+          clear: () => { lists.forEach(L => { L.length = 0; }); cols.forEach(c => c.draw()); emitS(); },
+          destroy: () => { container.innerHTML = ''; },
+        };
+      }
       const cfg = (question && question.config) || {};
       const wantConclusion = !!cfg.conclusion;
 

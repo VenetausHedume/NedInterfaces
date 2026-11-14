@@ -15,9 +15,10 @@
       unlocks: 'CS algorithms',
       samples: [
         { label: 'Algorithm flowchart',
-          question: { text: 'Draw a flowchart that inputs 10 numbers and outputs the largest.', marks: 6, config: {} } },
+          question: { text: 'Draw a flowchart that inputs 10 numbers and outputs the largest.', marks: 6, config: {} },
+          answer: { tests: [{ input: [3, 9, 2, 7, 5, 1, 8, 4, 6, 0], expect: [9] }, { input: [1, 2, 3, 4, 5, 6, 7, 8, 9, 50], expect: [50] }], features: ['input', 'decision', 'counting', 'output'] } },
         { label: 'FDE cycle',
-          question: { text: 'Draw a flowchart for the fetch-decode-execute cycle.', marks: 4, config: {} } },
+          question: { text: 'Draw a flowchart for the fetch-decode-execute cycle.', marks: 4, config: { run: false } } },
       ],
     },
     function (container, { question, value, onChange }) {
@@ -232,6 +233,11 @@
       }, { passive: false });
       applyView();
       window.addEventListener('resize', () => { fit(); drawEdges(); });
+
+      // Run: steps through the student's own flowchart, so they see what it really does before it is marked
+      const algorithmic = !(question && question.config && question.config.run === false);
+      if (Ned.runPanel && algorithmic) Ned.runPanel(container, 'flow', () => ({
+        nodes: nodes.map(n => ({ id: n.id, type: n.type, text: n.text })), edges: edges.map(e => ({ from: e.from, to: e.to, label: e.label || '' })) }), question);
 
       return {
         update: (v) => { nodes.forEach(n => n.el.g.remove()); nodes = []; edges = []; if (v && v.nodes) loadValue(v); },

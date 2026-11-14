@@ -2,19 +2,22 @@
    electrons into 4 side-slots (max 2 each) as dots or crosses. Slot-based for strict
    grading. A slot facing another atom = bonding region (dot+cross = shared pair).
    Saves { atoms:[{id,element,circle,x,y,slots:{top,bottom,left,right}}] } or null.
+   Marked by NedMark 'lewis': shared electrons between neighbouring atoms, and the non-bonding electrons on each atom.
    Requires Konva (index.html). */
 (function () {
   if (typeof Konva === 'undefined') { Ned.register('lewis', { name:'Dot-and-cross', unlocks:'chem bonding', samples:[{label:'Molecule', question:{text:'Konva failed to load.',marks:0,config:{}}}] }, function(c){ c.textContent='Konva not loaded — check the CDN <script> in index.html.'; return {update(){},clear(){},destroy(){c.innerHTML='';}}; }); return; }
   Ned.register('lewis',
     { name:'Dot-and-cross', unlocks:'chem bonding',
       samples:[
-        { label:'Covalent (water)', question:{ text:'Draw a dot-and-cross diagram for water, H2O.', marks:3, config:{} } },
-        { label:'Covalent (methane)', question:{ text:'Draw a dot-and-cross diagram for methane, CH4.', marks:3, config:{} } },
+        { label:'Covalent (water)', question:{ text:'Draw a dot-and-cross diagram for water, H2O. Show outer shell electrons only.', marks:3, config:{} }, answer:{ bonds:[['O','H',2],['O','H',2]], lone:{ O:[4], H:[0,0] } } },
+        { label:'Covalent (methane)', question:{ text:'Draw a dot-and-cross diagram for methane, CH4. Show outer shell electrons only.', marks:3, config:{} }, answer:{ bonds:[['C','H',2],['C','H',2],['C','H',2],['C','H',2]], lone:{ C:[0], H:[0,0,0,0] } } },
       ] },
     function (container, { question, value, onChange }) {
       const tb = document.createElement('div');
       tb.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;';
-      tb.innerHTML = `<label style="font-size:13px;">Atom: <input type="text" id="el" value="O" maxlength="3"></label>
+      tb.innerHTML = `<span style="font-size:13px;color:#8a8272;">Atom:</span>
+    <button data-el="H">H</button><button data-el="C">C</button><button data-el="N">N</button><button data-el="O">O</button><button data-el="Cl">Cl</button>
+    <label style="font-size:13px;">other: <input type="text" id="el" value="O" maxlength="3" aria-label="Element symbol"></label>
     <button data-tool="atom">+ Place atom</button>
     <button data-tool="circle">Toggle circle</button>
     <span class="sep"></span>
@@ -29,7 +32,7 @@
       const wrap = document.createElement('div'); wrap.style.cssText='position:relative;width:100%;max-width:900px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fffdf7;touch-action:none;';
       const statusEl = document.createElement('div'); statusEl.style.cssText='font:12.5px ui-monospace,Menlo,Consolas,monospace;margin-top:8px;color:#555;white-space:pre-wrap;';
       container.append(tb, wrap, statusEl);
-      container.appendChild(Ned.el('p',{class:'ned-note'},['Type element, + Place atom; with Dot/Cross active click a side-slot (max 2). Erase removes one. Toggle circle draws the shell. Scroll=zoom, drag empty=pan.']));
+      container.appendChild(Ned.el('p',{class:'ned-note'},['Pick an atom and click the board to place it. Then choose Dot or Cross and click one of the four small rings around an atom to add an electron there (two per ring at most). Put atoms next to each other: electrons in the rings between them are the shared pair.']));
       tb.querySelectorAll('button').forEach(b=>{ b.style.cssText='padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer;font-size:13px;font-weight:600;'; });
       tb.querySelectorAll('.sep').forEach(x=>{ x.style.cssText='width:1px;height:24px;background:var(--line);margin:0 4px;'; });
       const elI=tb.querySelector('#el'); if(elI) elI.style.cssText='width:60px;padding:6px;border:1px solid var(--line);border-radius:6px;font-size:14px;text-align:center;';
@@ -65,13 +68,14 @@ function render(){
     // slot markers + electrons
     SIDES.forEach(side=>{ const c=slotCentre(a,side); const es=a.slots[side];
       // clickable slot target
-      const hit=new Konva.Circle({x:c.x,y:c.y,radius:11,fill:(selected===a?'rgba(70,130,180,0.08)':'rgba(0,0,0,0.001)'),stroke:(selected===a?'#cdd8e4':null),strokeWidth:1});
+      const hit=new Konva.Circle({x:c.x,y:c.y,radius:11,fill:(selected===a?'rgba(70,130,180,0.08)':'rgba(0,0,0,0.001)'),stroke:(selected===a?'#9db8d2':'#d9d2bd'),strokeWidth:1,dash:[3,3]});      // the rings are always visible, so it is clear where electrons go
       hit.on('mousedown touchstart',(e)=>{ e.cancelBubble=true; onSlot(a,side); });
       layer.add(hit);
       // draw electrons in slot (1 -> centre; 2 -> side by side)
       es.forEach((type,i)=>{ let ex=c.x, ey=c.y; if(es.length===2){ if(side==='top'||side==='bottom'){ ex=c.x+(i===0?-5:5); } else { ey=c.y+(i===0?-5:5); } }
-        if(type==='dot'){ layer.add(new Konva.Circle({x:ex,y:ey,radius:3.2,fill:'#2b2b2b'})); }
-        else { layer.add(new Konva.Text({x:ex,y:ey,text:'\u00d7',fontSize:13,fontStyle:'bold',fill:'#2b2b2b',offsetX:4,offsetY:7})); }
+        // electrons do not take clicks, so a second click on the same ring adds the second electron
+        if(type==='dot'){ layer.add(new Konva.Circle({x:ex,y:ey,radius:3.2,fill:'#2b2b2b',listening:false})); }
+        else { layer.add(new Konva.Text({x:ex,y:ey,text:'\u00d7',fontSize:13,fontStyle:'bold',fill:'#2b2b2b',offsetX:4,offsetY:7,listening:false})); }
       });
     });
   });
@@ -104,13 +108,14 @@ function emit(){
   statusEl.textContent = (lines.join('\n')||'(no atoms)') + (bonds.length? '\n'+bonds.join('\n') : '');
 }
 
-function setTool(t){ tool=t; tb.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t)); }
+function setTool(t){ tool=t; tb.querySelectorAll('[data-tool]').forEach(b=>{ const on=b.dataset.tool===t; b.classList.toggle('on',on); b.setAttribute('aria-pressed',on); b.style.background=on?'#eaf1f8':'var(--paper)'; b.style.borderColor=on?'var(--accent)':'var(--line)'; }); }
+tb.querySelectorAll('[data-el]').forEach(b=> b.onclick=()=>{ tb.querySelector('#el').value=b.dataset.el; setTool('atom'); });
 tb.querySelectorAll('[data-tool]').forEach(b=>{ if(!['atom','circle'].includes(b.dataset.tool)) b.onclick=()=>setTool(b.dataset.tool); });
 tb.querySelector('[data-tool="atom"]').onclick=()=>setTool('atom');
 tb.querySelector('[data-tool="circle"]').onclick=()=>{ if(selected){ selected.circle=!selected.circle; render(); emit(); } };
 stage.on('mousedown touchstart',(e)=>{ if(e.target===stage){
   if(tool==='atom'){ const t=stage.getAbsoluteTransform().copy(); t.invert(); const p=t.point(stage.getPointerPosition());
-    addAtom(tb.querySelector('#el').value||'X', p.x, p.y); setTool('dot'); }
+    addAtom((tb.querySelector('#el').value||'X').trim(), p.x, p.y); }      // the atom tool stays on until Dot or Cross is chosen
   else { selected=null; render(); }
 }});
 stage.on('wheel',(e)=>{ e.evt.preventDefault(); const old=stage.scaleX(); const ptr=stage.getPointerPosition();
@@ -119,10 +124,14 @@ stage.on('wheel',(e)=>{ e.evt.preventDefault(); const old=stage.scaleX(); const 
 tb.querySelector('#del').onclick=()=>{ if(selected){ atoms=atoms.filter(a=>a!==selected); selected=null; render(); emit(); } };
 tb.querySelector('#clear').onclick=()=>{ atoms=[]; selected=null; render(); emit(); };
 
-render(); emit();
+function loadValue(v){
+  atoms=((v&&v.atoms)||[]).map(a=>({id:a.id,el:a.element,circle:!!a.circle,x:a.x,y:a.y,slots:{top:(a.slots.top||[]).slice(),bottom:(a.slots.bottom||[]).slice(),left:(a.slots.left||[]).slice(),right:(a.slots.right||[]).slice()}}));
+  uid=atoms.reduce((n,a)=>Math.max(n,+String(a.id).replace(/\D/g,'')||0),0)+1; selected=null; render(); emit();
+}
+setTool(tool); loadValue(value);
 
       return {
-        update: () => {},
+        update: (v) => { loadValue(v); },
         clear: () => { atoms=[]; selected=null; render(); emit(); },
         destroy: () => { try{ stage.destroy(); }catch(e){} container.innerHTML=''; },
       };
