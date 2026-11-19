@@ -44,6 +44,8 @@
   function runOne(kind, py, value, code, t, input) {
     const opts = { given: t.given, random: t.random, vars: Object.keys(t.vars || {}).concat(...(t.checks || []).map(c => Object.keys(c.vars || {})), (t.derive && t.derive.take) || []) };
     if (kind === 'flowchart') return P.runFlowchart(value, input, undefined, t.files, opts);
+    // a procedure/function the question only asks to be written: the test adds the call (test.append = { pseudo, python })
+    if (t.append) code = code + '\n' + ((py ? t.append.python : t.append.pseudo) || '');
     if (py) return Py ? Py.run(code, input, 1500, t.files, opts) : { ok: false, output: [], error: { message: 'The Python runner did not load.' } };
     return P.run(code, input, 1000000, t.files, opts);        // big programs (sorting 200 records) need more than the Run button's limit
   }
