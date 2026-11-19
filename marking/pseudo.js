@@ -97,6 +97,8 @@
 
   /* ── statements ── */
   function parse(src) {
+    // mark schemes write file names without quotes (OPENFILE MyFile.txt FOR READ): accept that
+    src = String(src).replace(/\b(OPENFILE|READFILE|WRITEFILE|CLOSEFILE|EOF\s*\()\s*([A-Za-z_][\w-]*\.(?:txt|dat|csv))\b/gi, (m, k, f) => k + (/\($/.test(k) ? '' : ' ') + '"' + f + '"');
     const L = lex(src); let n = 0;
     const first = () => (L[n] ? L[n].toks[0] : null);
     const kw = v => first() && first().t === 'kw' && first().v === v;
@@ -104,6 +106,18 @@
       const out = [];
       while (n < L.length && !(first().t === 'kw' && enders.includes(first().v))) out.push(stmt());
       return out;
+    }
+    function endifAhead() {                    // is there an ENDIF for an IF that starts here, before the enclosing block ends?
+      let depth = 0;
+      for (let k = n; k < L.length; k++) {
+        const t = L[k].toks[0]; if (!t || t.t !== 'kw') continue;
+        const last = L[k].toks[L[k].toks.length - 1];
+        if (t.v === 'IF') { const thenAt = L[k].toks.findIndex(x => x.t === 'kw' && x.v === 'THEN'); const oneLine = thenAt >= 0 && thenAt < L[k].toks.length - 1 && !(last.t === 'kw' && last.v === 'ENDIF');
+          if (!(last.t === 'kw' && last.v === 'ENDIF') && !oneLine) depth++; continue; }
+        if (t.v === 'ENDIF') { if (depth === 0) return true; depth--; continue; }
+        if (depth === 0 && ['NEXT', 'ENDWHILE', 'UNTIL', 'ENDFUNCTION', 'ENDPROCEDURE', 'ENDCASE'].includes(t.v)) return false;
+      }
+      return false;
     }
     function need(v, what, openLine) { if (!kw(v)) throw new PErr(`${what} (started on line ${openLine}) needs ${v} to close it.`, L[Math.min(n, L.length - 1)].line); return L[n++]; }
     function inline(toks, line) { const save = [L, n]; const sub = parseTokensAsStatement(toks, line); return sub; }
@@ -132,6 +146,14 @@
             if (p.is('kw', 'THEN')) { p.eat('kw', 'THEN'); rest = p.rest(); } else if (!p.done()) throw new PErr('IF needs THEN after the condition.', line);
             else { if (!kw('THEN')) throw new PErr('IF needs THEN after the condition.', line); rest = L[n].toks.slice(1); n++; }
             const yes = [], no = [];
+            // 'IF X > 5 THEN Count ← Count + 1' on one line with no ENDIF anywhere after it: a one-line IF (examiners accept it)
+            if (rest.length && !(rest[rest.length - 1].t === 'kw' && rest[rest.length - 1].v === 'ENDIF') && !(rest[0].t === 'kw' && rest[0].v === 'IF') && !endifAhead()) {
+              const el = rest.findIndex(x => x.t === 'kw' && x.v === 'ELSE');
+              L.splice(n, 0, { line, toks: el > 0 ? rest.slice(0, el) : rest }); yes.push(stmt());
+              if (el > 0 && el < rest.length - 1) { L.splice(n, 0, { line, toks: rest.slice(el + 1) }); no.push(stmt()); }
+              else if (kw('ELSE') && L[n].toks.length > 1) { const e = L[n]; e.toks.shift(); no.push(stmt()); }
+              return { k: 'if', cond, yes, no, line };
+            }
             if (rest.length) { const last = rest[rest.length - 1]; if (rest.length > 1 && last.t === 'kw' && last.v === 'ENDIF') L.splice(n, 0, { line, toks: rest.slice(0, -1) }, { line, toks: [last] }); else L.splice(n, 0, { line, toks: rest }); }   // one-line IF … THEN … ENDIF
             yes.push(...block(['ELSE', 'ENDIF', 'ELSEIF']));
             if (kw('ELSE')) { const e = L[n]; if (e.toks.length > 1) { e.toks.shift(); } else n++; no.push(...block(['ENDIF'])); }
@@ -180,8 +202,11 @@
   /* ── running ── */
   const num = (v, line) => { if (typeof v === 'number') return v; if (typeof v === 'string' && v.trim() !== '' && !isNaN(+v)) return +v; if (typeof v === 'boolean') throw new PErr('TRUE/FALSE cannot be used as a number.', line); throw new PErr(`"${v}" is not a number.`, line); };
   const show = v => (typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE') : typeof v === 'number' ? String(+v.toFixed(10)) : String(v));
-  function machine(inputs, limit, files) {
+  function machine(inputs, limit, files, given) {
     const globals = new Map(), types = new Map(), defs = new Map(), out = [];
+    // data the question says already exists (variables, arrays): set before the program runs, and a DECLARE of it keeps it
+    const givenNames = new Set();
+    Object.keys(given || {}).forEach(k => { const N = k.toUpperCase(); globals.set(N, toValue(given[k])); givenNames.add(N); });
     const store = {}; Object.keys(files || {}).forEach(k => { store[k] = (files[k] || []).map(String); });
     const opened = {};
     const fileOf = (name, line, mode) => { const o = opened[name]; if (!o) throw new PErr(`The file "${name}" is not open. Use OPENFILE first.`, line); if (mode && (mode === 'READ') !== (o.mode === 'READ')) throw new PErr(`The file "${name}" was opened FOR ${o.mode}, so it cannot be ${mode === 'READ' ? 'read' : 'written'}.`, line); return o; };
@@ -252,15 +277,15 @@
       for (const s of list) {
         tick(s.line);
         switch (s.k) {
-          case 'declare': s.names.forEach(nm => { if (s.type) types.set(nm, s.type); if (s.dims) frames[frames.length - 1].set(nm, { __arr: true, dims: s.dims.map(d => [num(ev(d[0], s.line), s.line), num(ev(d[1], s.line), s.line)]), data: new Map() }); }); break;
+          case 'declare': s.names.forEach(nm => { if (s.type) types.set(nm, s.type); if (s.dims && !(givenNames.has(nm) && frames.length === 1)) frames[frames.length - 1].set(nm, { __arr: true, dims: s.dims.map(d => [num(ev(d[0], s.line), s.line), num(ev(d[1], s.line), s.line)]), data: new Map() }); }); break;
           case 'assign': assign(s.to, ev(s.e, s.line), s.line); break;
           case 'input': s.ts.forEach(t => { if (!queue.length) throw new PErr('The program asked for more input than it was given.', s.line); let v = queue.shift(); const ty = types.get(t.name);
-            if (typeof v === 'string' && v.trim() !== '' && !isNaN(+v) && ty !== 'STRING' && ty !== 'CHAR') v = +v; assign(t, v, s.line); }); break;
+            if (typeof v === 'string' && /^\s*-?(\d+\.?\d*|\.\d+)\s*$/.test(v) && ty !== 'STRING' && ty !== 'CHAR') v = +v; assign(t, v, s.line); }); break;
           case 'open': { const nm = show(ev(s.f, s.line)); if (s.mode === 'READ' && !store[nm]) throw new PErr(`There is no file called "${nm}".`, s.line); if (s.mode === 'WRITE' || !store[nm]) store[nm] = []; opened[nm] = { mode: s.mode, pos: 0 }; break; }
           case 'readf': { const nm = show(ev(s.f, s.line)), o = fileOf(nm, s.line, 'READ'); if (o.pos >= store[nm].length) throw new PErr(`The program read past the end of "${nm}". Check EOF first.`, s.line); let v = store[nm][o.pos++]; const ty = types.get(s.t.name); if (v.trim() !== '' && !isNaN(+v) && ty !== 'STRING' && ty !== 'CHAR') v = +v; assign(s.t, v, s.line); break; }
           case 'writef': { const nm = show(ev(s.f, s.line)); fileOf(nm, s.line, 'WRITE'); store[nm].push(show(ev(s.e, s.line))); break; }
           case 'close': { const nm = show(ev(s.f, s.line)); fileOf(nm, s.line); delete opened[nm]; break; }
-          case 'output': out.push(s.es.map(e => show(ev(e, s.line))).join('')); break;
+          case 'output': out.push(s.es.map(e => show(ev(e, s.line))).reduce((a, b) => a + (/\d$/.test(a) && /^-?\d/.test(b) ? ' ' : '') + b, '')); break;   // two numbers side by side keep a space between them
           case 'if': exec(truth(ev(s.cond, s.line), s.line) ? s.yes : s.no); break;
           case 'case': { const v = ev(s.subj, s.line); let done = false;
             for (const a of s.arms) { const hit = a.range ? (v >= ev(a.vals[0], s.line) && v <= ev(a.range, s.line)) : a.vals.some(x => { const y = ev(x, s.line); return y === v || (!isNaN(+y) && !isNaN(+v) && +y === +v) || show(y) === show(v); }); if (hit) { exec(a.body); done = true; break; } }
@@ -275,22 +300,40 @@
         }
       }
     }
-    return { exec, out, ev, truth, assign, queue, steps: () => steps, tick, defs, files: store };
+    const snapshot = names => { const o = {}; (names || []).forEach(n => { const v = globals.get(String(n).toUpperCase()); o[n] = v && v.__arr ? fromArray(v) : v; }); return o; };
+    return { exec, out, ev, truth, assign, queue, steps: () => steps, tick, defs, files: store, snapshot, used: () => (inputs || []).length - queue.length };
   }
-  function run(code, inputs, limit, files) {
+  /* given values: a JS array is a 1-D array from index 1, an array of arrays is 2-D; {dims:[[lo,hi]…], data:{'i,j':v}} sets the bounds */
+  function toValue(v) {
+    if (Array.isArray(v)) {
+      const two = v.length && Array.isArray(v[0]), data = new Map();
+      if (two) { v.forEach((row, i) => row.forEach((x, j) => data.set((i + 1) + ',' + (j + 1), x))); return { __arr: true, dims: [[1, v.length], [1, Math.max(...v.map(r => r.length))]], data }; }
+      v.forEach((x, i) => data.set(String(i + 1), x)); return { __arr: true, dims: [[1, v.length]], data };
+    }
+    if (v && typeof v === 'object' && v.dims) return { __arr: true, dims: v.dims, data: new Map(Object.entries(v.data || {})) };
+    return v;
+  }
+  function fromArray(a) {
+    if (a.dims.length === 1) { const out = []; for (let i = a.dims[0][0]; i <= Math.min(a.dims[0][1], a.dims[0][0] + 999); i++) out.push(a.data.has(String(i)) ? a.data.get(String(i)) : null); return out; }
+    const out = []; for (let i = a.dims[0][0]; i <= Math.min(a.dims[0][1], 200); i++) { const row = []; for (let j = a.dims[1][0]; j <= Math.min(a.dims[1][1], 200); j++) row.push(a.data.has(i + ',' + j) ? a.data.get(i + ',' + j) : null); out.push(row); } return out;
+  }
+  /* opts: { given:{ Name: value }, vars:[names to report after the run] } -> the result also has used (inputs read) and vars */
+  function run(code, inputs, limit, files, opts) {
     let m = null;
-    try { const prog = parse(code); m = machine(inputs, limit, files); prog.filter(s => s.k === 'def').forEach(s => m.defs.set(s.name, s)); m.exec(prog.filter(s => s.k !== 'def')); return { ok: true, output: m.out, steps: m.steps(), files: m.files }; }
-    catch (e) { if (e && e.__ret) return { ok: true, output: m.out, steps: m.steps(), files: m.files }; if (e instanceof PErr) return { ok: false, output: m ? m.out : [], error: { line: e.line || null, message: e.message }, steps: m ? m.steps() : 0 }; throw e; }
+    const done = r => Object.assign(r, m ? { used: m.used(), vars: m.snapshot(opts && opts.vars) } : {});
+    try { const prog = parse(code); m = machine(inputs, limit, files, opts && opts.given); prog.filter(s => s.k === 'def').forEach(s => m.defs.set(s.name, s)); m.exec(prog.filter(s => s.k !== 'def')); return done({ ok: true, output: m.out, steps: m.steps(), files: m.files }); }
+    catch (e) { if (e && e.__ret) return done({ ok: true, output: m.out, steps: m.steps(), files: m.files }); if (e instanceof PErr) return done({ ok: false, output: m ? m.out : [], error: { line: e.line || null, message: e.message }, steps: m ? m.steps() : 0 }); throw e; }
   }
   function check(code) { try { parse(code); return null; } catch (e) { if (e instanceof PErr) return { line: e.line || null, message: e.message }; throw e; } }
 
   /* ── flowcharts: every box holds a pseudocode statement, a decision holds a condition, arrows are Yes / No ── */
-  function runFlowchart(value, inputs, limit) {
+  function runFlowchart(value, inputs, limit, files, opts) {
     const nodes = (value && value.nodes) || [], edges = (value && value.edges) || [];
     let m = null;
     const where = n => `the box "${(n.text || '').trim() || n.type}"`;
     try {
-      m = machine(inputs, limit);
+      m = machine(inputs, limit, files, opts && opts.given);
+      const done = r => Object.assign(r, { used: m.used(), vars: m.snapshot(opts && opts.vars) });
       const isStart = n => /^(start|begin)$/i.test((n.text || '').trim());
       const isStop = n => /^(stop|end|finish)$/i.test((n.text || '').trim());
       let cur = nodes.find(isStart) || nodes.find(n => !edges.some(e => e.to === n.id));
@@ -300,7 +343,7 @@
         const outs = edges.filter(e => e.from === cur.id);
         const text = (cur.text || '').trim();
         let next = null;
-        if (isStop(cur)) return { ok: true, output: m.out, steps: m.steps() };
+        if (isStop(cur)) return done({ ok: true, output: m.out, steps: m.steps() });
         if (cur.type === 'decision') {
           const cond = text.replace(/^\s*is\s+/i, '').replace(/\?\s*$/, '');
           let v; try { v = m.truth(m.ev(parseExprTokens(lex(cond)[0].toks, 1), 1), 1); } catch (e) { throw new PErr(`In ${where(cur)}: ${e.message}`); }
@@ -342,7 +385,7 @@
     for (const want of expect) {
       const w = String(want).toLowerCase().trim();
       let at = -1;
-      if (w !== '' && !isNaN(+w)) { const re = /-?\d+(?:\.\d+)?/g; re.lastIndex = pos; let m; while ((m = re.exec(hay))) { if (Math.abs(+m[0] - +w) < 1e-6 * Math.max(1, Math.abs(+w))) { at = m.index + m[0].length; break; } } }
+      if (w !== '' && !isNaN(+w)) { const re = /-?\d+(?:\.\d+)?/g; re.lastIndex = pos; let m; while ((m = re.exec(hay))) { const dp = (m[0].split('.')[1] || '').length; if (Math.abs(+m[0] - +w) < 1e-6 * Math.max(1, Math.abs(+w)) || (dp >= 2 && Math.abs(+m[0] - +w) <= 0.5 * Math.pow(10, -dp) + 1e-9)) { at = m.index + m[0].length; break; } } }
       else { const k = hay.indexOf(w, pos); if (k >= 0) at = k + w.length; }
       if (at < 0) return false; pos = at;
     }

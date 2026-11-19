@@ -827,7 +827,7 @@
     // self-marked parts (long algorithms, levels-of-response): the student ticks the mark points they met, after seeing them
     if (answer.selfmark && (Array.isArray(value.ticks) || value.self != null)) return selfMark(answer, value, max);
     const r = fn(answer, value, max, opts || {}, question);
-    if (answer.selfmark && r.status !== 'unanswered' && !(answer.tests || []).length) r.status = 'self_check';
+    if (answer.selfmark && r.status !== 'unanswered' && !(answer.tests || []).length && !(answer.auto && (answer.auto.tests || []).length)) r.status = 'self_check';
     return r;
   }
   /* answer.selfmark: true, answer.checklist: ['MP1 …', { text, marks }] ; value.ticks: [indexes] or value.self: a total

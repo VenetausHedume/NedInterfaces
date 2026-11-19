@@ -38,14 +38,29 @@
       .replace(/ on line \d+$/, '');
   }
 
-  function run(code, inputs, limit, files) {
+  const pyLit = v => Array.isArray(v) ? '[' + v.map(pyLit).join(', ') + ']' : typeof v === 'string' ? JSON.stringify(v) : typeof v === 'boolean' ? (v ? 'True' : 'False') : v == null ? 'None' : String(v);
+  /* opts: { given:{ Name: value } set before the program (lists start at 0, as Python students write them), vars:[names] read after it } */
+  function run(code, inputs, limit, files, opts) {
+    const given = (opts && opts.given) || {}, want = (opts && opts.vars) || [];
+    const pre = Object.keys(given).map(k => k + ' = ' + pyLit(given[k])).join('\n');
+    const post = want.map(k => `\ntry:\n    print("\\x01VAR", ${JSON.stringify(k)}, repr(${k}))\nexcept Exception:\n    print("\\x01VAR", ${JSON.stringify(k)}, "None")`).join('');
+    const r = runRaw((pre ? pre + '\n' : '') + String(code).replace(/\t/g, '    ') + post, inputs, limit, files);
+    const shift = pre ? pre.split('\n').length : 0;
+    if (r.error && r.error.line) r.error.line = Math.max(1, r.error.line - shift);
+    const vars = {}; r.output = r.output.filter(l => { const m = l.match(/^\x01VAR (\S+) (.*)$/); if (!m) return true; vars[m[1]] = pyValue(m[2]); return false; });
+    r.vars = vars; return r;
+  }
+  function pyValue(t) {
+    try { return JSON.parse(t.replace(/'/g, '"').replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null')); } catch (e) { return t === 'None' ? null : t; }
+  }
+  function runRaw(code, inputs, limit, files) {
     const Sk = sk();
     if (!Sk) return { ok: false, output: [], error: { line: null, message: 'The Python runner did not load.' }, files: {} };
     let out = '';
     const queue = (inputs || []).map(String);
     const store = {}; Object.keys(files || {}).forEach(k => { store[k] = (files[k] || []).map(String); });
     const written = new WeakSet(), buf = {};
-    let ranOut = false;
+    let ranOut = false, used = 0;
     const wasBrowser = Sk.inBrowser;
     Sk.inBrowser = false;                              // open() then reads through Sk.read, i.e. our files
     Sk.configure({
@@ -61,7 +76,7 @@
         if (!written.has(fileObj)) { written.add(fileObj); buf[name] = mode[0] === 'a' && store[name] && store[name].length ? store[name].join('\n') + '\n' : ''; }
         buf[name] += Sk.ffi.remapToJs(str);
       },
-      inputfun: () => { if (!queue.length) { ranOut = true; throw new Sk.builtin.EOFError('EOF when reading a line'); } return queue.shift(); },
+      inputfun: () => { if (!queue.length) { ranOut = true; throw new Sk.builtin.EOFError('EOF when reading a line'); } used++; return queue.shift(); },
       inputfunTakesPrompt: true, nonreadopen: true,
       __future__: Sk.python3,
       execLimit: limit || 3000,
@@ -74,12 +89,12 @@
     try {
       Sk.importMainWithBody('<stdin>', false, String(code).replace(/\t/g, '    '), false);
       const f = finish(); Sk.inBrowser = wasBrowser;
-      return { ok: true, output: f.lines, files: f.files };
+      return { ok: true, output: f.lines, files: f.files, used };
     } catch (e) {
       const f = finish(); Sk.inBrowser = wasBrowser;
       const line = (e && e.traceback && e.traceback[0] && e.traceback[0].lineno) || null;
       const message = ranOut ? 'The program asked for more input than it was given.' : friendly(e && e.toString ? e.toString() : e);
-      return { ok: false, output: f.lines, error: { line, message }, files: f.files };
+      return { ok: false, output: f.lines, error: { line, message }, files: f.files, used };
     }
   }
 

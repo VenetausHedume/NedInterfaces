@@ -14,26 +14,61 @@
      Full marks when every test gives the expected output (extra text such as prompts is ignored).
      Otherwise one mark for each listed feature the answer shows, up to max − 1; with no feature list,
      a share of max − 1 for the tests that pass. A syntax slip does not zero the answer: features are read from the words. */
+  /* answer.auto (written per past-paper question): { tests:[…], points?:[…], require?:[…] }
+       test   : { input:[…] | inputs:[[…],[…]] (any one of several input orders may pass), given?:{ Name: value },
+                 expect?:[values the output must contain, in order], vars?:{ Name: value after the run }, files?, expectFiles? }
+       point  : { text, tests?:[i…] (these tests pass) | code:'regex on the code' | feature:'loop' | not:'regex' }
+       require: { code|not|feature, why }   e.g. a rewrite must use WHILE and must not use FOR
+     Full marks when every test passes and every requirement holds. Otherwise one mark per mark point met (max − 1),
+     like an examiner who gives marks for the parts that are right even when the whole program is not. */
+  const sameVal = (a, b) => { if (a == null || b == null) return a == b; if (typeof a === 'boolean' || typeof b === 'boolean') return String(a).toLowerCase() === String(b).toLowerCase();
+    if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length >= b.length && b.every((x, i) => x == null || sameVal(a[i], x));
+    if (!isNaN(+a) && !isNaN(+b) && String(a).trim() !== '' && String(b).trim() !== '') return Math.abs(+a - +b) < 1e-6 * Math.max(1, Math.abs(+b));
+    return String(a).trim() === String(b).trim(); };
+  function stripCode(code, py) { return String(code).replace(py ? /#.*$/gm : /\/\/.*$/gm, '').replace(/"[^"\n]*"|'[^'\n]*'/g, '""'); }
+  function runOne(kind, py, value, code, t, input) {
+    const opts = { given: t.given, vars: Object.keys(t.vars || {}) };
+    if (kind === 'flowchart') return P.runFlowchart(value, input, undefined, t.files, opts);
+    if (py) return Py ? Py.run(code, input, 1500, t.files, opts) : { ok: false, output: [], error: { message: 'The Python runner did not load.' } };
+    return P.run(code, input, undefined, t.files, opts);
+  }
   function markAlgo(kind) {
     return function (answer, value, max) {
       const code = kind === 'code' ? ((value && value.code) || '') : '';
       const py = kind === 'code' && value && value.lang === 'python';
       if (kind === 'code' ? !code.trim() : !(value && (value.nodes || []).length)) return un(max);
-      const tests = (answer.tests || []).map(t => {
-        const r = kind === 'code' ? (py ? (Py ? Py.run(code, t.input || [], undefined, t.files) : { ok: false, output: [], error: { message: 'The Python runner did not load.' } }) : P.run(code, t.input || [], undefined, t.files)) : P.runFlowchart(value, t.input || []);
-        const filesOk = !t.expectFiles || (r.ok && Object.keys(t.expectFiles).every(nm => JSON.stringify(((r.files || {})[nm] || []).map(x => String(x).trim())) === JSON.stringify(t.expectFiles[nm].map(x => String(x).trim()))));
-        return { pass: r.ok && P.outputMatches(r.output, t.expect || []) && filesOk, filesOk, output: r.output, error: r.error || null, input: t.input || [], expect: t.expect || [] };
+      const A = answer.auto || answer;
+      const t0 = Date.now(), BUDGET = 7000;            // marking has a time limit: a program that never stops must not hold it up
+      const tests = (A.tests || []).map(t => {
+        const tries = t.inputs || [t.input || []];
+        let best = null;
+        if (Date.now() - t0 > BUDGET) return { pass: false, output: [], vars: {}, error: { message: 'not run: the earlier tests took too long' }, input: tries[0], expect: t.expect || [], want: t.vars || null };
+        for (const input of tries) {
+          const r = runOne(kind, py, value, code, t, input);
+          const filesOk = !t.expectFiles || (r.ok && Object.keys(t.expectFiles).every(nm => JSON.stringify(((r.files || {})[nm] || []).map(x => String(x).trim())) === JSON.stringify(t.expectFiles[nm].map(x => String(x).trim()))));
+          const varsOk = !t.vars || (r.ok && Object.keys(t.vars).every(k => sameVal((r.vars || {})[k], t.vars[k])));
+          const outOk = r.ok && P.outputMatches(r.output, t.expect || []);
+          const res = { pass: outOk && filesOk && varsOk, filesOk, varsOk, output: r.output, vars: r.vars || {}, error: r.error || null, input, expect: t.expect || [], want: t.vars || null };
+          if (!best || res.pass || (!best.error && false)) best = res;
+          if (res.pass || (r.error && /too long/.test(r.error.message)) || Date.now() - t0 > BUDGET) break;
+        }
+        return best;
       });
       const passed = tests.filter(t => t.pass).length;
       const text = kind === 'code' ? code : (value.nodes || []).map(n => n.text || '').join('\n');
       const f = py && Py ? Py.features(text) : P.features(text);
       if (kind === 'flowchart') f.decision = (value.nodes || []).some(n => n.type === 'decision');
-      const feats = (answer.features || []).map(name => ({ name, label: FEATURE_NAMES[name] || name, ok: !!f[name] }));
+      const plain = stripCode(text, py);
+      const holds = c => c.feature ? !!f[c.feature] : c.code ? new RegExp(c.code, 'i').test(plain) : c.not ? !new RegExp(c.not, 'i').test(plain) : true;
+      const reqs = (A.require || []).map(c => ({ why: c.why || c.code || c.not || c.feature, ok: (py && c.pseudoOnly) ? true : holds(c) }));
+      const feats = (A.features || []).map(name => ({ name, label: FEATURE_NAMES[name] || name, ok: !!f[name] }));
+      const points = (A.points || []).map(p => ({ text: p.text, ok: p.tests ? p.tests.every(i => tests[i] && tests[i].pass) : (py && p.pseudoOnly) ? false : holds(p) }));
       let score;
-      if (tests.length && passed === tests.length) score = max;
+      if (tests.length && passed === tests.length && reqs.every(r => r.ok)) score = max;
+      else if (points.length) score = Math.min(Math.max(0, max - 1), points.filter(x => x.ok).length);
       else if (feats.length) score = Math.min(Math.max(0, max - 1), feats.filter(x => x.ok).length);
       else score = tests.length ? Math.floor(Math.max(0, max - 1) * passed / tests.length) : 0;
-      return { score, max, status: 'marked', detail: { tests, passed, features: feats, error: (tests.find(t => t.error) || {}).error || null } };
+      return { score, max, status: 'marked', detail: { tests, passed, features: feats, points, require: reqs, error: (tests.find(t => t.error) || {}).error || null } };
     };
   }
 
@@ -415,7 +450,15 @@
         d.eqOk ? good('New equilibrium marked at the right crossing.') : info('Mark the new equilibrium where the shifted curve crosses the other one.');
         break; }
       case 'code': case 'flowchart': {
-        (d.tests || []).forEach(t => (t.pass ? good(`Inputs ${t.input.join(', ') || 'none'}: correct output.`) : bad(`Inputs ${t.input.join(', ') || 'none'}: expected ${t.expect.join(', ')}` + (t.error ? `, but it stopped: ${t.error.line ? 'line ' + t.error.line + ': ' : ''}${t.error.message}` : `, but it gave ${t.output.join(' | ') || 'nothing'}.`))));
+        const shown = (answer.auto && answer.auto.show) || 2;           // the first tests are shown in full; the rest are hidden tests
+        (d.tests || []).forEach((t, i) => {
+          const what = t.want ? Object.keys(t.want).map(k => `${k} = ${JSON.stringify(t.want[k])}`).join(', ') : t.expect.join(', ');
+          const got = t.want ? Object.keys(t.want).map(k => `${k} = ${JSON.stringify((t.vars || {})[k] === undefined ? null : t.vars[k])}`).join(', ') : (t.output.join(' | ') || 'nothing');
+          const inp = t.input && t.input.length ? `With inputs ${t.input.join(', ')}` : 'Test ' + (i + 1);
+          if (i >= shown) { t.pass ? good(`Hidden test ${i + 1 - shown}: right.`) : bad(`Hidden test ${i + 1 - shown}: not right` + (t.error ? ` (it stopped: ${t.error.message})` : '') + '.'); return; }
+          t.pass ? good(`${inp}: right.`) : bad(`${inp}: expected ${what}` + (t.error ? `, but it stopped: ${t.error.line ? 'line ' + t.error.line + ': ' : ''}${t.error.message}` : `, but it gave ${got}.`)); });
+        (d.require || []).forEach(q => { if (!q.ok) bad('The question asks you to ' + q.why + '.'); });
+        if (r.score < r.max) (d.points || []).forEach(p => (p.ok ? good('Mark point: ' + p.text + '.') : info('Missing: ' + p.text + '.')));
         (d.features || []).forEach(f => (f.ok ? good('It ' + f.label + '.') : bad('It should ' + f.label.replace(/^(uses|takes|gives|keeps|counts|has)\b/, m => ({ uses: 'use', takes: 'take', gives: 'give', keeps: 'keep', counts: 'count', has: 'have' }[m])) + '.')));
         break; }
       case 'order': {
