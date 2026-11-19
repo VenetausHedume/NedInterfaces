@@ -30,7 +30,7 @@
     const opts = { given: t.given, vars: Object.keys(t.vars || {}).concat(...(t.checks || []).map(c => Object.keys(c.vars || {}))) };
     if (kind === 'flowchart') return P.runFlowchart(value, input, undefined, t.files, opts);
     if (py) return Py ? Py.run(code, input, 1500, t.files, opts) : { ok: false, output: [], error: { message: 'The Python runner did not load.' } };
-    return P.run(code, input, undefined, t.files, opts);
+    return P.run(code, input, 1000000, t.files, opts);        // big programs (sorting 200 records) need more than the Run button's limit
   }
   function markAlgo(kind) {
     return function (answer, value, max) {
