@@ -27,7 +27,7 @@
     return String(a).trim() === String(b).trim(); };
   function stripCode(code, py) { return String(code).replace(py ? /#.*$/gm : /\/\/.*$/gm, '').replace(/"[^"\n]*"|'[^'\n]*'/g, '""'); }
   function runOne(kind, py, value, code, t, input) {
-    const opts = { given: t.given, vars: Object.keys(t.vars || {}) };
+    const opts = { given: t.given, vars: Object.keys(t.vars || {}).concat(...(t.checks || []).map(c => Object.keys(c.vars || {}))) };
     if (kind === 'flowchart') return P.runFlowchart(value, input, undefined, t.files, opts);
     if (py) return Py ? Py.run(code, input, 1500, t.files, opts) : { ok: false, output: [], error: { message: 'The Python runner did not load.' } };
     return P.run(code, input, undefined, t.files, opts);
@@ -48,7 +48,9 @@
           const filesOk = !t.expectFiles || (r.ok && Object.keys(t.expectFiles).every(nm => JSON.stringify(((r.files || {})[nm] || []).map(x => String(x).trim())) === JSON.stringify(t.expectFiles[nm].map(x => String(x).trim()))));
           const varsOk = !t.vars || (r.ok && Object.keys(t.vars).every(k => sameVal((r.vars || {})[k], t.vars[k])));
           const outOk = r.ok && P.outputMatches(r.output, t.expect || []);
-          const res = { pass: outOk && filesOk && varsOk, filesOk, varsOk, output: r.output, vars: r.vars || {}, error: r.error || null, input, expect: t.expect || [], want: t.vars || null };
+          // requirement checks on the same run (15-mark programs): a program that stops part-way still earns the checks it reached
+          const checks = (t.checks || []).map(c => ({ req: c.req, ok: (!c.expect || P.outputMatches(r.output, c.expect)) && (!c.vars || Object.keys(c.vars).every(k => sameVal((r.vars || {})[k], c.vars[k]))) }));
+          const res = { pass: outOk && filesOk && varsOk && checks.every(c => c.ok), filesOk, varsOk, checks, output: r.output, vars: r.vars || {}, error: r.error || null, input, expect: t.expect || [], want: t.vars || null };
           if (!best || res.pass || (!best.error && false)) best = res;
           if (res.pass || (r.error && /too long/.test(r.error.message)) || Date.now() - t0 > BUDGET) break;
         }
@@ -64,6 +66,25 @@
       const feats = (A.features || []).map(name => ({ name, label: FEATURE_NAMES[name] || name, ok: !!f[name] }));
       const points = (A.points || []).map(p => ({ text: p.text, ok: p.tests ? p.tests.every(i => tests[i] && tests[i].pass) : (py && p.pseudoOnly) ? false : holds(p) }));
       let score;
+      if (A.levels) {
+        // AO2 (techniques, data structures) and AO3 (names, logic, accuracy, requirements met) from how much of each
+        // requirement the program gets right when it is run. Comments are not marked.
+        const R = A.levels.requirements || [];
+        const per = R.map((q, k) => { const cs = tests.flatMap(t => (t.checks || []).filter(c => c.req === k)); return { text: q.text, weight: q.weight || 1, got: cs.filter(c => c.ok).length, of: cs.length }; });
+        const W = per.reduce((a, q) => a + q.weight, 0) || 1;
+        const frac = per.reduce((a, q) => a + q.weight * (q.of ? q.got / q.of : 0), 0) / W;
+        const ids = [...new Set((plain.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).filter(w => !/^(IF|THEN|ELSE|ENDIF|FOR|TO|NEXT|WHILE|DO|ENDWHILE|REPEAT|UNTIL|INPUT|OUTPUT|PRINT|AND|OR|NOT|CASE|OF|OTHERWISE|ENDCASE|DECLARE|TRUE|FALSE|DIV|MOD|STEP|RETURN|in|range|int|float|str|len|print|input|def|if|else|elif|for|while|and|or|not|True|False|return|i|j|k)$/i.test(w)))];
+        const counters = new Set((plain.match(/\bFOR\s+([A-Za-z_]\w*)|\bfor\s+([A-Za-z_]\w*)\s+in\b/gi) || []).map(x => x.split(/\s+/)[1].toLowerCase()));
+        const named = ids.filter(w => !counters.has(w.toLowerCase()));
+        const structures = (A.levels.names || []).every(n => new RegExp('\\b' + n + '\\b', 'i').test(plain));
+        const meaningful = named.length ? named.filter(w => w.length >= 3).length / named.length >= 0.75 : false;   // loop counters (FOR i …) may be short
+        const attempt = ['loop', 'selection', 'input', 'output', 'array'].filter(x => f[x]).length;
+        let ao2 = frac >= 0.999 ? 9 : Math.min(8, Math.round(9 * frac)), ao3 = frac >= 0.999 && structures && meaningful ? 6 : Math.min(5, Math.round(6 * frac * (structures && meaningful ? 1 : 0.8)));
+        if (ao2 === 0 && attempt >= 2) ao2 = 1;           // at least one programming technique used
+        if (ao3 === 0 && attempt >= 2) ao3 = 1;           // attempts at least one requirement
+        score = Math.min(max, ao2 + ao3);
+        return { score, max, status: 'marked', detail: { tests, passed, levels: { ao2, ao3, requirements: per, structures, meaningful }, error: (tests.find(t => t.error) || {}).error || null } };
+      }
       if (tests.length && passed === tests.length && reqs.every(r => r.ok)) score = max;
       else if (points.length) score = Math.min(Math.max(0, max - 1), points.filter(x => x.ok).length);
       else if (feats.length) score = Math.min(Math.max(0, max - 1), feats.filter(x => x.ok).length);
@@ -450,6 +471,14 @@
         d.eqOk ? good('New equilibrium marked at the right crossing.') : info('Mark the new equilibrium where the shifted curve crosses the other one.');
         break; }
       case 'code': case 'flowchart': {
+        if (d.levels) {
+          const L = d.levels;
+          L.requirements.forEach(q => (q.of && q.got === q.of ? good(`${q.text}: works.`) : q.got ? bad(`${q.text}: works in ${q.got} of ${q.of} checks.`) : bad(`${q.text}: not working yet.`)));
+          if (d.error) info('Your program stopped: ' + (d.error.line ? 'line ' + d.error.line + ': ' : '') + d.error.message);
+          if (!L.structures) info('Use the array names given in the question.');
+          if (!L.meaningful) info('Use meaningful names for your variables (not single letters).');
+          info(`AO2 (programming techniques and data structures): ${L.ao2} of 9. AO3 (names, logic, accuracy, requirements): ${L.ao3} of 6. Comments are not marked here.`);
+          break; }
         const shown = (answer.auto && answer.auto.show) || 2;           // the first tests are shown in full; the rest are hidden tests
         (d.tests || []).forEach((t, i) => {
           const what = t.want ? Object.keys(t.want).map(k => `${k} = ${JSON.stringify(t.want[k])}`).join(', ') : t.expect.join(', ');
