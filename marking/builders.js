@@ -114,7 +114,11 @@
         return { score, max, status: 'marked', detail: { tests, passed, levels: { ao2, ao3, requirements: per, structures, meaningful }, error: (tests.find(t => t.error) || {}).error || null } };
       }
       if (tests.length && passed === tests.length && reqs.every(r => r.ok)) score = max;
-      else if (points.length) score = Math.min(Math.max(0, max - 1), points.filter(x => x.ok).length);
+      else if (points.length) {
+        // mark points earn marks, but a program that gets no test right cannot score more than half (and never full marks)
+        const cap = tests.length && passed === 0 ? Math.ceil(max / 2) : max - 1;
+        score = Math.min(Math.max(0, cap), points.filter(x => x.ok).length);
+      }
       else if (feats.length) score = Math.min(Math.max(0, max - 1), feats.filter(x => x.ok).length);
       else score = tests.length ? Math.floor(Math.max(0, max - 1) * passed / tests.length) : 0;
       return { score, max, status: 'marked', detail: { tests, passed, features: feats, points, require: reqs, error: (tests.find(t => t.error) || {}).error || null } };
