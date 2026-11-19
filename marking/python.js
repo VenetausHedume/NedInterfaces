@@ -42,7 +42,11 @@
   /* opts: { given:{ Name: value } set before the program (lists start at 0, as Python students write them), vars:[names] read after it } */
   function run(code, inputs, limit, files, opts) {
     const given = (opts && opts.given) || {}, want = (opts && opts.vars) || [];
-    const pre = Object.keys(given).map(k => k + ' = ' + pyLit(given[k])).join('\n');
+    let pre = Object.keys(given).map(k => k + ' = ' + pyLit(given[k])).join('\n');
+    if (opts && opts.random && opts.random.length) {   // the same fixed 'random' numbers as the pseudocode run
+      pre = ['import random as _nr', '_nseq = ' + pyLit(opts.random.map(Number)), '_ni = [0]', 'def _nnext():', '    v = _nseq[_ni[0] % len(_nseq)]', '    _ni[0] += 1', '    return v',
+        '_nr.random = _nnext', '_nr.randint = lambda a, b: a + int(_nnext() * (b - a + 1))', '_nr.randrange = lambda a, b=None: (a + int(_nnext() * (b - a))) if b is not None else int(_nnext() * a)'].join('\n') + (pre ? '\n' + pre : '');
+    }
     const post = want.map(k => `\ntry:\n    print("\\x01VAR", ${JSON.stringify(k)}, repr(${k}))\nexcept Exception:\n    print("\\x01VAR", ${JSON.stringify(k)}, "None")`).join('');
     const r = runRaw((pre ? pre + '\n' : '') + String(code).replace(/\t/g, '    ') + post, inputs, limit, files);
     const shift = pre ? pre.split('\n').length : 0;

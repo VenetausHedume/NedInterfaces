@@ -21,13 +21,28 @@
        require: { code|not|feature, why }   e.g. a rewrite must use WHILE and must not use FOR
      Full marks when every test passes and every requirement holds. Otherwise one mark per mark point met (max − 1),
      like an examiner who gives marks for the parts that are right even when the whole program is not. */
-  const sameVal = (a, b) => { if (a == null || b == null) return a == b; if (typeof a === 'boolean' || typeof b === 'boolean') return String(a).toLowerCase() === String(b).toLowerCase();
+  // a key value may be a rule instead of a value: { min, max, int } for numbers, { of, count, notAt } for arrays
+  function ruleOk(a, b) {
+    if (b.of !== undefined) {
+      const cells = []; const walk = (x, at) => (Array.isArray(x) ? x.forEach((y, i) => walk(y, at.concat(i + 1))) : cells.push([x, at])); walk(a, []);
+      const hits = cells.filter(([x]) => String(x).trim().toLowerCase() === String(b.of).toLowerCase());
+      if (b.count != null && hits.length !== b.count) return false;
+      if (b.notAt && hits.some(([, at]) => b.notAt.some(p => p.join(',') === at.join(',')))) return false;
+      return true;
+    }
+    if (a == null || a === '' || isNaN(+a)) return false;
+    if (b.int && Math.abs(+a - Math.round(+a)) > 1e-9) return false;
+    return (b.min == null || +a >= b.min - 1e-9) && (b.max == null || +a <= b.max + 1e-9);
+  }
+  const isRule = b => b && typeof b === 'object' && !Array.isArray(b) && ('min' in b || 'max' in b || 'int' in b || 'of' in b);
+  const expectOfLines = lines => { const out = []; lines.forEach(l => { const n = String(l).match(/-?\d+(?:\.\d+)?/g); if (n) out.push(...n); else if (String(l).trim()) out.push(String(l).trim()); }); return out; };
+  const sameVal = (a, b) => { if (isRule(b)) return ruleOk(a, b); if (a == null || b == null) return a == b; if (typeof a === 'boolean' || typeof b === 'boolean') return String(a).toLowerCase() === String(b).toLowerCase();
     if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b) && a.length >= b.length && b.every((x, i) => x == null || sameVal(a[i], x));
     if (!isNaN(+a) && !isNaN(+b) && String(a).trim() !== '' && String(b).trim() !== '') return Math.abs(+a - +b) < 1e-6 * Math.max(1, Math.abs(+b));
     return String(a).trim() === String(b).trim(); };
   function stripCode(code, py) { return String(code).replace(py ? /#.*$/gm : /\/\/.*$/gm, '').replace(/"[^"\n]*"|'[^'\n]*'/g, '""'); }
   function runOne(kind, py, value, code, t, input) {
-    const opts = { given: t.given, vars: Object.keys(t.vars || {}).concat(...(t.checks || []).map(c => Object.keys(c.vars || {}))) };
+    const opts = { given: t.given, random: t.random, vars: Object.keys(t.vars || {}).concat(...(t.checks || []).map(c => Object.keys(c.vars || {})), (t.derive && t.derive.take) || []) };
     if (kind === 'flowchart') return P.runFlowchart(value, input, undefined, t.files, opts);
     if (py) return Py ? Py.run(code, input, 1500, t.files, opts) : { ok: false, output: [], error: { message: 'The Python runner did not load.' } };
     return P.run(code, input, 1000000, t.files, opts);        // big programs (sorting 200 records) need more than the Run button's limit
@@ -39,18 +54,29 @@
       if (kind === 'code' ? !code.trim() : !(value && (value.nodes || []).length)) return un(max);
       const A = answer.auto || answer;
       const t0 = Date.now(), BUDGET = 7000;            // marking has a time limit: a program that never stops must not hold it up
-      const tests = (A.tests || []).map(t => {
+      const tests = (A.tests || []).map(t0 => {
+        let t = t0;
         const tries = t.inputs || [t.input || []];
         let best = null;
         if (Date.now() - t0 > BUDGET) return { pass: false, output: [], vars: {}, error: { message: 'not run: the earlier tests took too long' }, input: tries[0], expect: t.expect || [], want: t.vars || null };
         for (const input of tries) {
+          let tt = t;
           const r = runOne(kind, py, value, code, t, input);
           const filesOk = !t.expectFiles || (r.ok && Object.keys(t.expectFiles).every(nm => JSON.stringify(((r.files || {})[nm] || []).map(x => String(x).trim())) === JSON.stringify(t.expectFiles[nm].map(x => String(x).trim()))));
-          const varsOk = !t.vars || (r.ok && Object.keys(t.vars).every(k => sameVal((r.vars || {})[k], t.vars[k])));
-          const outOk = r.ok && P.outputMatches(r.output, t.expect || []);
+          if (t.derive && r.ok && A.ref) {
+            // the right result depends on data the program made itself (a random cell, a generated code):
+            // run the reference on that same data and the same inputs to get what this program should output
+            const g = Object.assign({}, t.given); (t.derive.take || []).forEach(k => { if (r.vars && r.vars[k] !== undefined) g[k] = r.vars[k]; });
+            const rr = P.run(A.ref, input, 1000000, t.files, { given: g, random: t.random });
+            const lines = (rr.output || []).map(String);
+            if (A.levels) tt = Object.assign({}, t, { checks: (t.checks || []).concat(lines.map(l => l.match(/^#R(\d+)\s*(.*)$/)).filter(Boolean).map(m => ({ req: m[1] - 1, expect: expectOfLines([m[2]]) }))) });
+            else tt = Object.assign({}, t, { expect: (tt.expect || []).concat(expectOfLines(lines)) });
+          }
+          const varsOk = !tt.vars || (r.ok && Object.keys(tt.vars).every(k => sameVal((r.vars || {})[k], tt.vars[k])));
+          const outOk = r.ok && P.outputMatches(r.output, tt.expect || []);
           // requirement checks on the same run (15-mark programs): a program that stops part-way still earns the checks it reached
-          const checks = (t.checks || []).map(c => ({ req: c.req, ok: (!c.expect || P.outputMatches(r.output, c.expect)) && (!c.vars || Object.keys(c.vars).every(k => sameVal((r.vars || {})[k], c.vars[k]))) }));
-          const res = { pass: outOk && filesOk && varsOk && checks.every(c => c.ok), filesOk, varsOk, checks, output: r.output, vars: r.vars || {}, error: r.error || null, input, expect: t.expect || [], want: t.vars || null };
+          const checks = (tt.checks || []).map(c => ({ req: c.req, ok: (!c.expect || P.outputMatches(r.output, c.expect)) && (!c.vars || Object.keys(c.vars).every(k => sameVal((r.vars || {})[k], c.vars[k]))) }));
+          const res = { pass: outOk && filesOk && varsOk && checks.every(c => c.ok), filesOk, varsOk, checks, output: r.output, vars: r.vars || {}, error: r.error || null, input, expect: tt.expect || [], want: t.vars || null };
           if (!best || res.pass || (!best.error && false)) best = res;
           if (res.pass || (r.error && /too long/.test(r.error.message)) || Date.now() - t0 > BUDGET) break;
         }
@@ -481,8 +507,11 @@
           break; }
         const shown = (answer.auto && answer.auto.show) || 2;           // the first tests are shown in full; the rest are hidden tests
         (d.tests || []).forEach((t, i) => {
-          const what = t.want ? Object.keys(t.want).map(k => `${k} = ${JSON.stringify(t.want[k])}`).join(', ') : t.expect.join(', ');
-          const got = t.want ? Object.keys(t.want).map(k => `${k} = ${JSON.stringify((t.vars || {})[k] === undefined ? null : t.vars[k])}`).join(', ') : (t.output.join(' | ') || 'nothing');
+          const fmt = v => { if (v && typeof v === 'object' && !Array.isArray(v)) { if (v.of !== undefined) return `${v.count != null ? 'exactly ' + v.count + ' ' : ''}"${v.of}"` + (v.notAt ? ' (not at ' + v.notAt.map(p => '[' + p.join(',') + ']').join(' or ') + ')' : '');
+              return v.min === v.max && v.min != null ? String(v.min) : `${v.int ? 'a whole number' : 'a number'}${v.min != null ? ' from ' + v.min : ''}${v.max != null ? ' to ' + v.max : ''}`; }
+            const j = JSON.stringify(v); return j && j.length > 80 ? j.slice(0, 77) + '…' : j; };
+          const what = t.want ? Object.keys(t.want).map(k => `${k} = ${fmt(t.want[k])}`).join(', ') : t.expect.join(', ');
+          const got = t.want ? Object.keys(t.want).map(k => `${k} = ${fmt((t.vars || {})[k] === undefined ? null : t.vars[k])}`).join(', ') : (t.output.join(' | ') || 'nothing');
           const inp = t.input && t.input.length ? `With inputs ${t.input.join(', ')}` : 'Test ' + (i + 1);
           if (i >= shown) { t.pass ? good(`Hidden test ${i + 1 - shown}: right.`) : bad(`Hidden test ${i + 1 - shown}: not right` + (t.error ? ` (it stopped: ${t.error.message})` : '') + '.'); return; }
           t.pass ? good(`${inp}: right.`) : bad(`${inp}: expected ${what}` + (t.error ? `, but it stopped: ${t.error.line ? 'line ' + t.error.line + ': ' : ''}${t.error.message}` : `, but it gave ${got}.`)); });

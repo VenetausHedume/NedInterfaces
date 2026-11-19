@@ -202,7 +202,9 @@
   /* ── running ── */
   const num = (v, line) => { if (typeof v === 'number') return v; if (typeof v === 'string' && v.trim() !== '' && !isNaN(+v)) return +v; if (typeof v === 'boolean') throw new PErr('TRUE/FALSE cannot be used as a number.', line); throw new PErr(`"${v}" is not a number.`, line); };
   const show = v => (typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE') : typeof v === 'number' ? String(+v.toFixed(10)) : String(v));
-  function machine(inputs, limit, files, given) {
+  function machine(inputs, limit, files, given, random) {
+    // tests can fix what RANDOM() returns (a list used in turn), so a program that uses it can still be checked
+    let ri = 0; const rnd = () => (random && random.length ? +random[(ri++) % random.length] : Math.random());
     const globals = new Map(), types = new Map(), defs = new Map(), out = [];
     // data the question says already exists (variables, arrays): set before the program runs, and a DECLARE of it keeps it
     const givenNames = new Set();
@@ -260,7 +262,7 @@
     function call(name, args, line, wantValue) {
       const B = { EOF: s => { const nm = show(s[0]), o = fileOf(nm, line, 'READ'); return o.pos >= (store[nm] || []).length; }, LENGTH: s => show(s[0]).length, UCASE: s => show(s[0]).toUpperCase(), LCASE: s => show(s[0]).toLowerCase(), UPPER: s => show(s[0]).toUpperCase(), LOWER: s => show(s[0]).toLowerCase(),
         SUBSTRING: s => show(s[0]).substr(num(s[1], line) - 1, num(s[2], line)), MID: s => show(s[0]).substr(num(s[1], line) - 1, num(s[2], line)), LEFT: s => show(s[0]).slice(0, num(s[1], line)), RIGHT: s => { const t = show(s[0]); return t.slice(Math.max(0, t.length - num(s[1], line))); },
-        ROUND: s => { const p = Math.pow(10, s.length > 1 ? num(s[1], line) : 0); return Math.round(num(s[0], line) * p) / p; }, INT: s => Math.trunc(num(s[0], line)), RANDOM: () => Math.random(),
+        ROUND: s => { const p = Math.pow(10, s.length > 1 ? num(s[1], line) : 0); return Math.round(num(s[0], line) * p) / p; }, INT: s => Math.trunc(num(s[0], line)), RANDOM: s => (s.length >= 2 ? num(s[0], line) + Math.floor(rnd() * (num(s[1], line) - num(s[0], line) + 1)) : rnd()), RAND: s => (s.length >= 2 ? num(s[0], line) + Math.floor(rnd() * (num(s[1], line) - num(s[0], line) + 1)) : s.length ? Math.floor(rnd() * num(s[0], line)) : rnd()),
         NUM_TO_STR: s => show(s[0]), STR_TO_NUM: s => num(s[0], line), ASC: s => show(s[0]).charCodeAt(0), CHR: s => String.fromCharCode(num(s[0], line)) };
       if (B[name]) return B[name](args);
       const d = defs.get(name);
@@ -321,7 +323,7 @@
   function run(code, inputs, limit, files, opts) {
     let m = null;
     const done = r => Object.assign(r, m ? { used: m.used(), vars: m.snapshot(opts && opts.vars) } : {});
-    try { const prog = parse(code); m = machine(inputs, limit, files, opts && opts.given); prog.filter(s => s.k === 'def').forEach(s => m.defs.set(s.name, s)); m.exec(prog.filter(s => s.k !== 'def')); return done({ ok: true, output: m.out, steps: m.steps(), files: m.files }); }
+    try { const prog = parse(code); m = machine(inputs, limit, files, opts && opts.given, opts && opts.random); prog.filter(s => s.k === 'def').forEach(s => m.defs.set(s.name, s)); m.exec(prog.filter(s => s.k !== 'def')); return done({ ok: true, output: m.out, steps: m.steps(), files: m.files }); }
     catch (e) { if (e && e.__ret) return done({ ok: true, output: m.out, steps: m.steps(), files: m.files }); if (e instanceof PErr) return done({ ok: false, output: m ? m.out : [], error: { line: e.line || null, message: e.message }, steps: m ? m.steps() : 0 }); throw e; }
   }
   function check(code) { try { parse(code); return null; } catch (e) { if (e instanceof PErr) return { line: e.line || null, message: e.message }; throw e; } }
@@ -332,7 +334,7 @@
     let m = null;
     const where = n => `the box "${(n.text || '').trim() || n.type}"`;
     try {
-      m = machine(inputs, limit, files, opts && opts.given);
+      m = machine(inputs, limit, files, opts && opts.given, opts && opts.random);
       const done = r => Object.assign(r, { used: m.used(), vars: m.snapshot(opts && opts.vars) });
       const isStart = n => /^(start|begin)$/i.test((n.text || '').trim());
       const isStop = n => /^(stop|end|finish)$/i.test((n.text || '').trim());
