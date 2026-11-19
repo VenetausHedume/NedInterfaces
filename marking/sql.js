@@ -57,10 +57,13 @@
           throw new SErr('A WHERE condition needs a comparison such as = or >.');
         }
         i++; const rr = val();
-        return r => { let a = l(r), b = rr(r); if (typeof a === 'string' && typeof b === 'string') { a = a.toLowerCase(); b = b.toLowerCase(); } else if (typeof a !== typeof b) { if (!isNaN(+a) && !isNaN(+b)) { a = +a; b = +b; } else { a = String(a).toLowerCase(); b = String(b).toLowerCase(); } }
+        return r => { let a = l(r), b = rr(r); const yn = v => typeof v === 'boolean' || /^(true|false|yes|no|y|n)$/i.test(String(v)); if ((typeof a === 'boolean' || typeof b === 'boolean') && yn(a) && yn(b)) { a = a === true || /^(true|yes|y)$/i.test(String(a)); b = b === true || /^(true|yes|y)$/i.test(String(b)); } else if (typeof a === 'string' && typeof b === 'string') { a = a.toLowerCase(); b = b.toLowerCase(); } else if (typeof a !== typeof b) { if (!isNaN(+a) && !isNaN(+b)) { a = +a; b = +b; } else { a = String(a).toLowerCase(); b = String(b).toLowerCase(); } }
           switch (o.v) { case '=': return a === b; case '<>': return a !== b; case '<': return a < b; case '>': return a > b; case '<=': return a <= b; default: return a >= b; } };
       }
-      function val() { const t = T[i]; if (!t) throw new SErr('The condition is not finished.'); i++; if (t.t === 'num' || t.t === 'str') return () => t.v; if (t.t === 'id') { if (t.u === 'TRUE') return () => true; if (t.u === 'FALSE') return () => false; const k = ci(t.v); return r => r[k]; } throw new SErr(`"${t.v}" cannot be used in a condition.`); }
+      function val() { const t = T[i]; if (!t) throw new SErr('The condition is not finished.'); i++; if (t.t === 'num' || t.t === 'str') return () => t.v; if (t.t === 'id') { if (t.u === 'TRUE') return () => true; if (t.u === 'FALSE') return () => false;
+        // Yes / No / Y / N written without quotes (Cambridge accepts them for a Boolean field) when no column has that name
+        if (/^(YES|NO|Y|N)$/.test(t.u) && !cols.some(c => c.toUpperCase() === t.u)) return () => /^Y/.test(t.u);
+        const k = ci(t.v); return r => r[k]; } throw new SErr(`"${t.v}" cannot be used in a condition.`); }
       function and() { let a = prim(); while (is('AND')) { i++; const b = prim(), x = a; a = r => x(r) && b(r); } return a; }
       function or() { let a = and(); while (is('OR')) { i++; const b = and(), x = a; a = r => x(r) || b(r); } return a; }
       if (is('WHERE')) { i++; where = or(); }

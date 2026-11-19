@@ -689,8 +689,14 @@
     const c = circuitTables(value, vars);
     const out = c.outs.find(o => !answer.output || String(o.label).toUpperCase() === String(answer.output).toUpperCase()) || c.outs[0];
     if (out && out.sig === want) return { score: max, max, status: 'marked', detail: { table: out.sig, expected: want, match: true } };
-    if (!e) {                                     // only the truth table is known: part marks for the rows the circuit gets right
-      const right = out && out.sig ? [...want].filter((b, i) => b === out.sig[i]).length : 0, half = want.length / 2;
+    if (!e) {                                     // only the truth table is known: part marks for the rows the circuit gets right,
+      // and only for a real attempt: the output comes from a gate and every input is used
+      const feeds = {}; (value.wires || []).forEach(w => { feeds[w.to.id + ':' + w.to.pin] = w.from.id; });
+      const outSrc = out ? feeds[((value.outputs || []).find(o => o.label === out.label) || {}).id + ':in'] : null;
+      const ins = (value.inputs || []).filter(t => vars.includes(String(t.label).toUpperCase()));
+      const used = new Set((value.wires || []).map(w => w.from.id));
+      const real = !!(outSrc && (value.gates || []).some(g => g.id === outSrc) && ins.length === vars.length && ins.every(t => used.has(t.id)));
+      const right = real && out && out.sig ? [...want].filter((b, i) => b === out.sig[i]).length : 0, half = want.length / 2;
       return { score: Math.min(Math.max(0, max - 1), Math.floor(Math.max(0, max - 1) * Math.max(0, right - half) / half)), max, status: 'unsure',
         detail: { table: out ? out.sig : null, expected: want, match: false, rowsRight: right, outputWired: !!(out && out.sig) } };
     }
