@@ -386,7 +386,7 @@
       const w = String(want).toLowerCase().trim();
       let at = -1;
       if (w !== '' && !isNaN(+w)) { const re = /-?\d+(?:\.\d+)?/g; re.lastIndex = pos; let m; while ((m = re.exec(hay))) { const dp = (m[0].split('.')[1] || '').length; if (Math.abs(+m[0] - +w) < 1e-6 * Math.max(1, Math.abs(+w)) || (dp >= 2 && Math.abs(+m[0] - +w) <= 0.5 * Math.pow(10, -dp) + 1e-9)) { at = m.index + m[0].length; break; } } }
-      else { const k = hay.indexOf(w, pos); if (k >= 0) at = k + w.length; }
+      else { let k = hay.indexOf(w, pos); while (k >= 0 && !/^(no|not)\b/.test(w) && /\b(no|not)\s+$/.test(hay.slice(Math.max(0, k - 5), k))) k = hay.indexOf(w, k + 1); if (k >= 0) at = k + w.length; }   // 'no drought' is not 'drought'
       if (at < 0) return false; pos = at;
     }
     return true;
