@@ -54,7 +54,7 @@
       const DEFTEXT = { start: '', process: '', io: '', decision: '' };
 
       function addNode(type, x, y, text) {
-        const s = SIZE[type];
+        const s = SIZE[type] || SIZE.process;          // an unknown shape type is drawn as a process box
         const N = { id: uid++, type, x, y, w: s.w, h: s.h, text: text != null ? text : DEFTEXT[type] };
         const g = svg('g', {});
         let shape;
