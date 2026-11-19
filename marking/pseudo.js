@@ -107,6 +107,11 @@
       while (n < L.length && !(first().t === 'kw' && enders.includes(first().v))) out.push(stmt());
       return out;
     }
+    function isArm(row) {                      // '1 : …', '"A" : …', 'X, Y : …' starts a new CASE value
+      const t = row.toks; if (!t.length || t[0].t === 'kw') return false;
+      const c = t.findIndex(x => x.t === 'op' && x.v === ':'), a = t.findIndex(x => x.t === 'op' && (x.v === '←' || x.v === '='));
+      return c > 0 && (a < 0 || c < a);
+    }
     function endifAhead() {                    // is there an ENDIF for an IF that starts here, before the enclosing block ends?
       let depth = 0;
       for (let k = n; k < L.length; k++) {
@@ -154,7 +159,12 @@
               else if (kw('ELSE') && L[n].toks.length > 1) { const e = L[n]; e.toks.shift(); no.push(stmt()); }
               return { k: 'if', cond, yes, no, line };
             }
-            if (rest.length) { const last = rest[rest.length - 1]; if (rest.length > 1 && last.t === 'kw' && last.v === 'ENDIF') L.splice(n, 0, { line, toks: rest.slice(0, -1) }, { line, toks: [last] }); else L.splice(n, 0, { line, toks: rest }); }   // one-line IF … THEN … ENDIF
+            if (rest.length) { const last = rest[rest.length - 1];
+              if (rest.length > 1 && last.t === 'kw' && last.v === 'ENDIF') {
+                const body = rest.slice(0, -1), el = body.findIndex(x => x.t === 'kw' && x.v === 'ELSE');
+                if (el > 0) L.splice(n, 0, { line, toks: body.slice(0, el) }, { line, toks: body.slice(el) }, { line, toks: [last] });   // IF … THEN a ELSE b ENDIF on one line
+                else L.splice(n, 0, { line, toks: body }, { line, toks: [last] });
+              } else L.splice(n, 0, { line, toks: rest }); }   // one-line IF … THEN … ENDIF
             yes.push(...block(['ELSE', 'ENDIF', 'ELSEIF']));
             if (kw('ELSE')) { const e = L[n]; if (e.toks.length > 1) { e.toks.shift(); } else n++; no.push(...block(['ENDIF'])); }
             need('ENDIF', 'IF', line);
@@ -167,8 +177,12 @@
               if (q.is('kw', 'TO')) { q.eat('kw', 'TO'); range = q.expr(); }
               while (q.is('op', ',')) { q.eat('op', ','); vals.push(q.expr()); }
               q.eat('op', ':'); const r = q.rest(); n++;
-              if (!r.length) throw new PErr('Put the statement for this CASE value after the colon.', row.line);
-              L.splice(n, 0, { line: row.line, toks: r }); arms.push({ vals, range, body: [stmt()] });
+              const body = [];
+              if (r.length) { L.splice(n, 0, { line: row.line, toks: r }); body.push(stmt()); }
+              // more statements for the same value on the next lines (Cambridge allows several), until the next value
+              while (n < L.length && !kw('ENDCASE') && !kw('OTHERWISE') && !isArm(L[n])) body.push(stmt());
+              if (!body.length) throw new PErr('Put the statement for this CASE value after the colon.', row.line);
+              arms.push({ vals, range, body });
             }
             need('ENDCASE', 'CASE', line); return { k: 'case', subj, arms, other, line }; }
           case 'FOR': { n++; p.eat('kw', 'FOR'); const v = p.eat('id').v; if (p.is('op', '←')) p.eat('op', '←'); else p.eat('op', '='); const from = p.expr(); p.eat('kw', 'TO'); const to = p.expr(); let step = null; if (p.is('kw', 'STEP')) { p.eat('kw', 'STEP'); step = p.expr(); }
@@ -316,6 +330,11 @@
     return v;
   }
   function fromArray(a) {
+    if (a.dims.some(d => d[0] < -1e6 || d[1] > 1e6)) {          // never declared: bounds from the elements that were set
+      const keys = [...a.data.keys()].map(k => k.split(',').map(Number));
+      if (!keys.length) return [];
+      a = Object.assign({}, a, { dims: a.dims.map((_, d) => [Math.min(...keys.map(k => k[d])), Math.max(...keys.map(k => k[d]))]) });
+    }
     if (a.dims.length === 1) { const out = []; for (let i = a.dims[0][0]; i <= Math.min(a.dims[0][1], a.dims[0][0] + 999); i++) out.push(a.data.has(String(i)) ? a.data.get(String(i)) : null); return out; }
     const out = []; for (let i = a.dims[0][0]; i <= Math.min(a.dims[0][1], 200); i++) { const row = []; for (let j = a.dims[1][0]; j <= Math.min(a.dims[1][1], 200); j++) row.push(a.data.has(i + ',' + j) ? a.data.get(i + ',' + j) : null); out.push(row); } return out;
   }

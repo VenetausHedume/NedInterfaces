@@ -38,7 +38,13 @@
       .replace(/ on line \d+$/, '');
   }
 
-  const pyLit = v => Array.isArray(v) ? '[' + v.map(pyLit).join(', ') + ']' : typeof v === 'string' ? JSON.stringify(v) : typeof v === 'boolean' ? (v ? 'True' : 'False') : v == null ? 'None' : String(v);
+  const pyLit = v => (v && typeof v === 'object' && !Array.isArray(v) && v.dims) ? pyLit(dimsToList(v)) : Array.isArray(v) ? '[' + v.map(pyLit).join(', ') + ']' : typeof v === 'string' ? JSON.stringify(v) : typeof v === 'boolean' ? (v ? 'True' : 'False') : v == null ? 'None' : String(v);
+  // a given array written as { dims, data } becomes a Python list (index 0 = the lowest index)
+  function dimsToList(v) {
+    const d = v.dims, get = k => (v.data || {})[k] === undefined ? null : v.data[k];
+    if (d.length === 1) { const o = []; for (let i = d[0][0]; i <= d[0][1]; i++) o.push(get(String(i))); return o; }
+    const o = []; for (let i = d[0][0]; i <= d[0][1]; i++) { const r = []; for (let j = d[1][0]; j <= d[1][1]; j++) r.push(get(i + ',' + j)); o.push(r); } return o;
+  }
   /* opts: { given:{ Name: value } set before the program (lists start at 0, as Python students write them), vars:[names] read after it } */
   function run(code, inputs, limit, files, opts) {
     const given = (opts && opts.given) || {}, want = (opts && opts.vars) || [];
