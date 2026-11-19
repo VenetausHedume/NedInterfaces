@@ -264,7 +264,7 @@
         SUBSTRING: s => show(s[0]).substr(num(s[1], line) - 1, num(s[2], line)), MID: s => show(s[0]).substr(num(s[1], line) - 1, num(s[2], line)), LEFT: s => show(s[0]).slice(0, num(s[1], line)), RIGHT: s => { const t = show(s[0]); return t.slice(Math.max(0, t.length - num(s[1], line))); },
         ROUND: s => { const p = Math.pow(10, s.length > 1 ? num(s[1], line) : 0); return Math.round(num(s[0], line) * p) / p; }, INT: s => Math.trunc(num(s[0], line)), RANDOM: s => (s.length >= 2 ? num(s[0], line) + Math.floor(rnd() * (num(s[1], line) - num(s[0], line) + 1)) : rnd()), RAND: s => (s.length >= 2 ? num(s[0], line) + Math.floor(rnd() * (num(s[1], line) - num(s[0], line) + 1)) : s.length ? Math.floor(rnd() * num(s[0], line)) : rnd()),
         NUM_TO_STR: s => show(s[0]), STR_TO_NUM: s => num(s[0], line), ASC: s => show(s[0]).charCodeAt(0), CHR: s => String.fromCharCode(num(s[0], line)) };
-      if (B[name]) return B[name](args);
+      if (B[name] && !defs.has(name)) return B[name](args);          // a FUNCTION the program defines wins over a built-in of the same name
       const d = defs.get(name);
       if (!d) throw new PErr(`There is no function or procedure called "${name}".`, line);
       if (frames.length > 60) throw new PErr('Too many calls inside calls.', line);

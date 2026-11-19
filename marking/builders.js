@@ -516,7 +516,7 @@
           const fmt = v => { if (v && typeof v === 'object' && !Array.isArray(v)) { if (v.of !== undefined) return `${v.count != null ? 'exactly ' + v.count + ' ' : ''}"${v.of}"` + (v.notAt ? ' (not at ' + v.notAt.map(p => '[' + p.join(',') + ']').join(' or ') + ')' : '');
               return v.min === v.max && v.min != null ? String(v.min) : `${v.int ? 'a whole number' : 'a number'}${v.min != null ? ' from ' + v.min : ''}${v.max != null ? ' to ' + v.max : ''}`; }
             const j = JSON.stringify(v); return j && j.length > 80 ? j.slice(0, 77) + '…' : j; };
-          const what = t.want ? Object.keys(t.want).map(k => `${k} = ${fmt(t.want[k])}`).join(', ') : t.expect.join(', ');
+          const what = t.want ? Object.keys(t.want).map(k => `${k} = ${fmt(t.want[k])}`).join(', ') : t.expect.length ? t.expect.join(', ') : t.filesOk === false ? 'the right file contents' : 'the right result';
           const got = t.want ? Object.keys(t.want).map(k => `${k} = ${fmt((t.vars || {})[k] === undefined ? null : t.vars[k])}`).join(', ') : (t.output.join(' | ') || 'nothing');
           const inp = t.input && t.input.length ? `With inputs ${t.input.join(', ')}` : 'Test ' + (i + 1);
           if (i >= shown) { t.pass ? good(`Hidden test ${i + 1 - shown}: right.`) : bad(`Hidden test ${i + 1 - shown}: not right` + (t.error ? ` (it stopped: ${t.error.message})` : '') + '.'); return; }
