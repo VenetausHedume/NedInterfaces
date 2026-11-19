@@ -49,7 +49,13 @@
         if (is('NOT')) { i++; const e = prim(); return r => !e(r); }
         const l = val(); const o = T[i];
         if (o && o.t === 'id' && o.u === 'LIKE') { i++; const p = val(); return r => { const re = new RegExp('^' + String(p(r)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i'); return re.test(String(l(r))); }; }
-        if (!o || o.t !== 'op' || !['=', '<>', '<', '>', '<=', '>='].includes(o.v)) throw new SErr('A WHERE condition needs a comparison such as = or >.');
+        if (!o || o.t !== 'op' || !['=', '<>', '<', '>', '<=', '>='].includes(o.v)) {
+          // a Boolean field on its own ('WHERE News AND Sport') is allowed by Cambridge: it means News = TRUE
+          const yesNo = v => typeof v === 'boolean' || /^(true|false|yes|no|y|n)$/i.test(String(v));
+          if ((!o || (o.t === 'id' && ['AND', 'OR', 'ORDER'].includes(o.u)) || (o.t === 'op' && [')', ';'].includes(o.v))) && tab.rows.length && tab.rows.every(r => yesNo(l(r))))
+            return r => { const v = l(r); return v === true || /^(true|yes|y)$/i.test(String(v)); };
+          throw new SErr('A WHERE condition needs a comparison such as = or >.');
+        }
         i++; const rr = val();
         return r => { let a = l(r), b = rr(r); if (typeof a === 'string' && typeof b === 'string') { a = a.toLowerCase(); b = b.toLowerCase(); } else if (typeof a !== typeof b) { if (!isNaN(+a) && !isNaN(+b)) { a = +a; b = +b; } else { a = String(a).toLowerCase(); b = String(b).toLowerCase(); } }
           switch (o.v) { case '=': return a === b; case '<>': return a !== b; case '<': return a < b; case '>': return a > b; case '<=': return a <= b; default: return a >= b; } };

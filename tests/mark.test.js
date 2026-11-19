@@ -245,7 +245,22 @@ t('ionic equation with brackets', sc('text', { equation: 'Fe3+ + 3OH- → Fe(OH)
 t('word equation, any order', sc('text', { equation: 'glucose + oxygen → carbon dioxide + water' }, { latex: 'oxygen + glucose → water + carbon dioxide' }, 2), 2);
 t('word equation, one side wrong', sc('text', { equation: 'glucose + oxygen → carbon dioxide + water' }, { latex: 'glucose + oxygen → carbon dioxide + energy' }, 2), 1);
 t('logic expression equivalent', sc('text', { logic: '(A AND B) OR NOT C' }, { latex: 'X = NOT C OR (B AND A)' }, 2), 2);
-t('logic expression different', sc('text', { logic: '(A AND B) OR NOT C' }, { latex: 'A AND B OR C' }, 2), 0);
+t('logic expression different: the right bracketed part still scores', sc('text', { logic: '(A AND B) OR NOT C' }, { latex: 'A AND B OR C' }, 2), 1);
+t('logic expression wrong everywhere', sc('text', { logic: '(A AND B) OR NOT C' }, { latex: 'A OR C' }, 2), 0);
+t('logic expression: both parts right, wrong gate joining them', sc('text', { logic: '(A XOR B) OR (B AND NOT C)' }, { latex: '(A XOR B) AND (B AND NOT C)' }, 3), 2);
+{ const tr = { mode: 'trace', columns: { 0: ['0', '4'], 1: ['16', '7'], 2: ['TRUE'] }, fixed: { r1c0: '0' } };
+  t('trace table: right values in order, repeats and blank rows allowed', sc('table', tr, { cells: { r1c1: '16', r2c1: '16', r3c1: '7', r4c0: '4', r4c2: 'true' } }, 3), 3);
+  t('trace table: one column in the wrong order', sc('table', tr, { cells: { r1c1: '7', r2c1: '16', r4c0: '4', r4c2: 'TRUE' } }, 3), 2);
+  t('trace table: negative numbers with a dash', sc('table', { mode: 'trace', columns: { 0: ['4', '–1'] } }, { cells: { r1c0: '4', r2c0: '-1' } }, 1), 1);
+  t('trace table: groups (two marks, one for a single error)', sc('table', { mode: 'trace', columns: { 0: ['1'], 1: ['2'] }, groups: [{ cols: ['0', '1'], marks: 2, oneError: 1 }] }, { cells: { r1c0: '1', r1c1: '3' } }, 2), 1); }
+{ const er = { mode: 'errors', errors: [{ line: '04', fixes: ['>'] }, { line: '08', fixes: ['Counter'] }, { line: '11', fixes: ['Total ← Total + Number'] }] };
+  t('find the errors: all three', sc('table', er, { cells: { r1c1: '4', r1c2: 'IF List[Counter] > Max', r2c1: 'line 8', r2c2: 'Counter', r3c1: '11', r3c2: 'Total <- Total + Number' } }, 3), 3);
+  t('find the errors: right line, wrong fix; same line twice', sc('table', er, { cells: { r1c1: '4', r1c2: 'IF List[Counter] = Max', r2c1: '8', r2c2: 'Counter', r3c1: '8', r3c2: 'Counter' } }, 3), 1); }
+t('fill the gaps', sc('cloze', { blanks: { 0: { alts: ['50'], exact: true }, 1: { alts: ['FALSE'], exact: true } } }, { blanks: { 0: '50', 1: 'false' } }, 2), 2);
+t('fill the gaps: a wrong gap', sc('cloze', { blanks: { 0: { alts: ['50'], exact: true }, 1: { alts: ['FALSE'], exact: true } } }, { blanks: { 0: '49', 1: 'FALSE' } }, 2), 1);
+t('logic circuit known only by its truth table: right circuit', sc('logic', { table: { vars: ['A', 'B'], out: '0001' } },
+  { gates: [{ id: 'g', gate: 'AND' }], inputs: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], outputs: [{ id: 'o', label: 'X' }], wires: [{ from: { id: 'a' }, to: { id: 'g', pin: 'in0' } }, { from: { id: 'b' }, to: { id: 'g', pin: 'in1' } }, { from: { id: 'g' }, to: { id: 'o', pin: 'in' } }] }, 2), 2);
+
 
 // ── from the real candidate answers (Cambridge ECR booklets, Nov 2026) ──
 t('quoted key words must be together', sc('text', { points: [{ alts: ['"collision rate" increases'] }], need: 1 }, { latex: 'more particles to collide so the rate would increase' }, 1), 0);

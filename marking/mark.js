@@ -518,7 +518,13 @@
       const env = {}; vars.forEach((v, i) => { env[v] = (r >> (vars.length - 1 - i)) & 1; });
       if (evalExpr(e, env) !== evalExpr(m, env)) bad = env;
     }
-    return { score: bad ? 0 : max, max, status: 'marked', detail: { logic: { same: !bad, row: bad } } };
+    if (!bad) return { score: max, max, status: 'marked', detail: { logic: { same: true } } };
+    // part marks: each bracketed part of the model (Cambridge: "A XOR B" 1 mark, "B AND NOT C" 1 mark, whole 1 mark)
+    const sig = x => rows(vars).map(env => evalExpr(x, env)).join('');
+    const mine = new Set(subExprs(e).map(sig));
+    const parts = [m.a, m.b].filter(x => x && !x.v);
+    const got = parts.filter(x => mine.has(sig(x))).length;
+    return { score: Math.min(Math.max(0, max - 1), got), max, status: 'marked', detail: { logic: { same: false, row: bad, parts: parts.length, partsRight: got } } };
   }
 
   /* ───────────── mcq ─────────────
@@ -563,6 +569,70 @@
       n = Object.keys(rows).filter(r => rows[r].every(k => right.includes(k))).length;
     }
     return { score: ladder(n, max, answer.scale), max, status: 'marked', detail: { right, wrong, counted: n } };
+  }
+
+  /* ───────────── trace tables (and any table marked column by column) ─────────────
+     answer: { mode:'trace', columns:{ <col index>:[values top to bottom] }, fixed?:{ rRcC:'value printed in the paper' },
+               groups?:[{ cols:[…], marks, oneError? }] }
+     value : { cells:{ rRcC:'…' } }
+     A column is right when its values, read top to bottom, are the key's: blank cells are skipped and a value written
+     again on the next row counts once (examiners accept both). Without groups each column is worth the same share. */
+  function traceSame(a, b) {
+    const n = x => latexToText(String(x)).replace(/[“”"'‘’″ꞌ]/g, '').replace(/[−–—]/g, '-').replace(/\s+/g, '').toLowerCase();
+    const A = n(a), B = n(b);
+    if (A === B) return true;
+    const p = parseNumber(n(a)), q = parseNumber(n(b));
+    return !!(p && q && !p.unit && !q.unit && Math.abs(p.n - q.n) < 1e-9);
+  }
+  function traceSeq(cells, c) {
+    const rows = Object.keys(cells).map(k => k.match(/^r(\d+)c(\d+)$/)).filter(m => m && +m[2] === +c && latexToText(String(cells[m[0]] || '')).trim())
+      .map(m => [+m[1], latexToText(String(cells[m[0]])).trim()]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
+    return rows.filter((v, i) => i === 0 || !traceSame(v, rows[i - 1]));
+  }
+  function markTrace(answer, value, max) {
+    const got = Object.assign({}, answer.fixed || {}, (value && value.cells) || {});
+    if (!Object.keys((value && value.cells) || {}).some(k => latexToText(String(value.cells[k] || '')).trim())) return { score: 0, max, status: 'unanswered', detail: {} };
+    const per = {};
+    Object.keys(answer.columns || {}).forEach(c => {
+      const want = (answer.columns[c] || []).filter((v, i, a) => i === 0 || !traceSame(v, a[i - 1]));
+      const have = traceSeq(got, c);
+      let wrong = Math.abs(want.length - have.length);
+      for (let i = 0; i < Math.min(want.length, have.length); i++) if (!traceSame(want[i], have[i])) wrong++;
+      per[c] = { ok: wrong === 0, wrong, want, have };
+    });
+    const cols = Object.keys(per);
+    let score;
+    if (answer.groups && answer.groups.length) {
+      score = answer.groups.reduce((s, g) => {
+        const w = g.cols.reduce((t, c) => t + (per[c] ? per[c].wrong : 0), 0);
+        return s + (w === 0 ? g.marks : (g.oneError != null && w === 1 ? g.oneError : 0));
+      }, 0);
+    } else {
+      const right = cols.filter(c => per[c].ok).length;
+      score = cols.length === max ? right : right === cols.length ? max : Math.floor(right * max / Math.max(1, cols.length));
+    }
+    return { score: Math.min(max, score), max, status: 'marked', detail: { columns: per, right: cols.filter(c => per[c].ok).length, of: cols.length } };
+  }
+
+  /* ───────────── find the errors: line number + correction ─────────────
+     answer: { mode:'errors', errors:[{ line:'4', fixes:['IF Age > 18'] }] }   value: { cells:{ r1c1:'4', r1c2:'IF Age > 18 THEN' } }
+     Each row scores when its line number is one of the errors (not already used) and the correction contains the
+     corrected code (spaces, capitals and <- / = for ← ignored). */
+  function codeNorm(x) { return latexToText(String(x || '')).replace(/<-|:=/g, '←').replace(/[“”″]/g, '"').replace(/[‘’ꞌ]/g, "'").replace(/[−–]/g, '-').replace(/\s+/g, '').toLowerCase(); }
+  function markErrors(answer, value, max) {
+    const got = (value && value.cells) || {};
+    const rows = {};
+    Object.keys(got).forEach(k => { const m = k.match(/^r(\d+)c(\d+)$/); if (m && latexToText(String(got[k] || '')).trim()) (rows[m[1]] = rows[m[1]] || {})[m[2]] = got[k]; });
+    if (!Object.keys(rows).length) return { score: 0, max, status: 'unanswered', detail: {} };
+    const used = new Set(), per = [];
+    Object.keys(rows).sort((a, b) => a - b).forEach(r => {
+      const line = parseInt(latexToText(String(rows[r][1] || '')).replace(/\D+/g, ' ').trim().split(' ')[0], 10), fix = codeNorm(rows[r][2]);
+      const k = answer.errors.findIndex((e, i) => !used.has(i) && parseInt(e.line, 10) === line);
+      const lineOk = k >= 0, fixOk = lineOk && fix && answer.errors[k].fixes.some(f => fix.includes(codeNorm(f)));
+      if (fixOk) used.add(k);
+      per.push({ row: +r, line: isNaN(line) ? null : line, lineOk, fixOk });
+    });
+    return { score: Math.min(max, used.size), max, status: 'marked', detail: { errors: per, found: used.size, of: answer.errors.length } };
   }
 
   /* ───────────── logic circuits ─────────────
@@ -613,11 +683,17 @@
   }
   function markLogic(answer, value, max) {
     if (!value || !(value.gates || []).length) return { score: 0, max, status: 'unanswered', detail: {} };
-    const e = parseExpr(answer.expr), vars = [...exprVars(e)].sort();
-    const want = rows(vars).map(env => evalExpr(e, env)).join('');
+    const e = answer.expr ? parseExpr(answer.expr) : null;
+    const vars = e ? [...exprVars(e)].sort() : answer.table.vars.map(v => v.toUpperCase());
+    const want = e ? rows(vars).map(env => evalExpr(e, env)).join('') : answer.table.out;
     const c = circuitTables(value, vars);
     const out = c.outs.find(o => !answer.output || String(o.label).toUpperCase() === String(answer.output).toUpperCase()) || c.outs[0];
     if (out && out.sig === want) return { score: max, max, status: 'marked', detail: { table: out.sig, expected: want, match: true } };
+    if (!e) {                                     // only the truth table is known: part marks for the rows the circuit gets right
+      const right = out && out.sig ? [...want].filter((b, i) => b === out.sig[i]).length : 0, half = want.length / 2;
+      return { score: Math.min(Math.max(0, max - 1), Math.floor(Math.max(0, max - 1) * Math.max(0, right - half) / half)), max, status: 'unsure',
+        detail: { table: out ? out.sig : null, expected: want, match: false, rowsRight: right, outputWired: !!(out && out.sig) } };
+    }
     const subs = subExprs(e).map(s => rows(vars).map(env => evalExpr(s, env)).join(''));
     const pool = c.gateSigs.slice();
     let credit = 0;
@@ -729,7 +805,8 @@
     prose: markProse,
     formula: markNumeric, numeric: markNumeric, math: markNumeric,
     mcq: markMcq, match: markMatch,
-    table: (a, v, m, o) => markKeyed('cells', a, v, m, o),
+    table: (a, v, m, o) => (a.mode === 'trace' ? markTrace(a, v, m) : a.mode === 'errors' ? markErrors(a, v, m) : markKeyed('cells', a, v, m, o)),
+    cloze: (a, v, m, o) => markKeyed('blanks', a, v, m, o),
     label: (a, v, m, o) => markKeyed('labels', a, v, m, o),
     place: (a, v, m, o) => markKeyed('spots', a, v, m, o),
     flowfill: (a, v, m, o) => markKeyed('boxes', a, v, m, o),
@@ -741,7 +818,21 @@
     const fn = MARKERS[ui];
     if (!fn) return { score: 0, max, status: 'no_marker', detail: {} };
     if (value == null) return { score: 0, max, status: 'unanswered', detail: {} };
-    return fn(answer, value, max, opts || {}, question);
+    // self-marked parts (long algorithms, levels-of-response): the student ticks the mark points they met, after seeing them
+    if (answer.selfmark && (Array.isArray(value.ticks) || value.self != null)) return selfMark(answer, value, max);
+    const r = fn(answer, value, max, opts || {}, question);
+    if (answer.selfmark && r.status !== 'unanswered' && !(answer.tests || []).length) r.status = 'self_check';
+    return r;
   }
-  return { mark, latexToText, norm, tokens, parseNumber, exprCanon, parseExpr, markPoints, markProse, markNumeric, markMcq, markMatch, markKeyed, markLogic, markPlot, markEcon, MARKERS, algebraSame, markEquation, markLogicText, caseMatters };
+  /* answer.selfmark: true, answer.checklist: ['MP1 …', { text, marks }] ; value.ticks: [indexes] or value.self: a total
+     A ticked point is worth its marks (default 1); the total never passes max. */
+  function selfMark(answer, value, max) {
+    const list = answer.checklist || [];
+    let score;
+    if (value.self != null && !Array.isArray(value.ticks)) score = Math.round(+value.self || 0);
+    else score = [...new Set(value.ticks)].filter(i => Number.isInteger(i) && i >= 0 && i < list.length)
+      .reduce((s, i) => s + ((list[i] && list[i].marks) || 1), 0);
+    return { score: Math.max(0, Math.min(max, score)), max, status: 'self_marked', detail: { ticks: value.ticks || null, self: value.self != null ? +value.self : null } };
+  }
+  return { mark, latexToText, norm, tokens, parseNumber, exprCanon, parseExpr, markPoints, markProse, markNumeric, markMcq, markMatch, markKeyed, markLogic, markPlot, markEcon, MARKERS, algebraSame, markEquation, markLogicText, caseMatters, markTrace, traceSame, markErrors };
 });

@@ -54,7 +54,7 @@
       ],
     },
     function (container, { question, value, onChange }) {
-      const startCode = (value && value.code) || '';
+      const startCode = (value && value.code) || ((question && question.config && question.config.starter) || '');
 
       function buildTextarea() {
         const ta = document.createElement('textarea');

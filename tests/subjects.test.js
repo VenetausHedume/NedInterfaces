@@ -189,7 +189,7 @@ q('0478 Q5(b) WHILE vs REPEAT', 'prose', 4, { points: [{ alts: ['WHILE has the c
 q('0478 Q12(b) why hexadecimal', 'text', 2, { points: [{ alts: ['easier for programmers to read and understand', 'easier to read', 'easier to understand'] }, { alts: ['easier to find errors', 'easier to debug'] }, { alts: ['shorter than binary', 'fewer digits', 'takes up less screen space'] }, { alts: ['easy to convert to binary'] }], need: 2 }, [
   [T('it is easier for humans to read and uses fewer digits than binary'), 2], [T('it is quicker for the computer'), 0, 'a common wrong idea'],
 ]);
-q('0478 logic expression', 'text', 2, { logic: '(A AND B) OR NOT C' }, [[T('X = (A AND B) OR (NOT C)'), 2], [T('X = A.B + ¬C'), 2, 'Boolean symbols'], [T('X = A AND B OR C'), 0]]);
+q('0478 logic expression', 'text', 2, { logic: '(A AND B) OR NOT C' }, [[T('X = (A AND B) OR (NOT C)'), 2], [T('X = A.B + ¬C'), 2, 'Boolean symbols'], [T('X = A AND B OR C'), 1, 'the A AND B part is right: Cambridge gives a mark per correct part'], [T('X = A OR C'), 0]]);
 q('0478 pseudocode average', 'code', 4, { tests: [{ input: [4, 6, 8, -1], expect: [6] }, { input: [10, -1], expect: [10] }], features: ['loop', 'input', 'totalling', 'counting'] }, [
   [{ code: 'Total <- 0\nCount <- 0\nINPUT N\nWHILE N <> -1 DO\n  Total <- Total + N\n  Count <- Count + 1\n  INPUT N\nENDWHILE\nOUTPUT Total / Count' }, 4, 'pseudocode'],
   [{ lang: 'python', code: 'total = 0\ncount = 0\nn = int(input())\nwhile n != -1:\n    total += n\n    count += 1\n    n = int(input())\nprint(total / count)' }, 4, 'Python (prints 6.0)'],

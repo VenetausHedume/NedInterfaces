@@ -194,7 +194,7 @@ function emitStruct(){
   const gs=gates.map(g=>({id:g.id,gate:g.type,x:R(g.node.x()),y:R(g.node.y())}));
   const ins=terms.filter(t=>t.kind==='in').map(t=>({id:t.id,label:t.label,x:R(t.node.x()),y:R(t.node.y())}));
   const outs=terms.filter(t=>t.kind==='out').map(t=>({id:t.id,label:t.label,x:R(t.node.x()),y:R(t.node.y())}));
-  const empty = gs.length===0 && ins.length===0 && outs.length===0 && wires.length===0;
+  const empty = gs.length===0 && wires.length===0;          // terminals alone are not an answer yet
   onChange(empty ? null : {gates:gs,inputs:ins,outputs:outs,wires:wires.map(w=>({from:w.from,to:w.to}))});
 }
 
@@ -229,6 +229,13 @@ function loadValue(v){
   loading=false; drawPins(); drawWires(); layer.batchDraw();
 }
 if(value) loadValue(value);
+else if((question&&question.config&&question.config.inputs||[]).length){
+  // the question names the inputs and the output: put them on the canvas ready to wire
+  const ins=question.config.inputs; loading=true;
+  ins.forEach((L,i)=>addTerminal('in',70,Math.round(H/2+(i-(ins.length-1)/2)*90),'t'+(uid++),String(L)));
+  addTerminal('out',W-70,Math.round(H/2),'t'+(uid++),question.config.output||'X');
+  inLetter=65+ins.length; loading=false; drawPins(); layer.batchDraw();
+}
 emitStruct();
 
       return {

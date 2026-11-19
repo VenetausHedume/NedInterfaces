@@ -20,6 +20,7 @@
     const panel = Ned.el('div', { style: 'margin-top:12px;max-width:100%;' });
     if (kind === 'sql') {
       const tabs = cfg.tables || {};
+      if (!Object.keys(tabs).length) return;            // no table printed in the question: nothing to run the query on
       if (Object.keys(tabs).length) {
         const top = Ned.el('div', { style: 'margin-bottom:10px;' });
         Object.keys(tabs).forEach(n => { top.appendChild(Ned.el('div', { style: 'font-size:13px;font-weight:600;margin:4px 0;' }, ['Table: ' + n])); top.appendChild(table(tabs[n].columns, tabs[n].rows)); });

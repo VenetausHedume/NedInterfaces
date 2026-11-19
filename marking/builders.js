@@ -345,7 +345,8 @@
         if (d.logic) { const L = d.logic;
           if (L.error) bad(L.error + '. Use AND, OR, NOT, NAND, NOR, XOR and brackets.');
           else if (L.same) good('Your expression gives the right output for every combination of inputs.');
-          else bad('When ' + Object.keys(L.row).map(k => k + ' = ' + L.row[k]).join(', ') + ' your expression gives a different output from the correct one.');
+          else { bad('When ' + Object.keys(L.row).map(k => k + ' = ' + L.row[k]).join(', ') + ' your expression gives a different output from the correct one.');
+            if (L.parts) info(`${L.partsRight} of the ${L.parts} bracketed parts of the expression are right.`); }
           break; }
         (d.awarded || []).forEach(i => good('You made the point: ' + answer.points[i].alts[0] + '.'));
         if (r.score < r.max) { const need = Math.min(r.max, answer.need || r.max) - r.score; const rest = (d.missed || []).map(i => answer.points[i].alts[0]);
@@ -373,16 +374,29 @@
         const L = cfg.left || [], R = cfg.right || [], nameL = id => (L.find(x => String(x.id) === String(id)) || {}).text || id, nameR = id => (R.find(x => String(x.id) === String(id)) || {}).text || id;
         Object.keys(answer.pairs).filter(k => !(d.right || []).includes(k)).forEach(k => bad(`${nameL(k)} goes with ${nameR(answer.pairs[k])}.`));
         break; }
-      case 'table': keyed('cells', 'cell'); if (answer.scheme === 'row') info('This table is marked by row: every cell in a row must be right.'); break;
+      case 'table': if (answer.mode === 'errors') {
+          (d.errors || []).forEach(e => (e.fixOk ? good(`Line ${e.line}: right error, right correction.`) : e.lineOk ? bad(`Line ${e.line} has an error, but the correction is not right.`) : bad(e.line == null ? 'Give the line number of each error.' : `Line ${e.line} is not one of the errors (or you named it twice).`)));
+          if (d.found < r.max) info(`${d.found} of ${r.max} errors found and corrected.`);
+          break; }
+        if (answer.mode === 'trace') {
+          const H = answer.headers || (cfg.table && cfg.table[0]) || [];
+          Object.keys(d.columns || {}).forEach(c => { const x = d.columns[c], name = H[c] || 'column ' + (+c + 1);
+            if (x.ok) good(`Column ${name}: right.`);
+            else bad(`Column ${name}: should read ${x.want.join(', ') || '(nothing)'}` + (x.have.length ? `; yours reads ${x.have.join(', ')}.` : '; yours is empty.')); });
+          info('Trace tables are marked column by column: the values in each column must appear in the right order. Writing a value again on the next row is fine.');
+          break; }
+        keyed('cells', 'cell'); if (answer.scheme === 'row') info('This table is marked by row: every cell in a row must be right.'); break;
       case 'label': keyed('labels', 'label'); break;
+      case 'cloze': keyed('blanks', 'blank'); break;
       case 'place': keyed('spots', 'spot'); break;
       case 'flowfill': keyed('boxes', 'box'); break;
       case 'logic': {
         if (d.match) good('Your circuit gives the right output for every combination of inputs.');
         else { if (!d.outputWired) bad('The output is not connected to a complete path from the inputs.');
-          else { const vars = [...new Set((String(answer.expr).match(/\b[A-Za-z]\b/g) || []).map(x => x.toUpperCase()))].sort(); const k = [...d.expected].findIndex((c, i) => c !== d.table[i]);
+          else { const vars = answer.expr ? [...new Set((String(answer.expr).match(/\b[A-Za-z]\b/g) || []).map(x => x.toUpperCase()))].sort() : answer.table.vars; const k = [...d.expected].findIndex((c, i) => c !== d.table[i]);
             if (k >= 0) { const bits = k.toString(2).padStart(vars.length, '0'); bad(`When ${vars.map((v, i) => v + ' = ' + bits[i]).join(', ')} the output should be ${d.expected[k]}, but your circuit gives ${d.table[k]}.`); } }
-          info(`${d.gatesRight || 0} of ${d.gatesExpected} gates produce the right signal.`); }
+          if (d.gatesExpected) info(`${d.gatesRight || 0} of ${d.gatesExpected} gates produce the right signal.`);
+          else if (d.rowsRight != null) info(`Your circuit gives the right output in ${d.rowsRight} of ${d.expected.length} rows of the truth table.`); }
         break; }
       case 'plot': {
         if (d.points) { (d.points.right === d.points.of && !d.points.extra) ? good('Every point is plotted correctly.') : bad(`${d.points.right} of ${d.points.of} points are within half a small square` + (d.points.extra ? `, and ${d.points.extra} point${d.points.extra === 1 ? ' is' : 's are'} in the wrong place.` : '.')); }

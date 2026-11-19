@@ -251,5 +251,15 @@ cases.forEach(([ui, a, v, qq]) => { const question = Object.assign({ marks: 4 },
 t('feedback for all ' + cases.length + ' wrong-answer cases is readable', thin, []);
 t('feedback for a blank answer', M.explain('text', { points: [] }, null, M.mark('text', { points: [] }, null, { marks: 1 }), {})[0].text, 'Nothing to mark yet.');
 if (process.argv[2] === '-fb') cases.forEach(([ui, a, v, qq]) => { const question = Object.assign({ marks: 4 }, qq); const r = M.mark(ui, a, v, question); console.log('\n' + ui + ' ' + r.score + '/' + r.max); M.explain(ui, a, v, r, question).forEach(f => console.log('   ' + { good: '+', bad: 'x', info: 'i' }[f.kind] + ' ' + f.text)); });
+// ── CS additions: Boolean fields in WHERE, self-marked algorithms, trace-table feedback ──
+{ const tabs = { Contract: { columns: ['ContractNumber', 'News', 'Sport'], rows: [[1, true, true], [2, true, false], [3, false, true]] } };
+  t('SQL: a Boolean field on its own in WHERE', Q.run('SELECT ContractNumber FROM Contract WHERE News AND Sport;', tabs).rows, [[1]]);
+  t('SQL: WHERE News = TRUE gives the same', sc('sql', { query: 'SELECT ContractNumber FROM Contract WHERE News AND Sport;', tables: tabs }, { code: 'SELECT ContractNumber FROM Contract WHERE News = TRUE AND Sport = TRUE;' }, 2), 2); }
+{ const a = { selfmark: true, checklist: ['loop', 'total', { text: 'output', marks: 2 }] };
+  t('self-marked: before ticking, the status asks for it', M.mark('code', a, { code: 'OUTPUT 1' }, { marks: 4 }).status, 'self_check');
+  t('self-marked: ticks add up (a point can be worth 2)', sc('code', a, { code: 'x', ticks: [0, 2] }, 4), 3);
+  t('self-marked: never above the marks', sc('code', a, { code: 'x', self: 9 }, 4), 4); }
+{ const a = { mode: 'trace', columns: { 0: ['1', '2'] }, headers: ['Count'] }, v = { cells: { r1c0: '1', r2c0: '3' } };
+  const r = M.mark('table', a, v, { marks: 1 }); t('trace feedback names the column and the right values', M.explain('table', a, v, r, { marks: 1 })[0].text, 'Column Count: should read 1, 2; yours reads 1, 3.'); }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

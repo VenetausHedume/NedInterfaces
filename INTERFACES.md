@@ -29,6 +29,14 @@ Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowc
 `NedMark.explain(ui, answer, value, result, question)` turns a result into lines a student can read
 ("Gradient: right.", "Test 2 printed 7, expected 9."), shown under the score so a wrong answer still teaches something.
 
+**Self-marked parts.** Any answer may carry `selfmark:true, checklist:[…]` (and `levels:true` for levels-of-response).
+The first check returns status `self_check`; the student then sends `ticks:[i…]` (each point 1 mark, or `{text, marks}`)
+or `self:n`, and the score is theirs (`self_marked`). Used for writing algorithms, drawing flowcharts and the 15-mark program.
+
+**Logic expressions** (`text` with `{ logic }`) now give a mark for each bracketed part of the model that is right
+(Cambridge: "A XOR B" 1, "B AND NOT C" 1, whole expression 1). **SQL**: a Boolean field on its own (`WHERE News AND Sport`)
+is allowed; `answer.tables` holds a hidden table when the paper prints none.
+
 ## Phase 1 interfaces (used by the question bank)
 
 | id | Student does | Saves | Mark scheme (`answer`) | Marked by |
@@ -37,11 +45,14 @@ Files: `marking/mark.js` (core markers), `marking/builders.js` (code, sql, flowc
 | `formula` | working, answer, unit (unit always shown) | `{ formula, answer, unit }` | `{ final:[{value,unit,units?,abs?,exact?,strict?} \| {lo,hi} \| {expr,form?} \| {text}], method:[…] }` | number within 0.5 %, unit check, method marks; algebra by value and form |
 | `mcq` | picks one / several / a picture | `{ choice }` or `{ choices:[…] }` | `{ key }` or `{ keys:[…], scale? }` | exact; several = right ticks − wrong ticks |
 | `match` | picks a partner for each item | `{ pairs:{left:right} }` | `{ pairs:{…}, scale? }` | one per correct pair |
-| `table` | fills blank cells | `{ cells:{ r1c2:"…" } }` | `{ cells:{ r1c2: spec }, scheme?:'row', scale? }` | each cell as text or number |
+| `table` | fills blank cells (`config.plain` = plain boxes, no maths) | `{ cells:{ r1c2:"…" } }` | `{ cells:{ r1c2: spec }, scheme?:'row', scale? }` | each cell as text or number |
+| `table` (trace) | fills a trace table | `{ cells }` | `{ mode:'trace', columns:{ col:[values] }, fixed?, groups? }` | column by column: values in order, blanks skipped, a repeated value counts once |
+| `table` (errors) | line number + correction per error | `{ cells }` | `{ mode:'errors', errors:[{ line, fixes:[…] }] }` | right line (each once) and a correction containing the fix |
+| `cloze` | fills gaps in a passage or algorithm (`config.text` with `{{0}}`, `config.code`, `config.options`) | `{ blanks:{ "0":"…" } }` | `{ blanks:{ "0": spec }, scale? }` | each gap like a short answer |
 | `prose` | one box per point | `{ points:[…], conclusion? }` | `{ points:[…], groups?:[{title,max,points:[i]}] }` | one point per box, each point once, caps per group |
 | `label` | types labels on a figure | `{ labels:{id:"…"} }` | `{ labels:{ id: spec } }` | each label as text |
 | `place` | picks what goes at each spot | `{ spots:{id:"…"} }` | `{ spots:{ id: spec } }` | exact per spot |
-| `logic` | builds a gate circuit | `{ gates, inputs, outputs, wires }` | `{ expr:"(A AND B) OR NOT C", output? }` | truth table; part marks per correct gate |
+| `logic` | builds a gate circuit (`config.inputs` puts the inputs and output X on the canvas) | `{ gates, inputs, outputs, wires }` | `{ expr:"(A AND B) OR NOT C", output? }` or `{ table:{ vars, out:'00011000' } }` | truth table; part marks per correct gate (by rows when only the table is known) |
 | `flowfill` | completes blank flowchart boxes | `{ boxes:{id:"…"} }` | `{ boxes:{ id: spec } }` | each box as text (exact if chosen from a list) |
 | `order` | puts given lines of an algorithm in order, with indents (Parsons) | `{ order:[…], indent:[…] }` | `{ order:[…], indent? }` | longest run in the right order |
 | `code` | writes Cambridge pseudocode **or Python**; **Run** runs it on inputs they type (and on `config.files`) | `{ code, lang? }` | `{ tests:[{input,expect,files?,expectFiles?}], features? }` | runs the program on each test; part marks for loop / selection / totalling … |

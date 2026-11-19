@@ -2,6 +2,7 @@
    config.table : 2D array. A string cell is a FIXED label (read-only header);
    a null cell is EDITABLE -> a text-box field (same as the text interface).
    config.maxRows : optional cap (trace tables default cap 20).
+   config.plain   : plain text boxes instead of maths fields (trace tables, truth tables, data types: TRUE stays upright).
    Saves only filled cells, keyed by position: { cells: { "r0c2": "..." } } or null.
    Marked by NedMark 'table': each cell like a short answer or a number; scheme 'row' = a row scores only if all its cells are right. */
 
@@ -9,8 +10,8 @@
 
   const hasMath = () => window.customElements && customElements.get('math-field');
 
-  function makeCellField(initial, onInput) {
-    if (hasMath()) {
+  function makeCellField(initial, onInput, plain) {
+    if (hasMath() && !plain) {
       const mf = document.createElement('math-field');
       mf.style.cssText =
         'display:block;width:100%;min-width:4rem;font-size:1.05rem;padding:4px 6px;' +
@@ -97,7 +98,7 @@
           if (cell === null || cell === undefined) {
             const key = 'r' + r + 'c' + c;
             td.style.background = '#fff';
-            const fld = makeCellField(cells[key] || '', (v) => { cells[key] = v; emit(); });
+            const fld = makeCellField(cells[key] || '', (v) => { cells[key] = v; emit(); }, cfg.plain);
             fld.setAttribute('data-cell', key); fld.setAttribute('aria-label', 'Row ' + r + ', ' + (grid[0][c] || 'column ' + (c + 1)));
             td.appendChild(fld);
           } else {
