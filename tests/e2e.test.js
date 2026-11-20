@@ -173,7 +173,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     ok('prose: plain point list still works -> 2/4', (await h.score()) === '2/4', [await h.score(), await h.value()]);
     // a chosen layout: Definition → Why it might → Why it might not → Conclusion
     await h.open('prose', 2);
-    ok('prose layout: the choice is offered, plain points first', await page.locator('#mount [data-format]').count() === 2 && (await page.getAttribute('#mount [data-format="free"]', 'aria-pressed')) === 'true');
+    ok('prose layout: the choice is offered, plain points first', await page.locator('#mount [data-format]').count() === 3 && (await page.getAttribute('#mount [data-format="free"]', 'aria-pressed')) === 'true');
     await h.type('#mount [data-section="free"] math-field', 'Firms can take advantage of economies of scale');
     await page.click('#mount [data-format="sides"]');
     ok('prose layout: four headed sections, what was written carried across', await page.locator('#mount [data-section]').count() === 4 && /economies/.test(JSON.stringify(await h.value())), await h.value());
@@ -190,6 +190,14 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     ok('prose layout: survives reload in the same layout', (await h.score()) === '5/8' && (await page.getAttribute('#mount [data-format="sides"]', 'aria-pressed')) === 'true' && await page.locator('#mount [data-section="Why it might"] math-field').count() === 2);
     await page.click('#mount [data-format="free"]');
     ok('prose layout: back to plain points keeps the score', (await h.score()) === '5/8', [await h.score(), await h.value()]);
+    // one full answer: the whole answer in one box, read statement by statement
+    await h.open('prose', 1);
+    await page.click('#mount [data-format="full"]');
+    await page.fill('#mount [data-section="full"] textarea', 'Bile emulsifies fat, which increases the surface area of the fat. This means lipase can digest the fat faster, because lipase has more surface to act on.');
+    await page.waitForTimeout(200);
+    const fullV = await h.value();
+    ok('prose full answer: saved as one piece', fullV && fullV.format === 'full' && fullV.points.length === 1, fullV);
+    ok('prose full answer: marked statement by statement -> 4/4', (await h.score()) === '4/4', [await h.score(), fullV]);
 
     // 1.10 label
     await h.open('label', 0);
@@ -690,7 +698,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     for (const [k, t] of [['r1c1', '4'], ['r1c2', '1'], ['r2c1', '7'], ['r2c2', '2']]) await page.fill(`#mount [data-cell=${k}]`, t);
     ok('fallback table -> 2/2', (await h.score()) === '2/2', await h.value());
     await h.open('prose', 1);
-    await page.fill('#mount textarea', 'bile emulsifies fat');
+    await page.fill('#mount [data-section="free"] input', 'bile emulsifies fat');
     ok('fallback prose -> 1/4', (await h.score()) === '1/4', await h.value());
   });
 

@@ -165,29 +165,83 @@
     .forEach(([a, b]) => { (OPP[a] = OPP[a] || []).push(b); (OPP[b] = OPP[b] || []).push(a); });
   const oWords = s => (String(s).toLowerCase().match(/[a-z][a-z-]*'?[a-z]*/g) || []);
   const oStem = w => w.replace(/ies$/, 'y').replace(/(?<=[a-z]{3})(es|s)$/, '');
+  const SHORT = /^(a|an|the|to|of|in|on|at|by|is|it|as|be|or|if|so|no|do|we|he|its|are|was|for|and|but|not|has|had|can|may|its|out|up|use|all|any|one|two|per|via|own|too|due|get|got|let|put|set|way)$/;
   const FILLER = /^(that|this|with|from|into|than|they|there|have|will|would|could|their|which|when|then|also)$/;
   const NEG = /^(not|no|never|cannot|can't|isn't|doesn't|aren't|don't|won't|without|unable|none)$/;
   function altState(alt, sents, pointNeg) {
     const aw = oWords(alt), pol = aw.filter(w => OPP[w]);
-    const content = aw.filter(w => w.length > 3 && !OPP[w] && !FILLER.test(w)).map(oStem);
+    // content words name what the statement is about; short ones count too ('Ca', 'Cl', 'RAM'), but not 'the', 'is' …
+    const content = aw.filter(w => (w.length > 3 || (w.length >= 2 && !SHORT.test(w))) && !OPP[w] && !FILLER.test(w)).map(oStem);
     if (!content.length) return null;
     const ov = sents.map(s => { const sw = new Set(oWords(s).map(oStem)); return content.filter(w => sw.has(w)).length; });
     const best = Math.max(...ov); if (!best) return null;
     const near = sents.filter((s, i) => ov[i] === best);
     const altNeg = pointNeg || aw.some(w => NEG.test(w));
     const flip = s => { const sw = oWords(s), set = new Set(sw), st = sw.map(oStem);
-      if (pol.some(w => !set.has(w) && OPP[w].some(o => set.has(o)))) return true;
+      // direction words: 'higher concentration, less water' is the same claim as 'lower concentration, more water',
+      // so with two or more direction words the claim is reversed only when an odd number of them are reversed
+      const st2 = pol.map(w => (set.has(w) ? 1 : OPP[w].some(o => set.has(o) && !pol.includes(o)) ? -1 : 0));
+      const opp = st2.filter(x => x < 0).length;
+      if (pol.length === 1 ? opp === 1 : (opp % 2 === 1 && st2.every(x => x !== 0))) return true;
       return !altNeg && content.some(c => { const i = st.indexOf(c); return i > 0 && NEG.test(sw[i - 1]); }); };
     if (!pol.length && !near.some(flip)) return null;
-    return near.every(flip) ? 'flip' : 'ok';
+    return near.every(flip) ? 'flip' : near.some(flip) ? 'both' : 'ok';
   }
-  function saysOpposite(p, text) {
+  function saysOpposite(p, text, con) {
     if (!p || !p.alts || !p.alts.length) return false;
     const sents = String(text).split(/(?<=[.!?;])\s+|\n+/).map(x => x.trim()).filter(Boolean);
     if (!sents.length) return false;
     const pointNeg = p.alts.some(a => oWords(a).some(w => NEG.test(w)));      // the point itself is about 'not …'
     const st = p.alts.map(a => altState(a, sents, pointNeg));
-    return st.includes('flip') && !st.includes('ok');
+    // con (sciences): 'the examiner should not choose between contradictory statements' — said one way and the
+    // other way in the same answer earns nothing
+    if (con && st.includes('both')) return true;
+    return st.includes('flip') && !st.includes('ok') && !st.includes('both');
+  }
+  const sentencesOf = (t) => String(t).split(/(?<=[.!?;])\s+|\n+/).map(x => x.trim()).filter(Boolean);
+
+  /* ───────────── how examiners apply a mark scheme ─────────────
+     (Cambridge 'Generic' and 'Science-Specific Marking Principles', printed at the front of every mark scheme)
+     list rule: for 'State two …' only the first two answers are read; a wrong answer still uses up a place.
+     chains: a '(1) … (1)' link that develops a point (the explanation) needs the point it develops.
+     listMax: 'Listing … max 3' — answers that only list, with no point developed, are capped.
+     levels: level-of-response questions ('Discuss …', 8 marks) are marked by level: a point only stated is
+     level 1; points that are explained ('…, so …', '… because …') reach level 2; explained points on both
+     sides reach level 3, and a judgement ('overall', 'it depends on …') takes it to the top. */
+  const DEVELOP = /\b(because|so|therefore|thus|hence|as a result|since|due to|so that|leading to|leads? to|lead to|resulting in|results? in|caus(?:e|es|ing)|mean(?:s|ing)|which (?:will|would|could|may|might|can|means|leads|causes|reduces|increases|raises|lowers)|this (?:will|would|could|may|might|can|means|leads|causes|reduces|increases|raises|lowers))\b/i;
+  const JUDGE = /\b(overall|on balance|in conclusion|to conclude|it depends|depends on|depend on|the extent|more likely|less likely|most likely|whether .{0,40} depends|in the (?:short|long) (?:run|term))\b/i;
+  function responsesOf(value, boxes) {
+    if (boxes.length > 1) return boxes;
+    const t = boxes[0] || '';
+    let parts = t.split(/\n+|;|(?:^|\s)(?:\d[.)]|[a-d][.)]|[•\-–])\s+/).map(x => x.trim()).filter(Boolean);
+    if (parts.length > 1) return parts;
+    parts = t.split(/,|\band\b|\.\s+/).map(x => x.trim()).filter(Boolean);
+    return parts.length > 1 && parts.every(x => x.split(/\s+/).length <= 8) ? parts : sentencesOf(t);
+  }
+  function listRule(answer, responses, syn, question, n) {
+    const pts = answer.points || [], used = new Set(), awarded = [];
+    let slots = n;
+    for (const r of responses) {
+      if (slots <= 0) break;
+      const ctx = context(r, syn, question);
+      // one written statement can hold two answers ('the dry weather and pests'); one with none still uses a place
+      const hits = pts.map((p, k) => (!used.has(k) && (p.alts || p.require) && pointHit(ctx, p) && !saysOpposite(p, r) ? k : -1)).filter(k => k >= 0);
+      if (!hits.length) { if (r.split(/\s+/).length >= 2) slots--; continue; }
+      hits.slice(0, slots).forEach(k => { used.add(k); awarded.push(k); });
+      slots -= Math.max(1, Math.min(hits.length, slots));
+    }
+    return awarded;
+  }
+  // 'Explain two reasons …' marked as reason (1) + explanation (1), twice: only two of the reasons count, the two
+  // with the most credited links — four reasons named without explanation earn two marks, not four
+  function applyChains(answer, awarded) {
+    if (!answer.chains || !answer.pick) return awarded;
+    const inChain = new Set([].concat(...answer.chains));
+    const best = answer.chains.map(ch => ch.filter(i => awarded.includes(i))).filter(l => l.length).sort((a, b) => b.length - a.length).slice(0, answer.pick);
+    return awarded.filter(i => !inChain.has(i) || best.some(l => l.includes(i)));
+  }
+  function developedLinks(answer, awarded) {
+    return (answer.chains || []).some(ch => ch.filter(i => awarded.includes(i)).length >= 2);
   }
   function valueText(v) {
     if (v == null) return '';
@@ -204,10 +258,14 @@
     if (!text.trim()) return { score: 0, max, status: 'unanswered', detail: {} };
     const ctx = context(text, buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms)), question);
     const exclude = new Set((opts && opts.exclude) || []);
-    const awarded = [], missed = [];
-    (answer.points || []).forEach((p, i) => { if ((!p.alts && !p.require) || exclude.has(i)) return; (pointHit(ctx, p) && !saysOpposite(p, text) ? awarded : missed).push(i); });
+    let awarded = [];
+    if (answer.list) awarded = listRule(answer, responsesOf(value, [text]), buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms)), question, answer.list).filter(i => !exclude.has(i));
+    else (answer.points || []).forEach((p, i) => { if ((!p.alts && !p.require) || exclude.has(i)) return; if (pointHit(ctx, p) && !saysOpposite(p, text, answer.con)) awarded.push(i); });
+    awarded = applyChains(answer, awarded);
+    const missed = (answer.points || []).map((p, i) => i).filter(i => (answer.points[i].alts || answer.points[i].require) && !awarded.includes(i) && !exclude.has(i));
     const need = Math.min(max, answer.need || max);
-    const score = answer.scale ? ladder(awarded.length, max, answer.scale) : Math.min(need, awarded.length);
+    let score = answer.scale ? ladder(awarded.length, max, answer.scale) : Math.min(need, awarded.length);
+    if (answer.listMax && !developedLinks(answer, awarded)) score = Math.min(score, answer.listMax);
     return { score, max, status: score >= max ? 'marked' : 'unsure', detail: { awarded, missed } };
   }
 
@@ -219,12 +277,15 @@
     const boxes = ((value && value.points) || []).concat(value && value.conclusion ? [value.conclusion] : []).map(latexToText).filter(b => b.trim());
     if (typeof value === 'string' && value.trim()) boxes.push(latexToText(value));
     if (!boxes.length) return { score: 0, max, status: 'unanswered', detail: {} };
+    // one full answer: read statement by statement, as an examiner reads a script
+    if (value && value.format === 'full') boxes.splice(0, boxes.length, ...sentencesOf(boxes.join(' ')));
     const syn = buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms));
     const pts = answer.points || [];
     const taken = new Set((opts && opts.exclude) || []);
     const perBox = [], extraHits = [];
     /* when the student sorted their points under headings, a point only counts under the heading it belongs to */
     const sideOf = value && value.sides && answer.groups ? value.sides : null;
+    const allText = boxes.join('\n');
     // which point each box could earn, then the best pairing of boxes and points (a box that matches two points
     // should not take the one only a later box can earn)
     const can = boxes.map((b, bi) => {
@@ -232,11 +293,14 @@
       // -2: a definition box — it can earn a definition point, not one of the arguments on either side
       const allowed = !sideOf ? null : sideOf[bi] === -2 ? pts.map((p, i) => i).filter(i => !answer.groups.some(g => g.points.includes(i)))
         : answer.groups[sideOf[bi]] ? answer.groups[sideOf[bi]].points : null;
-      return pts.map((p, i) => (p.alts || p.require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, p) && !saysOpposite(p, b)).map((h, i) => (h ? i : -1)).filter(i => i >= 0);
+      return pts.map((p, i) => (p.alts || p.require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, p) && !saysOpposite(p, b) && !(answer.con && saysOpposite(p, allText, true))).map((h, i) => (h ? i : -1)).filter(i => i >= 0);
     });
     // a box can hold more than one mark point when it is written out ('the minimum energy that colliding particles need
     // to react' is two points), but not a bare list of keywords: one point per sentence or per 6 words, at least one
-    const room = boxes.map(b => Math.max(1, b.split(/[.;!?\n]+/).filter(x => x.trim().split(/\s+/).length >= 2).length, Math.floor(b.trim().split(/\s+/).length / 6)));
+    // ('Education: better access … improves earning potential' is a reason and its explanation: a label before a colon counts)
+    // a clause is a sentence or part of one joined by ', which', ', so', 'because', 'and so', 'this means' …
+    const clauses = (b) => b.split(/[.;!?\n]+|,\s*(?=which|so|and|this|meaning|leading|causing|because|as)\b|\s(?=because|so|this means|which means|and so|therefore|leading to)\b/).filter(x => x && x.trim().split(/\s+/).length >= 2).length;
+    const room = boxes.map(b => Math.max(1, clauses(b) + (b.match(/:\s*\S/g) || []).length, Math.floor(b.trim().split(/\s+/).length / 6)));
     const owner = {}, load = boxes.map(() => []);
     function place(bi, seen) {
       for (const i of can[bi]) {
@@ -249,8 +313,14 @@
       return false;
     }
     boxes.forEach((b, bi) => { for (let k = 0; k < room[bi]; k++) { const before = load[bi].length; if (!place(bi, new Set(load[bi]))) break; if (load[bi].length === before) break; } });
+    if (answer.list) {          // 'State two …': the first two answers are read, a wrong one uses up a place
+      const got = listRule(answer, responsesOf(value, boxes), syn, question, answer.list);
+      load.forEach((l, bi) => { l.length = 0; });
+      got.forEach(i => { const bi = can.findIndex(c => c.includes(i)); if (bi >= 0) load[bi].push(i); });
+    }
     load.forEach((l, bi) => { perBox.push(l.length ? l[0] : -1); extraHits.push(...l.slice(1)); l.forEach(i => taken.add(i)); });
-    let awarded = perBox.filter(i => i >= 0).concat(extraHits);
+    let awarded = applyChains(answer, perBox.filter(i => i >= 0).concat(extraHits));
+    if (answer.levels) return markLevels(answer, boxes, load, awarded, max, value);
     let score = awarded.length;
     const groupScores = [];
     if (answer.groups && answer.groups.length) {
@@ -259,8 +329,32 @@
       score += awarded.filter(i => !answer.groups.some(g => g.points.includes(i))).length;
     }
     score = Math.min(max, answer.need || max, score);
+    if (answer.listMax && !developedLinks(answer, awarded)) score = Math.min(score, answer.listMax);
     // the score stands (it is saved and counts in totals); 'unsure' tells the page some marks may have been missed
     return { score, max, status: score >= max ? 'marked' : 'unsure', detail: { perBox, boxes: load, awarded, groups: groupScores, missed: pts.map((p, i) => i).filter(i => pts[i].alts && !awarded.includes(i)) } };
+  }
+
+  /* level-of-response marking (economics 'Discuss …'): the mark-scheme points show what is relevant; the level comes
+     from how well they are used. A point counts as developed when its box explains it (a reasoning link such as
+     'so', 'because', 'which leads to', and at least 9 words) or holds two linked points. */
+  function markLevels(answer, boxes, load, awarded, max, value) {
+    const L = answer.levels.slice().sort((a, b) => b.level - a.level);
+    const lv = (n) => L.find(x => x.level === n) || { min: 0, max: 0 };
+    const sideOfPoint = (i) => (answer.groups || []).findIndex(g => g.points.includes(i));
+    const boxOf = (i) => load.findIndex(l => l.includes(i));
+    const developed = awarded.filter(i => { const b = boxes[boxOf(i)] || ''; return (DEVELOP.test(b) && b.split(/\s+/).length >= 9) || (load[boxOf(i)] || []).length >= 2; });
+    const sides = new Set(awarded.map(sideOfPoint).filter(k => k >= 0)), devSides = new Set(developed.map(sideOfPoint).filter(k => k >= 0));
+    const twoSided = (answer.groups || []).length >= 2;
+    const judged = boxes.some(b => JUDGE.test(b)) && (!twoSided || sides.size >= 2);
+    let level, score;
+    if (!awarded.length) { level = 0; score = 0; }
+    else if (developed.length >= 3 && (!twoSided || devSides.size >= 2)) { level = 3; score = lv(3).min + (developed.length >= 4 ? 1 : 0) + (judged ? 1 : 0); }
+    else if (developed.length >= 1) { level = 2; score = lv(2).min + Math.min(2, Math.max(0, developed.length - 1) + (twoSided && sides.size >= 2 ? 1 : 0)); }
+    else { level = 1; score = lv(1).min + (awarded.length >= 2 ? 1 : 0); }
+    if (level) score = Math.min(score, lv(level).max);
+    score = Math.min(max, score);
+    return { score, max, status: score >= max ? 'marked' : 'unsure', detail: { perBox: load.map(l => (l.length ? l[0] : -1)), boxes: load, awarded, developed, level, judged,
+      levels: L, missed: (answer.points || []).map((p, i) => i).filter(i => answer.points[i].alts && !awarded.includes(i)) } };
   }
 
   /* ───────────── numbers ───────────── */

@@ -108,8 +108,11 @@
          Definition → Why it might → Why it might not → Conclusion, and write each point in its own box under its
          heading — or keep writing plain points. config.formats = [{ id, label, sections:[{ title, hint?, one?, group? }] }].
          Saves { points, sec:[section of each point], sides:[mark-scheme group of each point, -1 = any, -2 = definition], format }. */
-      const formats = (cfg0.formats || []).filter(f => f && f.id && f.sections && f.sections.length);
-      if (formats.length && Ned.field) {
+      // every written answer can also be given as one piece of prose ('One full answer'): it is read the way an
+      // examiner reads a script, statement by statement ("the response should be read as continuous prose")
+      const formats = (cfg0.formats || []).filter(f => f && f.id && f.sections && f.sections.length)
+        .concat([{ id: 'full', label: 'One full answer', sections: [{ title: null, full: true }] }]);
+      if (Ned.field) {
         const lists = {};                                  // format id -> one array of texts per section; 'free' -> [array]
         const blank = (id) => { const f = formats.find(x => x.id === id); return f ? f.sections.map(() => []) : [[]]; };
         let mode = 'free';
@@ -123,13 +126,21 @@
         load(value);
         const chipsRow = Ned.el('div', { class: 'ned-formats', style: 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;' });
         const body = Ned.el('div', {});
-        container.appendChild(Ned.el('div', { style: 'font-size:12px;color:var(--muted);margin-bottom:4px;' }, ['How do you want to lay out your answer?']));
+        container.appendChild(Ned.el('div', { style: 'font-size:12px;color:var(--muted);margin-bottom:4px;' }, ['How do you want to write your answer?']));
         container.appendChild(chipsRow); container.appendChild(body);
         const emitF = () => {
           if (mode === 'free') { const pts = lists.free[0].filter(t => t && t.trim()); onChange(pts.length ? { points: pts } : null); return; }
+          if (mode === 'full') { const t = (lists.full[0][0] || '').trim(); onChange(t ? { points: [t], format: 'full' } : null); return; }
           const f = formats.find(x => x.id === mode), pts = [], sec = [], sides = [];
           f.sections.forEach((s, k) => lists[f.id][k].forEach(t => { if (t && t.trim()) { pts.push(t); sec.push(k); sides.push(s.group == null ? -1 : s.group); } }));
           onChange(pts.length ? { points: pts, sec, sides, format: f.id } : null);
+        };
+        const fullEl = (arr) => {
+          if (!arr.length) arr.push('');
+          const f = Ned.field({ multiline: true, plain: true, label: 'Your full answer', placeholder: 'Write your whole answer here, in sentences, as you would in the exam.', value: arr[0], onInput: (val) => { arr[0] = val; emitF(); } });
+          f.el.rows = 8; f.el.style.minHeight = '11rem';
+          return Ned.el('div', { 'data-section': 'full', style: 'display:grid;gap:6px;margin-bottom:10px;' }, [f.el,
+            Ned.el('p', { class: 'ned-note', style: 'margin:0;' }, ['Marked the way an examiner reads it: each statement is checked against the mark scheme, so explain each point fully.'])]);
         };
         const sectionEl = (title, hint, arr, one) => {
           const box = Ned.el('div', { style: 'display:grid;gap:8px;' });
@@ -154,7 +165,7 @@
         };
         const render = () => {
           chipsRow.innerHTML = '';
-          [{ id: 'free', label: 'My own points' }].concat(formats).forEach(f => {
+          [{ id: 'free', label: 'Point by point' }].concat(formats).forEach(f => {
             const on = f.id === mode;
             chipsRow.appendChild(Ned.el('button', { type: 'button', 'data-format': f.id, 'aria-pressed': on ? 'true' : 'false',
               style: 'padding:5px 10px;border-radius:999px;cursor:pointer;font-size:13px;border:1px solid ' + (on ? 'var(--ink,#222)' : 'var(--line)') + ';background:' + (on ? 'var(--ink,#222)' : 'var(--paper)') + ';color:' + (on ? '#fff' : 'inherit') + ';',
@@ -163,6 +174,7 @@
           body.innerHTML = '';
           if (mode === 'free') { body.appendChild(sectionEl(null, 'one point', lists.free[0], false)); body.appendChild(Ned.el('p', { class: 'ned-note' }, ['Write one point in each box.'])); return; }
           const f = formats.find(x => x.id === mode);
+          if (f.id === 'full') { body.appendChild(fullEl(lists.full[0])); return; }
           f.sections.forEach((s, k) => body.appendChild(sectionEl(s.title, s.hint, lists[f.id][k], !!s.one)));
         };
         const filled = (id) => (lists[id] || []).some(a => a.some(t => t && t.trim()));
@@ -171,7 +183,9 @@
           // carry what was written across when the new layout is still empty
           const from = mode === 'free' ? lists.free[0].filter(t => t && t.trim()) : [].concat(...lists[mode]).filter(t => t && t.trim());
           if (from.length && !filled(id)) {
-            if (id === 'free') lists.free[0] = from;
+            if (id === 'full') lists.full[0] = [from.join(mode === 'full' ? '' : ' ')];
+            else if (mode === 'full') { const parts = from.join(' ').split(/(?<=[.!?])\s+/).filter(Boolean); if (id === 'free') lists.free[0] = parts; else { const f = formats.find(x => x.id === id); lists[id][Math.max(0, f.sections.findIndex(s => !s.one))] = parts; } }
+            else if (id === 'free') lists.free[0] = from;
             else { const f = formats.find(x => x.id === id); const k = Math.max(0, f.sections.findIndex(s => !s.one)); lists[id][k] = from; }
           }
           mode = id; render(); emitF();

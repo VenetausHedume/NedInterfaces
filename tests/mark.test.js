@@ -322,6 +322,31 @@ t('a time ending in 16 is not hex', sc('table', { cells: { r0c1: { alts: ['08 16
   const C = { points: [{ alts: ['reduces the time taken to upload'] }], need: 1 };
   t('opposite: "increases the time" does not earn "reduces the time"', M.mark('text', C, 'It increases the time taken to upload the file.', { marks: 1 }).score, 0); }
 
+// ── examiner rules: list rule, contradictions, explain-two, listing cap, levels ──
+{ const L2 = { points: [{ alts: ['dry weather'] }, { alts: ['pests'] }, { alts: ['disease'] }, { alts: ['underinvestment'] }], need: 2, list: 2 };
+  t('list rule: first two answers read', M.mark('text', L2, 'dry weather, pests, disease', { marks: 2 }).score, 2);
+  t('list rule: a wrong answer uses up a place', M.mark('text', L2, 'high prices, pests, disease', { marks: 2 }).score, 1);
+  t('list rule: two answers in one statement both count', M.mark('text', L2, 'Due to the dry weather and pests the supply has dropped.', { marks: 2 }).score, 2);
+  const CON = { points: [{ alts: ['zinc more reactive'] }], need: 1, con: true };
+  t('contradiction: said both ways earns nothing', M.mark('prose', CON, { points: ['Zinc is more reactive than iron.', 'Zinc is less reactive than iron.'] }, { marks: 1 }).score, 0);
+  t('contradiction: said once earns it', M.mark('prose', CON, { points: ['Zinc is more reactive than iron.'] }, { marks: 1 }).score, 1);
+  t('co-variation: "lower concentration, higher rate" is the same claim', M.mark('prose', { points: [{ alts: ['higher concentration less water excreted'] }], need: 1, con: true }, { points: ['At a lower concentration more water is excreted.'] }, { marks: 1 }).score, 1);
+  const TWO = { points: [{ alts: ['state benefits'] }, { alts: ['transfers increase the incomes of lower-income households'] }, { alts: ['the tax system'] }, { alts: ['regressive tax'] }, { alts: ['education'] }, { alts: ['better access to education improves earning potential'] }, { alts: ['healthcare'] }, { alts: ['healthier workers'] }],
+    chains: [[0, 1], [2, 3], [4, 5], [6, 7]], pick: 2 };
+  t('explain two: four reasons named, none explained -> 2', M.mark('prose', TWO, { points: ['State benefits.', 'The tax system.', 'Education.', 'Healthcare.'] }, { marks: 4 }).score, 2);
+  t('explain two: two reasons explained -> 4', M.mark('prose', TWO, { points: ['State benefits: transfers increase the incomes of lower-income households.', 'Education: better access to education improves earning potential.'] }, { marks: 4 }).score, 4);
+  const AN = { points: [{ alts: ['subsidise firms'] }, { alts: ['reduces costs of production'] }, { alts: ['increase supply'] }, { alts: ['increase state benefits'] }, { alts: ['set a maximum price'] }, { alts: ['provide free food'] }], chains: [[0, 1, 2]], listMax: 3 };
+  t('listing cap: four methods listed -> max 3', M.mark('prose', AN, { points: ['Subsidise firms.', 'Increase state benefits.', 'Set a maximum price.', 'Provide free food.'] }, { marks: 6 }).score, 3);
+  t('listing cap: a developed chain lifts the cap', M.mark('prose', AN, { points: ['The government could subsidise firms, which reduces costs of production and so firms increase supply.', 'Increase state benefits.', 'Set a maximum price.'] }, { marks: 6 }).score, 5);
+  const LV = { points: [{ alts: ['able to pay'] }, { alts: ['raise tax revenue'] }, { alts: ['more even distribution of income'] }, { alts: ['disincentive'] }, { alts: ['emigrate'] }, { alts: ['tax evasion'] }],
+    groups: [{ title: 'Why it should', max: 5, points: [0, 1, 2] }, { title: 'Why it should not', max: 5, points: [3, 4, 5] }], levels: [{ level: 3, min: 6, max: 8 }, { level: 2, min: 3, max: 5 }, { level: 1, min: 1, max: 2 }] };
+  const lv = (pts) => { const r = M.mark('prose', LV, { points: pts }, { marks: 8 }); return [r.detail.level, r.score]; };
+  t('levels: points only stated -> level 1', lv(['The rich are able to pay a high rate.', 'It would raise tax revenue.', 'It may act as a disincentive.', 'The rich may emigrate.']), [1, 2]);
+  t('levels: explained on one side -> level 2', lv(['The rich are able to pay a high rate because they have a lot of spare income after paying for necessities.', 'It would raise tax revenue, so the government could spend more on schools and hospitals.']), [2, 4]);
+  t('levels: explained on both sides with a judgement -> level 3 top', lv(['The rich are able to pay a high rate because they have a lot of spare income after their needs are met.',
+    'It would raise tax revenue, so the government could spend more on education and health care for the poor.', 'However, it may act as a disincentive to work, because the rich keep less of each extra dollar they earn.',
+    'The rich may emigrate to countries with lower taxes, which means the government could end up with less revenue.', 'Overall, whether it should depends on how high the rate is and how easily the rich can leave.']), [3, 8]); }
+
 // ── general ──
 t('no answer key', M.mark('text', null, { latex: 'x' }, { marks: 1 }).status, 'no_answer_key');
 t('unknown ui', M.mark('zzz', {}, { a: 1 }, { marks: 1 }).status, 'no_marker');

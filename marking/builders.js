@@ -678,13 +678,18 @@
       case 'prose': {
         // name each box by the heading it was written under when the student chose a layout ('Why it might, box 2')
         const fmt = value && value.format && (cfg.formats || []).find(f => f.id === value.format), seen = {};
-        const boxName = (b) => { const k = fmt && value.sec ? value.sec[b] : null, s = k != null && fmt.sections[k];
+        const boxName = (b) => { if (value && value.format === 'full') return `Sentence ${b + 1}`; const k = fmt && value.sec ? value.sec[b] : null, s = k != null && fmt.sections[k];
           if (!s) return `Box ${b + 1}`; seen[k] = (seen[k] || 0) + 1; return s.one ? s.title : `${s.title}, box ${seen[k]}`; };
         const framing = (b) => { const k = fmt && value.sec ? value.sec[b] : null; return k != null && fmt.sections[k] && /^(definition|conclusion)$/i.test(fmt.sections[k].title); };
         (d.boxes || (d.perBox || []).map(i => (i >= 0 ? [i] : []))).forEach((l, b) => { const n = boxName(b);
           if (!l.length && framing(b)) return info(`${n}: no separate mark for this in the scheme, but it frames your answer.`);
           return l.length ? good(`${n}: ${l.map(i => answer.points[i].alts[0]).join('; ')}.`) : bad(`${n}: no mark-scheme point found here${value && value.sides && answer.groups && value.sides[b] >= 0 && answer.groups[value.sides[b]] ? ' for this side' : ''}.`); });
         (d.groups || []).forEach(g => info(`${g.title}: ${g.score} of up to ${g.max}.`));
+        if (d.level != null) {
+          const L = (d.levels || []).find(x => x.level === d.level);
+          info(`Level ${d.level}${L ? ` (${L.min}–${L.max} marks)` : ''}: ${(d.developed || []).length} of your points explained (with a reason or a consequence), ${(d.awarded || []).length} relevant point${(d.awarded || []).length === 1 ? '' : 's'} in all${d.judged ? ', and a judgement' : ''}.`);
+          if (d.level < 3) info('To reach a higher level, explain each point: say why it happens and what it leads to ("…, so …", "… because …"), on both sides, then make a judgement ("Overall … depends on …").');
+        }
         const rest = (d.missed || []).map(i => answer.points[i].alts[0]); if (rest.length) info('Points you could add: ' + rest.slice(0, 6).join('; ') + '.');
         info('Written answers are marked on the mark-scheme points they contain. If you made a point in other words and it was not found, compare your answer with the mark scheme.');
         break; }
