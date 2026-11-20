@@ -127,6 +127,7 @@ function addComp(type,x,y,fixedId,rot,opts){
   const g=new Konva.Group({x,y,draggable:!opts.given});
   g.add(drawComp(type,opts.len,opts.kind));
   const rec={id,type,node:g,rot:rot||0,len:opts.len||null,given:!!opts.given,kind:opts.kind||null,label:opts.label||null}; if(rot) g.rotation(rot);
+  g.find('Text').forEach(t=>t.rotation(-(rot||0)));      // the A, V, M inside a meter stay upright
   if(opts.label){ const vert=(rot||0)%180!==0, isNode=type==='node';
     const t=new Konva.Text({text:opts.label,fontSize:15,fill:S,listening:false});
     if(isNode) t.position({x:x-t.width()/2-(0),y:y-t.height()-8});
@@ -236,7 +237,7 @@ function showRot(rec){
   rotG.on('dragmove',()=>{ const c={x:rec.node.x(),y:rec.node.y()};
     let deg=Math.atan2(rotG.y()-c.y, rotG.x()-c.x)*180/Math.PI + 90;   // handle points up at 0°
     const near=Math.round(deg/45)*45; if(Math.abs(deg-near)<=5) deg=near;
-    rec.rot=((deg%360)+360)%360; rec.node.rotation(rec.rot);
+    rec.rot=((deg%360)+360)%360; rec.node.rotation(rec.rot); rec.node.find('Text').forEach(t=>t.rotation(-rec.rot));
     drawTerms(); drawWires();
     let show=Math.round(rec.rot); if(show>180)show-=360;
     if(!rotBadge){ rotBadge=new Konva.Label({listening:false}); rotBadge.add(new Konva.Tag({fill:'#3a4653',cornerRadius:5})); rotBadge.add(new Konva.Text({text:'',fontSize:13,fontStyle:'bold',fill:'#fff',padding:5})); layer.add(rotBadge); }
@@ -320,12 +321,14 @@ tb.querySelector('#del').onclick=()=>{ if(!selected) return;
   selected=null; drawTerms(); drawWires(); emit(); };
 tb.querySelector('#clear').onclick=()=>{ loadValue(null); };
 
+let textNodes=[];
 function loadValue(v){
   loading=true;
   try{ comps.forEach(c=>{ c.node.destroy(); if(c.labelNode) c.labelNode.destroy(); }); termShapes.forEach(s=>s.destroy()); wireShapes.forEach(s=>s.destroy()); clearRot(); }catch(e){}
   comps=[];wires=[];termShapes=[];wireShapes=[];wireFrom=null;selected=null; let n=0;
   const num=id=>+String(id).replace(/\D/g,'')||0;
-  if(FIG){ (FIG.components||[]).forEach(c=>{ addComp(c.type,c.x,c.y,c.id,c.rot||0,{len:c.len,label:c.label,given:true,kind:c.kind}); n=Math.max(n,num(c.id)); });
+  if(FIG){ textNodes.forEach(t=>t.destroy()); textNodes=(FIG.texts||[]).map(o=>{ const t=new Konva.Text({text:o.t,fontSize:15,fill:S,listening:false}); t.position({x:o.x-t.width()/2,y:o.y-t.height()/2}); layer.add(t); return t; });   // printed labels ('power supply')
+    (FIG.components||[]).forEach(c=>{ addComp(c.type,c.x,c.y,c.id,c.rot||0,{len:c.len,label:c.label,given:true,kind:c.kind}); n=Math.max(n,num(c.id)); });
     (FIG.wires||[]).forEach(w=>{ const A=termByKey(w.a), B=termByKey(w.b); if(!A||!B) return;
       wires.push({id:'g'+(++n),given:true,a:{x:A.x,y:A.y,snap:w.a},b:{x:B.x,y:B.y,snap:w.b},pts:(w.bends||[]).map(p=>({x:p.x,y:p.y})),auto:false}); }); }
   ((v&&v.components)||[]).filter(c=>!c.given).forEach((c,i)=>{ addComp(c.type, c.x!=null?c.x:120+(i%5)*150, c.y!=null?c.y:80+Math.floor(i/5)*95, c.id, c.rot||0); n=Math.max(n,num(c.id)); });
