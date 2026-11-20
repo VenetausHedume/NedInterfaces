@@ -2,6 +2,7 @@
    config.table : 2D array. A string cell is a FIXED label (read-only header);
    a null cell is EDITABLE -> a text-box field (same as the text interface).
    config.maxRows : optional cap (trace tables default cap 20).
+   config.bracket : 'vector' | 'matrix' draws the grid between tall brackets (maths column vectors, matrices)
    config.plain   : plain text boxes instead of maths fields (trace tables, truth tables, data types: TRUE stays upright).
    Saves only filled cells, keyed by position: { cells: { "r0c2": "..." } } or null.
    Marked by NedMark 'table': each cell like a short answer or a number; scheme 'row' = a row scores only if all its cells are right. */
@@ -110,7 +111,13 @@
         table.appendChild(tr);
       });
 
-      container.appendChild(table);
+      if (cfg.bracket) {                    // a column vector or matrix: draw it between tall brackets
+        table.style.border = 'none';
+        table.querySelectorAll('td').forEach(td => { td.style.border = 'none'; td.style.padding = '3px 4px'; td.style.background = 'transparent'; });
+        table.querySelectorAll('[data-cell]').forEach(f => { f.style.border = '1px solid var(--line)'; f.style.borderRadius = '6px'; f.style.background = '#fff'; f.style.width = '5.5rem'; });
+        const wrap = Ned.el('div', { style: 'display:inline-block;padding:4px 10px;border-left:2px solid var(--ink,#1a1a1a);border-right:2px solid var(--ink,#1a1a1a);border-radius:14px;' });
+        wrap.appendChild(table); container.appendChild(wrap);
+      } else container.appendChild(table);
 
       return {
         update: (v) => {
