@@ -287,6 +287,26 @@ t('sf: 0.45 needs 2 dp (0.449 ok)', sc('formula', { final: [{ value: '0.45', sf:
 t('sf: 0.45 vs 0.46', sc('formula', { final: [{ value: '0.45', sf: true, units: [''] }] }, { answer: '0.46' }, 1), 0);
 t('no sf: 11.1 is not 11', sc('formula', { final: [{ value: '11', unit: 'Ω' }] }, { answer: '11.1', unit: 'Ω' }, 1), 0);
 
+// ── maths keys: any-order sets, 3 s.f., mixed numbers, fraction equivalents ──
+const roots = { cells: { r0c0: { final: [{ value: '10', units: [''] }] }, r0c1: { final: [{ value: '-16', units: [''] }] } }, sets: [[['r0c0'], ['r0c1']]] };
+t('set: roots in either order', sc('table', roots, { cells: { r0c0: '-16', r0c1: '10' } }, 2), 2);
+t('set: one root right', sc('table', roots, { cells: { r0c0: '-16', r0c1: '16' } }, 2), 1);
+t('set: the same root twice counts once', sc('table', roots, { cells: { r0c0: '10', r0c1: '10' } }, 2), 1);
+const pts = { cells: { r0c1: { final: [{ value: '1' }] }, r0c3: { final: [{ value: '2' }] }, r1c1: { final: [{ value: '-1' }] }, r1c3: { final: [{ value: '6' }] } }, sets: [[['r0c1', 'r0c3'], ['r1c1', 'r1c3']]] };
+t('set: points in either order', sc('table', pts, { cells: { r0c1: '-1', r0c3: '6', r1c1: '1', r1c3: '2' } }, 4), 4);
+t('set: crossed coordinates are not whole points', sc('table', pts, { cells: { r0c1: '1', r0c3: '6', r1c1: '-1', r1c3: '2' } }, 4), 2);
+const s3 = { final: [{ value: '3.06', units: [''], sf3: true }], method: [] };
+t('sf3: more figures that round to it', sc('formula', s3, { latex: '3.0574' }, 2), 2);
+t('sf3: 2 s.f. is not enough', sc('formula', s3, { latex: '3.1' }, 2), 0);
+t('sf3: 0.5 % off is still wrong', sc('formula', s3, { latex: '3.07' }, 2), 0);
+const mixed = { final: [{ value: '22/3', exact: true, units: [''], mixed: true }], method: [] };
+t('mixed number asked: 7 1/3', sc('formula', mixed, { latex: '7\\frac{1}{3}' }, 3), 3);
+t('mixed number asked: 22/3 loses the last mark', sc('formula', mixed, { latex: '\\frac{22}{3}' }, 3), 2);
+const third = { final: [{ value: '1/3', exact: true, dec3: true, units: [''] }], method: [] };
+t('1/3 oe: 0.333 accepted', sc('formula', third, { latex: '0.333' }, 1), 1);
+t('1/3 oe: 0.33 not accepted', sc('formula', third, { latex: '0.33' }, 1), 0);
+t('a time ending in 16 is not hex', sc('table', { cells: { r0c1: { alts: ['08 16', '0816', '08:16'], exact: true } } }, { cells: { r0c1: '08 16' } }, 1), 1);
+
 // ── general ──
 t('no answer key', M.mark('text', null, { latex: 'x' }, { marks: 1 }).status, 'no_answer_key');
 t('unknown ui', M.mark('zzz', {}, { a: 1 }, { marks: 1 }).status, 'no_marker');

@@ -241,6 +241,12 @@
     const s = Math.min(student.sig, 3);
     return student.sig >= 2 && student.sig <= 3 && Number(student.n.toPrecision(s)) === Number(expected.n.toPrecision(s));
   }
+  /* sf3 (maths): Cambridge wants 3 significant figures unless exact — 3.0574 counts for 3.06, 3.1 and 3.07 do not */
+  function sf3Equal(student, expected) {
+    if (Math.abs(student.n - expected.n) <= Math.abs(expected.n) * 1e-12) return true;
+    const p = Math.min(15, Math.max(3, expected.sig || 3));
+    return (student.sig || 0) >= p && Number(student.n.toPrecision(p)) === Number(expected.n.toPrecision(p));
+  }
   function exprCanon(s) {
     s = norm(s).replace(/\s+/g, '').replace(/\*/g, '').replace(/^[a-z]=(?!=)/, '').replace(/×/g, '');
     return s.replace(/-/g, '+-').split('+').filter(Boolean).sort().join('+');
@@ -306,7 +312,8 @@
         if (rg) { const a = +rg[1], b = +rg[2]; hit = lo && hi && a >= lo.n - 1e-9 && b <= hi.n + 1e-9; if (!unitOk && rg[3] && (eus.includes(unitNorm(rg[3])))) unitOk = true; }
         else hit = lo && hi && st.n >= lo.n - 1e-9 && st.n <= hi.n + 1e-9; }
       else { const exp = parseNumber(String(f.value)); const e2 = exp && (f.abs ? Object.assign({}, exp, { n: Math.abs(exp.n) }) : exp);
-        hit = e2 && (f.exact ? Math.abs(st.n - e2.n) <= Math.abs(e2.n) * 1e-9 : numEqual(st, e2) || (f.sf && sfHit(st.n, e2.n, String(f.value)))); }
+        hit = e2 && (f.exact ? Math.abs(st.n - e2.n) <= Math.abs(e2.n) * 1e-9 || (f.dec3 && st.sig >= 3 && st.sig < 9 && Number(st.n.toPrecision(3)) === Number(e2.n.toPrecision(3))) : f.sf3 ? sf3Equal(st, e2) : numEqual(st, e2) || (f.sf && sfHit(st.n, e2.n, String(f.value)))); }
+      if (hit && f.mixed && !/^\s*[-−]?\d+\s+\d+\s*\/\s*\d+/.test(raw)) { partForm = true; continue; }   // 'give your answer as a mixed number': 22/3 is right but not in the form asked
       if (hit) { if (unitOk) correct = true; else unitWrong = true; }
     }
     if (correct) return { score: max, max, status: 'marked', detail: { final: true } };
@@ -334,7 +341,7 @@
       if (!spec.alts.length) return false;
     }
     if (spec.exact) {
-      const a = norm(text).replace(/\s+/g, '').replace(/^0x(?=[0-9a-f]+$)/, '').replace(/(?<=^[0-9a-f]+)(?:_?16|\(16\))$/, '');
+      const a = norm(text).replace(/\s+/g, '').replace(/^0x(?=[0-9a-f]+$)/, '').replace(/(?<=^[0-9a-f]*[a-f][0-9a-f]*)(?:_?16|\(16\))$/, '').replace(/(?<=^[0-9a-f]+)(?:_16|\(16\))$/, '');   // '4F16' / '4F_16' (hex, subscript lost) — but 0816 is a time
       return spec.alts.some(x => { const b = norm(String(x)).replace(/\s+/g, ''); if (a === b) return true; const p = parseNumber(text), q = parseNumber(String(x)); return !!(p && q && !p.unit && !q.unit && p.n === q.n); });
     }
     return pointHit(context(text, syn), spec);
@@ -562,7 +569,29 @@
     const syn = buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms));
     const spec = answer[field] || {};
     const right = [], wrong = [];
-    Object.keys(spec).forEach(k => (cellRight(spec[k], got[k], syn) ? right : wrong).push(k));
+    /* sets: answers that may come in any order — [[ [r0c1], [r0c3] ]] for two roots, [[ [r0c1,r0c3], [r1c1,r1c3] ]] for two points.
+       Each tuple of the student's boxes is matched to a different tuple of the key. */
+    const inSet = new Set();
+    (answer.sets || []).forEach(set => {
+      const used = new Set(), rest = [];
+      set.forEach(tup => {
+        tup.forEach(k => inSet.add(k));
+        const j = set.findIndex((kt, ji) => !used.has(ji) && kt.every((k, p) => cellRight(spec[k], got[tup[p]], syn)));
+        if (j >= 0) { used.add(j); tup.forEach(k => right.push(k)); } else rest.push(tup);
+      });
+      // tuples with no whole match: each is paired with the unused key tuple it agrees with most, and scores the boxes that agree
+      rest.forEach(tup => {
+        let best = -1, bestHits = [];
+        set.forEach((kt, ji) => {
+          if (used.has(ji)) return;
+          const hits = tup.filter((k, p) => cellRight(spec[kt[p]], got[k], syn));
+          if (best < 0 || hits.length > bestHits.length) { best = ji; bestHits = hits; }
+        });
+        if (best >= 0) used.add(best);
+        tup.forEach(k => (bestHits.includes(k) ? right : wrong).push(k));
+      });
+    });
+    Object.keys(spec).forEach(k => { if (!inSet.has(k)) (cellRight(spec[k], got[k], syn) ? right : wrong).push(k); });
     let n = right.length;
     if (answer.scheme === 'row') {
       const rows = {};

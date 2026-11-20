@@ -417,6 +417,7 @@
     const out = [], good = t => out.push({ kind: 'good', text: t }), bad = t => out.push({ kind: 'bad', text: t }), info = t => out.push({ kind: 'info', text: t });
     if (!answer || !r) return out;
     if (r.status === 'unanswered') { info('Nothing to mark yet.'); return out; }
+    if (answer.selfmark && (r.status === 'self_check' || r.status === 'self_marked') && ui !== 'code' && ui !== 'flowchart') return out;   // the student marks it from the scheme
     const d = r.detail || {}, cfg = (question && question.config) || {};
     const keyed = (field, noun) => { (d.right || []).length && good(`${d.right.length} ${noun}${d.right.length === 1 ? '' : 's'} right.`); (d.wrong || []).forEach(k => { const given = M.latexToText(((value && value[field]) || {})[k] || ''); bad(`${noun[0].toUpperCase() + noun.slice(1)} ${labelOf(k)}: ${given ? `"${given}" is not right` : 'left blank'}. Expected: ${first(answer[field][k])}.`); }); };
     const labelOf = k => { const m = String(k).match(/^r(\d+)c(\d+)$/); if (m && cfg.table) return `in row "${cfg.table[+m[1]][0] || m[1]}", column "${cfg.table[0][+m[2]] || m[2]}"`; const list = cfg.labels || cfg.spots || cfg.nodes || []; const i = list.findIndex(x => String(x.id) === String(k)); return i >= 0 && !cfg.nodes ? String(i + 1) : String(k); };
