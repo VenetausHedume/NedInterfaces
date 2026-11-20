@@ -256,6 +256,9 @@ t('logic expression: both parts right, wrong gate joining them', sc('text', { lo
 { const er = { mode: 'errors', errors: [{ line: '04', fixes: ['>'] }, { line: '08', fixes: ['Counter'] }, { line: '11', fixes: ['Total ← Total + Number'] }] };
   t('find the errors: all three', sc('table', er, { cells: { r1c1: '4', r1c2: 'IF List[Counter] > Max', r2c1: 'line 8', r2c2: 'Counter', r3c1: '11', r3c2: 'Total <- Total + Number' } }, 3), 3);
   t('find the errors: right line, wrong fix; same line twice', sc('table', er, { cells: { r1c1: '4', r1c2: 'IF List[Counter] = Max', r2c1: '8', r2c2: 'Counter', r3c1: '8', r3c2: 'Counter' } }, 3), 1); }
+{ const tk = { mode: 'ticks', rows: { 1: [2], 2: [1], 3: [1, 2] } };
+  t('tick table: all rows right', sc('table', tk, { cells: { r1c2: '✓', r2c1: '✓', r3c1: '✓', r3c2: '✓' } }, 3), 3);
+  t('tick table: an extra tick spoils that row', sc('table', tk, { cells: { r1c2: '✓', r1c1: '✓', r2c1: '✓', r3c1: '✓', r3c2: '✓' } }, 3), 2); }
 t('fill the gaps', sc('cloze', { blanks: { 0: { alts: ['50'], exact: true }, 1: { alts: ['FALSE'], exact: true } } }, { blanks: { 0: '50', 1: 'false' } }, 2), 2);
 t('fill the gaps: a wrong gap', sc('cloze', { blanks: { 0: { alts: ['50'], exact: true }, 1: { alts: ['FALSE'], exact: true } } }, { blanks: { 0: '49', 1: 'FALSE' } }, 2), 1);
 t('logic circuit known only by its truth table: right circuit', sc('logic', { table: { vars: ['A', 'B'], out: '0001' } },

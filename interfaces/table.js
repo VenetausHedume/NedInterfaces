@@ -3,6 +3,7 @@
    a null cell is EDITABLE -> a text-box field (same as the text interface).
    config.maxRows : optional cap (trace tables default cap 20).
    config.bracket : 'vector' | 'matrix' draws the grid between tall brackets (maths column vectors, matrices)
+   config.ticks   : the empty cells are tick boxes (click to tick); marked with answer.mode 'ticks'
    config.plain   : plain text boxes instead of maths fields (trace tables, truth tables, data types: TRUE stays upright).
    Saves only filled cells, keyed by position: { cells: { "r0c2": "..." } } or null.
    Marked by NedMark 'table': each cell like a short answer or a number; scheme 'row' = a row scores only if all its cells are right. */
@@ -32,6 +33,19 @@
     inp.value = initial || '';
     inp.addEventListener('input', () => onInput(inp.value));
     return inp;
+  }
+
+  // a tick box: click to tick (✓), click again to clear
+  function makeTick(initial, onInput) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    const paint = () => { const on = !!b.dataset.v; b.textContent = on ? '✓' : ''; b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.style.background = on ? '#e6f2ee' : '#fff'; };
+    b.style.cssText = 'display:block;width:100%;min-width:3.2rem;height:2.4rem;border:none;cursor:pointer;font-size:1.25rem;font-weight:700;color:var(--accent,#034f46);';
+    b.dataset.v = initial ? '1' : ''; paint();
+    b.addEventListener('click', () => { b.dataset.v = b.dataset.v ? '' : '1'; paint(); onInput(b.dataset.v ? '✓' : ''); });
+    b.update = v => { b.dataset.v = v ? '1' : ''; paint(); };
+    return b;
   }
 
   Ned.register('table',
@@ -99,7 +113,7 @@
           if (cell === null || cell === undefined) {
             const key = 'r' + r + 'c' + c;
             td.style.background = '#fff';
-            const fld = makeCellField(cells[key] || '', (v) => { cells[key] = v; emit(); }, cfg.plain);
+            const fld = cfg.ticks ? makeTick(cells[key] || '', (v) => { cells[key] = v; emit(); }) : makeCellField(cells[key] || '', (v) => { cells[key] = v; emit(); }, cfg.plain);
             fld.setAttribute('data-cell', key); fld.setAttribute('aria-label', 'Row ' + r + ', ' + (grid[0][c] || 'column ' + (c + 1)));
             td.appendChild(fld);
           } else {
@@ -123,11 +137,12 @@
         update: (v) => {
           for (const k in cells) delete cells[k];
           if (v && v.cells) for (const k in v.cells) cells[k] = v.cells[k];
-          table.querySelectorAll('[data-cell]').forEach(f => { f.value = cells[f.getAttribute('data-cell')] || ''; });
+          table.querySelectorAll('[data-cell]').forEach(f => { if (f.update) f.update(cells[f.getAttribute('data-cell')] || ''); else f.value = cells[f.getAttribute('data-cell')] || ''; });
         },
         clear: () => {
           for (const k in cells) delete cells[k];
           table.querySelectorAll('math-field, input').forEach(f => { f.value = ''; });
+          table.querySelectorAll('button[data-cell]').forEach(f => f.update(''));
           emit();
         },
         destroy: () => { container.innerHTML = ''; },

@@ -615,6 +615,19 @@
     return { score: Math.min(max, score), max, status: 'marked', detail: { columns: per, right: cols.filter(c => per[c].ok).length, of: cols.length } };
   }
 
+  /* ───────────── tick tables: one row per statement, tick the right column(s) ─────────────
+     answer: { mode:'ticks', rows:{ "1":[2], "2":[1,2] }, scale? }   value: { cells:{ r1c2:'✓' } }
+     A row scores when its ticks are exactly the key's (a row with an extra or missing tick does not). */
+  function markTicks(answer, value, max) {
+    const got = (value && value.cells) || {};
+    const ticked = {};
+    Object.keys(got).forEach(k => { const m = k.match(/^r(\d+)c(\d+)$/); if (m && String(got[k] || '').trim()) (ticked[m[1]] = ticked[m[1]] || []).push(+m[2]); });
+    if (!Object.keys(ticked).length) return { score: 0, max, status: 'unanswered', detail: {} };
+    const right = [], wrong = [];
+    Object.keys(answer.rows || {}).forEach(r => { const want = answer.rows[r].slice().sort().join(','), have = (ticked[r] || []).sort().join(','); (want === have ? right : wrong).push(r); });
+    return { score: ladder(right.length, max, answer.scale), max, status: 'marked', detail: { right, wrong } };
+  }
+
   /* ───────────── find the errors: line number + correction ─────────────
      answer: { mode:'errors', errors:[{ line:'4', fixes:['IF Age > 18'] }] }   value: { cells:{ r1c1:'4', r1c2:'IF Age > 18 THEN' } }
      Each row scores when its line number is one of the errors (not already used) and the correction contains the
@@ -812,7 +825,7 @@
     prose: markProse,
     formula: markNumeric, numeric: markNumeric, math: markNumeric,
     mcq: markMcq, match: markMatch,
-    table: (a, v, m, o) => (a.mode === 'trace' ? markTrace(a, v, m) : a.mode === 'errors' ? markErrors(a, v, m) : markKeyed('cells', a, v, m, o)),
+    table: (a, v, m, o) => (a.mode === 'trace' ? markTrace(a, v, m) : a.mode === 'errors' ? markErrors(a, v, m) : a.mode === 'ticks' ? markTicks(a, v, m) : markKeyed('cells', a, v, m, o)),
     cloze: (a, v, m, o) => markKeyed('blanks', a, v, m, o),
     label: (a, v, m, o) => markKeyed('labels', a, v, m, o),
     place: (a, v, m, o) => markKeyed('spots', a, v, m, o),
@@ -841,5 +854,5 @@
       .reduce((s, i) => s + ((list[i] && list[i].marks) || 1), 0);
     return { score: Math.max(0, Math.min(max, score)), max, status: 'self_marked', detail: { ticks: value.ticks || null, self: value.self != null ? +value.self : null } };
   }
-  return { mark, latexToText, norm, tokens, parseNumber, exprCanon, parseExpr, markPoints, markProse, markNumeric, markMcq, markMatch, markKeyed, markLogic, markPlot, markEcon, MARKERS, algebraSame, markEquation, markLogicText, caseMatters, markTrace, traceSame, markErrors };
+  return { mark, latexToText, norm, tokens, parseNumber, exprCanon, parseExpr, markPoints, markProse, markNumeric, markMcq, markMatch, markKeyed, markLogic, markPlot, markEcon, MARKERS, algebraSame, markEquation, markLogicText, caseMatters, markTrace, traceSame, markErrors, markTicks };
 });

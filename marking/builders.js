@@ -462,7 +462,12 @@
         const L = cfg.left || [], R = cfg.right || [], nameL = id => (L.find(x => String(x.id) === String(id)) || {}).text || id, nameR = id => (R.find(x => String(x.id) === String(id)) || {}).text || id;
         Object.keys(answer.pairs).filter(k => !(d.right || []).includes(k)).forEach(k => bad(`${nameL(k)} goes with ${nameR(answer.pairs[k])}.`));
         break; }
-      case 'table': if (answer.mode === 'errors') {
+      case 'table': if (answer.mode === 'ticks') {
+          const T = cfg.table || [];
+          (d.right || []).forEach(r => good(`"${(T[+r] || [])[0] || 'Row ' + r}": right.`));
+          (d.wrong || []).forEach(r => bad(`"${(T[+r] || [])[0] || 'Row ' + r}": should be ticked under ${answer.rows[r].map(c => (T[0] || [])[c] || 'column ' + c).join(' and ') || 'nothing'}.`));
+          break; }
+        if (answer.mode === 'errors') {
           (d.errors || []).forEach(e => (e.fixOk ? good(`Line ${e.line}: right error, right correction.`) : e.lineOk ? bad(`Line ${e.line} has an error, but the correction is not right.`) : bad(e.line == null ? 'Give the line number of each error.' : `Line ${e.line} is not one of the errors (or you named it twice).`)));
           if (d.found < r.max) info(`${d.found} of ${r.max} errors found and corrected.`);
           break; }
