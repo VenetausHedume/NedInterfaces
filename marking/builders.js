@@ -676,10 +676,10 @@
           info('This was marked by matching key words. If you made one of these points in different words, count it yourself.'); }
         break; }
       case 'prose': {
-        (d.perBox || []).forEach((i, b) => (i >= 0 ? good(`Box ${b + 1}: ${answer.points[i].alts[0]}.`) : bad(`Box ${b + 1}: no mark-scheme point found here${value && value.sides && answer.groups ? ' for this side' : ''}.`)));
+        (d.boxes || (d.perBox || []).map(i => (i >= 0 ? [i] : []))).forEach((l, b) => (l.length ? good(`Box ${b + 1}: ${l.map(i => answer.points[i].alts[0]).join('; ')}.`) : bad(`Box ${b + 1}: no mark-scheme point found here${value && value.sides && answer.groups ? ' for this side' : ''}.`)));
         (d.groups || []).forEach(g => info(`${g.title}: ${g.score} of up to ${g.max}.`));
         const rest = (d.missed || []).map(i => answer.points[i].alts[0]); if (rest.length) info('Points you could add: ' + rest.slice(0, 6).join('; ') + '.');
-        info('Long answers are marked on the points they contain, not on how well they are argued. Treat this score as a minimum.');
+        info('Written answers are marked on the mark-scheme points they contain. If you made a point in other words and it was not found, compare your answer with the mark scheme.');
         break; }
       case 'formula': case 'numeric': case 'math': {
         if (d.final) good('Your final answer is correct.');

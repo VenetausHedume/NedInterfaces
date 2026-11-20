@@ -171,7 +171,8 @@
 
   /* ───────────── long answer, one box per point ─────────────
      answer: { points:[...], groups?:[{title,max,points:[indexes]}], need? }   value: { points:[latex...], conclusion? }
-     Each box can earn at most one point; each point is credited once; a group never earns more than its max. */
+     A box earns the points it contains (up to one per 6 words, so a list of keywords is not enough); each point is
+     credited once; a group never earns more than its max. */
   function markProse(answer, value, max, opts, question) {
     const boxes = ((value && value.points) || []).concat(value && value.conclusion ? [value.conclusion] : []).map(latexToText).filter(b => b.trim());
     if (typeof value === 'string' && value.trim()) boxes.push(latexToText(value));
@@ -182,13 +183,29 @@
     const perBox = [], extraHits = [];
     /* when the student sorted their points under headings, a point only counts under the heading it belongs to */
     const sideOf = value && value.sides && answer.groups ? value.sides : null;
-    boxes.forEach((b, bi) => {
+    // which point each box could earn, then the best pairing of boxes and points (a box that matches two points
+    // should not take the one only a later box can earn)
+    const can = boxes.map((b, bi) => {
       const ctx = context(b, syn, question);
-      const got = [];
       const allowed = sideOf && answer.groups[sideOf[bi]] ? answer.groups[sideOf[bi]].points : null;
-      for (let i = 0; i < pts.length && !got.length; i++) if ((pts[i].alts || pts[i].require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, pts[i])) { got.push(i); taken.add(i); }   // one point per box: overlapping mark-scheme points in one sentence must not count twice
-      perBox.push(got.length ? got[0] : -1); extraHits.push(...got.slice(1));
+      return pts.map((p, i) => (p.alts || p.require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, p)).map((h, i) => (h ? i : -1)).filter(i => i >= 0);
     });
+    // a box can hold more than one mark point when it is written out ('the minimum energy that colliding particles need
+    // to react' is two points), but not a bare list of keywords: one point per sentence or per 6 words, at least one
+    const room = boxes.map(b => Math.max(1, b.split(/[.;!?\n]+/).filter(x => x.trim().split(/\s+/).length >= 2).length, Math.floor(b.trim().split(/\s+/).length / 6)));
+    const owner = {}, load = boxes.map(() => []);
+    function place(bi, seen) {
+      for (const i of can[bi]) {
+        if (seen.has(i)) continue; seen.add(i);
+        if (owner[i] == null || place(owner[i], seen)) {
+          if (owner[i] != null) load[owner[i]] = load[owner[i]].filter(x => x !== i);
+          owner[i] = bi; load[bi].push(i); return true;
+        }
+      }
+      return false;
+    }
+    boxes.forEach((b, bi) => { for (let k = 0; k < room[bi]; k++) { const before = load[bi].length; if (!place(bi, new Set(load[bi]))) break; if (load[bi].length === before) break; } });
+    load.forEach((l, bi) => { perBox.push(l.length ? l[0] : -1); extraHits.push(...l.slice(1)); l.forEach(i => taken.add(i)); });
     let awarded = perBox.filter(i => i >= 0).concat(extraHits);
     let score = awarded.length;
     const groupScores = [];
@@ -198,7 +215,8 @@
       score += awarded.filter(i => !answer.groups.some(g => g.points.includes(i))).length;
     }
     score = Math.min(max, answer.need || max, score);
-    return { score, max, status: score >= max ? 'marked' : 'self_check', detail: { perBox, awarded, groups: groupScores, missed: pts.map((p, i) => i).filter(i => pts[i].alts && !awarded.includes(i)) } };
+    // the score stands (it is saved and counts in totals); 'unsure' tells the page some marks may have been missed
+    return { score, max, status: score >= max ? 'marked' : 'unsure', detail: { perBox, boxes: load, awarded, groups: groupScores, missed: pts.map((p, i) => i).filter(i => pts[i].alts && !awarded.includes(i)) } };
   }
 
   /* ───────────── numbers ───────────── */

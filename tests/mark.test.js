@@ -129,7 +129,10 @@ t('prose same point twice', sc('prose', profit, { points: ['more revenue', 'reve
 t('prose one box holds two points -> one mark', sc('prose', profit, { points: ['more sales and more revenue'] }, 8), 1);
 t('prose side cap', sc('prose', profit, { points: ['more sales', 'more revenue', 'economies of scale', 'lower average costs', 'profit margin rises', 'sales rise again'] }, 8), 5);
 t('prose both sides capped at max', sc('prose', profit, { points: ['more sales', 'more revenue', 'economies of scale', 'lower average costs', 'profit margin rises', 'lower price', 'demand is inelastic so revenue falls', 'diseconomies of scale', 'higher average cost'] }, 8), 8);
-t('prose provisional', M.mark('prose', profit, { points: ['more sales'] }, { marks: 8 }).status, 'self_check');
+t('prose partial score stands', M.mark('prose', profit, { points: ['more sales'] }, { marks: 8 }).status, 'unsure');
+t('prose one written-out box holds two points', sc('prose', { points: [{ alts: ['minimum energy'] }, { alts: ['colliding particles'] }] }, { points: ['Activation energy is the minimum energy that colliding particles need to react'] }, 2), 2);
+t('prose two short sentences in one box', sc('prose', { points: [{ alts: ['bromine water'] }, { alts: ['colourless'] }] }, { points: ['Add bromine water. It turns colourless.'] }, 2), 2);
+t('prose best pairing of boxes and points', sc('prose', { points: [{ alts: ['parity bit'] }, { alts: ['parity bit is added'] }] }, { points: ['a parity bit is added', 'uses a parity bit'] }, 2), 2);
 t('prose empty', M.mark('prose', profit, { points: ['  '] }, { marks: 8 }).status, 'unanswered');
 t('prose conclusion counted', sc('prose', profit, { points: ['more sales'], conclusion: 'overall price may be lower' }, 8), 2);
 
