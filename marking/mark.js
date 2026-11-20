@@ -90,12 +90,23 @@
     add(DEFAULT_SYN.general); add(extra);
     return map;
   }
+  /* 'Spellings of syllabus terms must allow for clear and unambiguous separation from other syllabus terms with which they
+     may be confused (e.g. ethane / ethene …)' — a one-letter slip is forgiven, but not when the other spelling is a
+     different term: alkane/alkene, chlorine/chloride, sulfate/sulfite, absorb/adsorb, insulin/inulin … */
+  const CONFUSE_END = [['an', 'en'], ['en', 'yn'], ['an', 'yn'], ['in', 'id'], ['at', 'it'], ['ol', 'al'], ['ic', 'ous'], ['on', 'en']];
+  const CONFUSE = new Set(['absorb|adsorb', 'fusion|fission', 'afferent|efferent', 'ileum|ilium', 'insulin|inulin', 'ion|iron', 'mitosi|meiosi',
+    'reflect|refract', 'ovary|ovule', 'anion|union', 'cation|caution', 'gene|gen', 'conductor|conduction', 'convector|convection']);
+  function confusable(a, b) {
+    if (CONFUSE.has(a + '|' + b) || CONFUSE.has(b + '|' + a)) return true;
+    const root = (w, x, y) => w.slice(0, w.length - (w.endsWith(x) ? x.length : y.length));
+    return CONFUSE_END.some(([x, y]) => ((a.endsWith(x) && b.endsWith(y)) || (a.endsWith(y) && b.endsWith(x))) && root(a, x, y) === root(b, x, y));
+  }
   function hasTok(set, text, t, syn) {
     const cands = syn && syn[t] ? [...syn[t]] : [t];
     for (const c of cands) {
       if (c.includes(' ')) { if ((' ' + text + ' ').includes(' ' + c + ' ')) return true; continue; }
       if (set.has(c)) return true;
-      if (c.length >= 5 && !/\d/.test(c)) for (const s of set) if (lev1(s, c)) return true;
+      if (c.length >= 5 && !/\d/.test(c)) for (const s of set) if (lev1(s, c) && !confusable(s, c)) return true;
       if (c.length === 4 && !/\d/.test(c)) for (const s of set) if (s.length === 4 && s !== c && lev1(s, c) && [...s].sort().join('') === [...c].sort().join('')) return true;   // vlave → valve
     }
     return false;

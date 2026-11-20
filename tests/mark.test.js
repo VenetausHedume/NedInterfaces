@@ -347,6 +347,15 @@ t('a time ending in 16 is not hex', sc('table', { cells: { r0c1: { alts: ['08 16
     'It would raise tax revenue, so the government could spend more on education and health care for the poor.', 'However, it may act as a disincentive to work, because the rich keep less of each extra dollar they earn.',
     'The rich may emigrate to countries with lower taxes, which means the government could end up with less revenue.', 'Overall, whether it should depends on how high the rate is and how easily the rich can leave.']), [3, 8]); }
 
+// ── spelling: a slip is forgiven, a different syllabus term is not ──
+{ const sp = (alt, ans) => M.mark('text', { points: [{ alts: [alt] }], need: 1 }, ans, { marks: 1 }).score;
+  t('spelling: ethene is not ethane', sp('ethane', 'ethene'), 0);
+  t('spelling: chloride is not chlorine', sp('chlorine', 'chloride'), 0);
+  t('spelling: adsorbs is not absorbs', sp('absorbs', 'adsorbs'), 0);
+  t('spelling: sulfite is not sulfate', sp('sulfate', 'sulfite'), 0);
+  t('spelling: refrection is a slip for refraction', sp('refraction', 'refrection'), 1);
+  t('spelling: evaparation is a slip for evaporation', sp('evaporation', 'evaparation'), 1); }
+
 // ── general ──
 t('no answer key', M.mark('text', null, { latex: 'x' }, { marks: 1 }).status, 'no_answer_key');
 t('unknown ui', M.mark('zzz', {}, { a: 1 }, { marks: 1 }).status, 'no_marker');

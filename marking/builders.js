@@ -683,6 +683,7 @@
         const framing = (b) => { const k = fmt && value.sec ? value.sec[b] : null; return k != null && fmt.sections[k] && /^(definition|conclusion)$/i.test(fmt.sections[k].title); };
         (d.boxes || (d.perBox || []).map(i => (i >= 0 ? [i] : []))).forEach((l, b) => { const n = boxName(b);
           if (!l.length && framing(b)) return info(`${n}: no separate mark for this in the scheme, but it frames your answer.`);
+          if (!l.length && d.level != null) return info(`${n}: no mark-scheme point here (it can still count as explanation or judgement).`);
           return l.length ? good(`${n}: ${l.map(i => answer.points[i].alts[0]).join('; ')}.`) : bad(`${n}: no mark-scheme point found here${value && value.sides && answer.groups && value.sides[b] >= 0 && answer.groups[value.sides[b]] ? ' for this side' : ''}.`); });
         (d.groups || []).forEach(g => info(`${g.title}: ${g.score} of up to ${g.max}.`));
         if (d.level != null) {
