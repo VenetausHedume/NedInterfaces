@@ -51,6 +51,7 @@ const layer=new Konva.Layer(); stage.add(layer);
 // statusEl provided by scaffold
 
 let uid=1, tool='dot', selected=null;
+const MAXE=(question&&question.config&&question.config.slotMax)||2;   // 3 for a triple bond (N2)
 // atom: { id, el, circle:bool, x, y, slots:{top:[],bottom:[],left:[],right:[]} }  each slot: array of 'dot'|'cross' (max 2)
 let atoms=[];
 const SIDES=['top','bottom','left','right'];
@@ -82,7 +83,7 @@ function render(){
       hit.on('mousedown touchstart',(e)=>{ e.cancelBubble=true; onSlot(a,side); });
       layer.add(hit);
       // draw electrons in slot (1 -> centre; 2 -> side by side)
-      es.forEach((type,i)=>{ let ex=c.x, ey=c.y; if(es.length===2){ if(side==='top'||side==='bottom'){ ex=c.x+(i===0?-5:5); } else { ey=c.y+(i===0?-5:5); } }
+      es.forEach((type,i)=>{ let ex=c.x, ey=c.y; if(es.length>=2){ const o=es.length===2?(i===0?-5:5):(i-1)*7; if(side==='top'||side==='bottom'){ ex=c.x+o; } else { ey=c.y+o; } }
         // electrons do not take clicks, so a second click on the same ring adds the second electron
         if(type==='dot'){ layer.add(new Konva.Circle({x:ex,y:ey,radius:3.2,fill:'#2b2b2b',listening:false})); }
         else { layer.add(new Konva.Text({x:ex,y:ey,text:'\u00d7',fontSize:13,fontStyle:'bold',fill:'#2b2b2b',offsetX:4,offsetY:7,listening:false})); }
@@ -93,7 +94,7 @@ function render(){
 }
 
 function onSlot(a,side){
-  if(tool==='dot'||tool==='cross'){ if(a.slots[side].length<2){ a.slots[side].push(tool); render(); emit(); } }
+  if(tool==='dot'||tool==='cross'){ if(a.slots[side].length<MAXE){ a.slots[side].push(tool); render(); emit(); } }
   else if(tool==='erase'){ if(a.slots[side].length){ a.slots[side].pop(); render(); emit(); } }
   else if(tool==='select'){ selected=a; chargeSel.value=a.charge||''; render(); }
 }

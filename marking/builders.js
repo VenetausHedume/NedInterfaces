@@ -372,7 +372,7 @@
              { orient:{ type:'diode', from:'F', to:'E' } } anode at F, cathode at E
        sel   'lamp' | { type:'resistor', label:'220 Ω' }
      The older key { components, arrangement, meters } still works. */
-  const SOURCE = ['cell', 'battery', 'ac', 'supply'];
+  const SOURCE = ['cell', 'battery', 'ac', 'supply', 'dcsupply', 'generator'];
   const kindOf = t => (t === 'bulb' ? 'lamp' : t);
   function circuitGraph(value, question) {
     const fig = (question && question.config && question.config.circuit) || null;
@@ -423,7 +423,7 @@
     }
     // directed: current leaves the + plate (a) and must come back to the − plate (b) through any diodes the right way
     function closed(src, directed) { if (src.openA || src.openB || src.a === src.b) return false;
-      return reach(G, src.a, new Set([src.id]), directed && src.type !== 'ac').has(src.b); }
+      return reach(G, src.a, new Set([src.id]), directed && !['ac', 'supply', 'generator'].includes(src.type)).has(src.b); }
     if (r.series) {
       const got = pickAll(r.series); if (!got) return false;
       if (count('source') && !closed(sources[0])) return false;
@@ -458,7 +458,7 @@
     if (r.joined) { const n = r.joined.map(l => G.nodeNet[l]); return n.every(x => x && x === n[0]); }
     if (r.orient) { const [p, q] = [G.nodeNet[r.orient.from], G.nodeNet[r.orient.to]]; if (!p || !q) return false;
       return C.some(c => selMatch(c, r.orient.type) && c.a === p && c.b === q); }
-    if (r.forward) { const d = C.filter(c => selMatch(c, r.forward)); if (!d.length || sources.length !== 1 || sources[0].type === 'ac') return false;
+    if (r.forward) { const d = C.filter(c => selMatch(c, r.forward)); if (!d.length || sources.length !== 1 || ['ac', 'supply', 'generator'].includes(sources[0].type)) return false;
       const src = sources[0]; return d.every(x => !x.openA && !x.openB) && closed(src, true); }
     return false;
   }

@@ -33,7 +33,10 @@
     <button data-comp="led" title="Light-emitting diode (LED)"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="15" x2="12" y2="15"/><path d="M12 8 L24 15 L12 22 Z"/><line x1="24" y1="8" x2="24" y2="22"/><line x1="24" y1="15" x2="42" y2="15"/><line x1="26" y1="6" x2="32" y2="1"/><line x1="31" y1="9" x2="37" y2="4"/></svg></button>
     <button data-comp="fuse" title="Fuse"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="42" y2="13"/><rect x="10" y="8" width="24" height="10"/></svg></button>
     <button data-comp="heater" title="Heater"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="8" y2="13"/><rect x="8" y="7" width="28" height="12"/><line x1="15" y1="7" x2="15" y2="19"/><line x1="22" y1="7" x2="22" y2="19"/><line x1="29" y1="7" x2="29" y2="19"/><line x1="36" y1="13" x2="42" y2="13"/></svg></button>
-    <button data-comp="ac" title="a.c. power supply"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="13" y2="13"/><circle cx="22" cy="13" r="9"/><path d="M16 13 C17.5 8 20.5 8 22 13 C23.5 18 26.5 18 28 13" stroke-width="1.6"/><line x1="31" y1="13" x2="42" y2="13"/></svg></button>
+    <button data-comp="ac" title="a.c. power supply"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="15" x2="14" y2="15"/><circle cx="17" cy="15" r="3"/><circle cx="27" cy="15" r="3"/><line x1="30" y1="15" x2="42" y2="15"/><path d="M18 7 C19.5 3.5 21 3.5 22 7 C23 10.5 24.5 10.5 26 7" stroke-width="1.6"/></svg></button>
+    <button data-comp="supply" title="Power supply"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="15" x2="14" y2="15"/><circle cx="17" cy="15" r="3"/><circle cx="27" cy="15" r="3"/><line x1="30" y1="15" x2="42" y2="15"/></svg></button>
+    <button data-comp="dcsupply" title="d.c. power supply"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="15" x2="14" y2="15"/><circle cx="17" cy="15" r="3"/><circle cx="27" cy="15" r="3"/><line x1="30" y1="15" x2="42" y2="15"/><text x="17" y="9" font-size="9" text-anchor="middle" stroke="none" fill="#2b2b2b" font-weight="bold">+</text><text x="27" y="9" font-size="9" text-anchor="middle" stroke="none" fill="#2b2b2b" font-weight="bold">−</text></svg></button>
+    <button data-comp="generator" title="Generator"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="9" y2="13"/><circle cx="22" cy="13" r="9"/><line x1="35" y1="13" x2="42" y2="13"/><text x="22" y="17" font-size="11" text-anchor="middle" stroke="none" fill="#2b2b2b" font-weight="bold">G</text></svg></button>
     <button data-comp="motor" title="Motor"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="9" y2="13"/><circle cx="22" cy="13" r="9"/><line x1="35" y1="13" x2="42" y2="13"/><text x="22" y="17" font-size="11" text-anchor="middle" stroke="none" fill="#2b2b2b" font-weight="bold">M</text></svg></button>
     <span class="sep"></span>
     <button id="del">Delete</button>
@@ -73,8 +76,13 @@ function drawComp(type,len,kind){
     return g; }
   // leads
   parts.push(line([-L,0,-18,0])); parts.push(line([18,0,L,0]));
-  if(type==='ac'){ parts.push(new Konva.Circle({radius:14,stroke:S,strokeWidth:SW}));
-    parts.push(new Konva.Path({data:'M-8 0 C-6 -8 -2 -8 0 0 C2 8 6 8 8 0',stroke:S,strokeWidth:2}));
+  if(type==='ac'||type==='supply'||type==='dcsupply'){            // power supplies: two terminals (Cambridge symbols)
+    parts.length=0; parts.push(line([-L,0,-12,0])); parts.push(line([12,0,L,0]));
+    parts.push(new Konva.Circle({x:-9,y:0,radius:3.5,stroke:S,strokeWidth:2,fill:'#fffdf7'})); parts.push(new Konva.Circle({x:9,y:0,radius:3.5,stroke:S,strokeWidth:2,fill:'#fffdf7'}));
+    if(type==='ac') parts.push(new Konva.Path({data:'M-5 -9 C-3.5 -13 -1.5 -13 0 -9 C1.5 -5 3.5 -5 5 -9',stroke:S,strokeWidth:1.8}));
+    if(type==='dcsupply'){ [['+',-9],['\u2212',9]].forEach(([t,x])=>{ const k=new Konva.Text({text:t,fontSize:14,fontStyle:'bold',fill:S}); k.offsetX(k.width()/2); k.offsetY(k.height()+5); k.x(x); parts.push(k); }); } }
+  else if(type==='generator'){ parts.push(new Konva.Circle({radius:14,stroke:S,strokeWidth:SW}));
+    const t=new Konva.Text({text:'G',fontSize:15,fontStyle:'bold',fill:S}); t.offsetX(t.width()/2); t.offsetY(t.height()/2); parts.push(t);
     parts.push(line([-18,0,-14,0])); parts.push(line([14,0,18,0])); }
   if(type==='cell'){ // long line + short thick line
     parts.push(line([-6,-14,-6,14])); parts.push(line([6,-7,6,7],{strokeWidth:6}));
