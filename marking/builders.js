@@ -235,7 +235,7 @@
      answer: { components:{ cell:1, lamp:2, switch:1 }, arrangement?:'series'|'parallel', meters?:true }
      One criterion each: the right components, a complete circuit in the right arrangement, meters connected correctly. */
   const ALIAS = { bulb: 'lamp', battery: 'cell', variable: 'resistor' };
-  function markCircuit(answer, value, max) {
+  function markCircuitLegacy(answer, value, max) {
     const comps = (value && value.components) || [];
     if (!comps.length) return un(max);
     const have = {}; comps.forEach(c => { const t = ALIAS[c.type] && !(c.type in (answer.components || {})) ? ALIAS[c.type] : c.type; have[t] = (have[t] || 0) + 1; });
@@ -247,6 +247,136 @@
     const ok = crit.filter(c => c.ok).length;
     const score = ok === crit.length ? max : Math.min(Math.max(0, max - 1), Math.floor(max * ok / crit.length));
     return { score, max, status: 'marked', detail: { criteria: crit, have } };
+  }
+
+  /* The circuit is read again here from its parts and wires (what the browser reports about it is not trusted).
+     A printed circuit to complete comes from question.config.circuit; the student's own parts and wires are added to it.
+     Terminal a of a cell is its + plate (the long line); terminal a of a diode or LED is its anode.
+
+     answer: { criteria:[{ name, marks, rules:[rule…] }] }   a criterion scores its marks when all its rules hold.
+       rule  { has:{ thermistor:1, lamp:2 } }             exactly these numbers of parts (source = any cell, battery or supply)
+             { atLeast:{ lamp:1 } }
+             { atLeastOf:{ n:2, of:{ source:1, led:1, resistor:1 } } }   at least n of the listed parts drawn
+             { complete:true }                            a closed circuit: every part joined at both ends, current can flow round
+             { series:['source','lamp','thermistor'] }    these parts all in one loop with nothing in parallel with them
+             { parallel:['lamp','lamp'] }                 each listed part directly across the same two points
+             { acrossSource:['lamp','lamp'] }             each listed part directly across the supply
+             { across:{ meter:'voltmeter', of:[sel…] } }  a voltmeter across the part(s) (several in series: across the lot)
+             { inBranch:{ meter:'ammeter', with:sel } }   an ammeter carrying the same current as the part
+             { between:{ type:'ammeter', at:['A','B'] } } a part joining the labelled points
+             { joined:['C','D'] }                         the labelled points joined by wire only
+             { forward:'led' }                            diode / LED conducting (anode towards the + side)
+             { orient:{ type:'diode', from:'F', to:'E' } } anode at F, cathode at E
+       sel   'lamp' | { type:'resistor', label:'220 Ω' }
+     The older key { components, arrangement, meters } still works. */
+  const SOURCE = ['cell', 'battery', 'ac', 'supply'];
+  const kindOf = t => (t === 'bulb' ? 'lamp' : t);
+  function circuitGraph(value, question) {
+    const fig = (question && question.config && question.config.circuit) || null;
+    const parts = [], wires = [];
+    if (fig) { (fig.components || []).forEach(c => parts.push(Object.assign({}, c, { given: true }))); (fig.wires || []).forEach(w => wires.push(w)); }
+    ((value && value.components) || []).filter(c => !c.given && !(fig && c.type === 'node')).forEach(c => parts.push({ id: String(c.id), type: kindOf(String(c.type)) }));
+    const ids = new Set(parts.map(p => p.id)); if (ids.size !== parts.length) return null;
+    const keys = []; parts.forEach(p => { keys.push(p.id + ':a'); if (p.type !== 'node') keys.push(p.id + ':b'); });
+    const keySet = new Set(keys);
+    ((value && value.wires) || []).filter(w => !w.given).forEach(w => { if (keySet.has(w.a) && keySet.has(w.b) && w.a !== w.b) wires.push({ a: w.a, b: w.b, student: true }); });
+    const par = {}; keys.forEach(k => (par[k] = k));
+    const find = x => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };
+    const touched = new Set();
+    wires.forEach(w => { par[find(w.a)] = find(w.b); touched.add(w.a); touched.add(w.b); });
+    const net = k => find(k);
+    const comps = parts.filter(p => p.type !== 'node').map(p => ({ id: p.id, type: p.type, label: p.label || null, given: !!p.given, a: net(p.id + ':a'), b: net(p.id + ':b'),
+      openA: !touched.has(p.id + ':a'), openB: !touched.has(p.id + ':b') }));
+    const nodeNet = {}; parts.filter(p => p.type === 'node' && p.label).forEach(p => { nodeNet[p.label] = net(p.id + ':a'); });
+    return { comps, nodeNet };
+  }
+  function selMatch(c, sel) {
+    if (typeof sel === 'string') sel = { type: sel };
+    if (sel.type === 'source') { if (!SOURCE.includes(c.type)) return false; }
+    else if (sel.type && kindOf(sel.type) !== c.type) return false;
+    if (sel.label && String(c.label || '').replace(/\s+/g, '') !== String(sel.label).replace(/\s+/g, '')) return false;
+    return true;
+  }
+  // nets that current can reach from `from` through conducting parts (voltmeters carry no current), leaving out `skip`
+  function reach(G, from, skip, directed) {
+    const seen = new Set([from]); const q = [from];
+    while (q.length) { const n = q.shift(); G.comps.forEach(c => { if (skip.has(c.id) || c.type === 'voltmeter' || c.openA || c.openB) return;
+      if (directed && (c.type === 'diode' || c.type === 'led')) { if (c.a === n && !seen.has(c.b)) { seen.add(c.b); q.push(c.b); } return; }
+      [[c.a, c.b], [c.b, c.a]].forEach(([x, y]) => { if (x === n && !seen.has(y)) { seen.add(y); q.push(y); } }); }); }
+    return seen;
+  }
+  function circuitRule(G, r) {
+    const C = G.comps;
+    const count = sel => C.filter(c => selMatch(c, sel)).length;
+    const pickAll = sels => { const used = new Set(), out = []; for (const s of sels) { const c = C.find(x => !used.has(x.id) && selMatch(x, s)); if (!c) return null; used.add(c.id); out.push(c); } return out; };
+    const sources = C.filter(c => SOURCE.includes(c.type));
+    if (r.has) return Object.keys(r.has).every(k => count(k) === r.has[k]);
+    if (r.atLeastOf) { let got = 0; Object.keys(r.atLeastOf.of).forEach(k => { got += Math.min(count(k), r.atLeastOf.of[k]); }); return got >= r.atLeastOf.n; }
+    if (r.atLeast) return Object.keys(r.atLeast).every(k => count(k) >= r.atLeast[k]);
+    if (r.complete) {
+      if (C.some(c => !c.given && (c.openA || c.openB))) return false;
+      if (sources.length !== 1) return sources.length > 1 && sources.every(s => !s.openA && !s.openB) && closed(sources[0]);
+      return closed(sources[0]);
+    }
+    // directed: current leaves the + plate (a) and must come back to the − plate (b) through any diodes the right way
+    function closed(src, directed) { if (src.openA || src.openB || src.a === src.b) return false;
+      return reach(G, src.a, new Set([src.id]), directed && src.type !== 'ac').has(src.b); }
+    if (r.series) {
+      const got = pickAll(r.series); if (!got) return false;
+      if (count('source') && !closed(sources[0])) return false;
+      // in one loop: every net touched by these parts joins exactly two current-carrying terminals
+      const deg = {}; C.filter(c => c.type !== 'voltmeter').forEach(c => { deg[c.a] = (deg[c.a] || 0) + 1; deg[c.b] = (deg[c.b] || 0) + 1; });
+      return got.every(c => deg[c.a] === 2 && deg[c.b] === 2 && c.a !== c.b);
+    }
+    if (r.parallel) { const got = pickAll(r.parallel); if (!got) return false; const s = new Set([got[0].a, got[0].b]);
+      return got[0].a !== got[0].b && got.every(c => s.has(c.a) && s.has(c.b) && c.a !== c.b); }
+    if (r.acrossSource) { const got = pickAll(r.acrossSource); if (!got || sources.length !== 1) return false; const s = new Set([sources[0].a, sources[0].b]);
+      return sources[0].a !== sources[0].b && got.every(c => s.has(c.a) && s.has(c.b) && c.a !== c.b) && closed(sources[0]); }
+    if (r.across) {
+      const tg = pickAll(r.across.of); if (!tg) return false;
+      let ends;
+      if (tg.length === 1) ends = [tg[0].a, tg[0].b];
+      else { const cnt = {}; tg.forEach(c => { cnt[c.a] = (cnt[c.a] || 0) + 1; cnt[c.b] = (cnt[c.b] || 0) + 1; });
+        ends = Object.keys(cnt).filter(n => cnt[n] === 1);
+        if (ends.length !== 2) { const s = new Set([tg[0].a, tg[0].b]); if (tg.every(c => s.has(c.a) && s.has(c.b))) ends = [tg[0].a, tg[0].b]; else return false; } }
+      return C.some(m => selMatch(m, r.across.meter || 'voltmeter') && !m.openA && !m.openB && ((m.a === ends[0] && m.b === ends[1]) || (m.a === ends[1] && m.b === ends[0])));
+    }
+    if (r.inBranch) {
+      const tg = pickAll([r.inBranch.with]); if (!tg) return false; const t = tg[0];
+      const deg = {}; C.filter(c => c.type !== 'voltmeter').forEach(c => { deg[c.a] = (deg[c.a] || 0) + 1; deg[c.b] = (deg[c.b] || 0) + 1; });
+      return C.some(m => { if (!selMatch(m, r.inBranch.meter || 'ammeter') || m.openA || m.openB || m.a === m.b) return false;
+        // walk along the branch from the meter through points joining just two parts
+        for (const start of [m.a, m.b]) { let at = start, prev = m, guard = 0;
+          while (guard++ < 50 && deg[at] === 2) { const nx = C.find(c => c !== prev && c.type !== 'voltmeter' && (c.a === at || c.b === at)); if (!nx) break; if (nx === t) return true; at = nx.a === at ? nx.b : nx.a; prev = nx; } }
+        return false; });
+    }
+    if (r.between) { const [p, q] = r.between.at.map(l => G.nodeNet[l]); if (!p || !q) return false;
+      return C.some(c => selMatch(c, r.between.type) && !c.given && ((c.a === p && c.b === q) || (c.a === q && c.b === p))); }
+    if (r.joined) { const n = r.joined.map(l => G.nodeNet[l]); return n.every(x => x && x === n[0]); }
+    if (r.orient) { const [p, q] = [G.nodeNet[r.orient.from], G.nodeNet[r.orient.to]]; if (!p || !q) return false;
+      return C.some(c => selMatch(c, r.orient.type) && c.a === p && c.b === q); }
+    if (r.forward) { const d = C.filter(c => selMatch(c, r.forward)); if (!d.length || sources.length !== 1 || sources[0].type === 'ac') return false;
+      const src = sources[0]; return d.every(x => !x.openA && !x.openB) && closed(src, true); }
+    return false;
+  }
+  function markCircuit(answer, value, max, opts, question) {
+    if (!answer.criteria) return markCircuitLegacy(answer, value, max);
+    const added = ((value && value.components) || []).filter(c => !c.given);
+    if (!value || (!added.length && !((value.wires || []).filter(w => !w.given).length))) return un(max);
+    const G = circuitGraph(value, question);
+    if (!G) return { score: 0, max, status: 'marked', detail: { criteria: [{ name: 'circuit could not be read', ok: false }] } };
+    let score = 0; const crit = answer.criteria.map(c => { const ok = (c.rules || []).every(r => circuitRule(G, r)); if (ok) score += (c.marks == null ? 1 : c.marks); return { name: c.name, ok }; });
+    return { score: Math.min(score, max), max, status: 'marked', detail: { criteria: crit } };
+  }
+
+  /* ───────── circuit symbols ─────────  value { symbol:'variable', name? }   answer { symbol, names?:['variable resistor',…] } */
+  const SYM_ALIAS = { bulb: 'lamp' };
+  function markSymbol(answer, value, max) {
+    if (!value || (!value.symbol && !value.name)) return un(max);
+    const symOk = (SYM_ALIAS[value.symbol] || value.symbol) === answer.symbol;
+    const norm = x => String(x || '').toLowerCase().replace(/[‑–-]/g, ' ').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+    const nameOk = !answer.names || answer.names.some(n => norm(value.name) === norm(n) || norm(value.name).replace(/^an? /, '') === norm(n));
+    return { score: symOk && nameOk ? max : 0, max, status: 'marked', detail: { symOk, nameOk, named: !!answer.names } };
   }
 
   /* ───────── nuclear equations ─────────  value: { left:[{A,Z,s}], right:[…] }  answer: same shape, the full equation
@@ -606,13 +736,14 @@
         if (c.name === 'point') (c.ok ? good('X is in the right place.') : bad(`X should be ${answer.where === 'inside' ? 'inside the curve (resources unused)' : answer.where === 'on' ? 'on the curve (all resources used)' : 'beyond the curve (not reachable now)'}.`)); }); break;
       case 'pricecontrol': d.criteria.forEach(c => { if (c.name === 'line') (c.ok ? good('The line is on the right side of the equilibrium.') : bad(`A ${answer.control === 'max' ? 'maximum price only has an effect below' : 'minimum price only has an effect above'} the equilibrium.`));
         if (c.name === 'gap') (c.ok ? good(`Right: it causes a ${d.gap}.`) : bad(`It causes a ${d.gap}: at that price the quantity ${d.gap === 'shortage' ? 'demanded is more than the quantity supplied' : 'supplied is more than the quantity demanded'}.`)); }); break;
+      case 'symbol': d.symOk ? good('Right symbol.') : bad('That is not the right symbol.'); if (d.named) d.nameOk ? good('Right name.') : bad('Check the name of the device.'); break;
       case 'circuit': (d.criteria || []).forEach(c => (c.ok ? good(c.name[0].toUpperCase() + c.name.slice(1) + ': right.') : bad(c.name[0].toUpperCase() + c.name.slice(1) + ': not right.'))); break;
     }
     return out;
   }
   M.explain = explain;
 
-  Object.assign(M.MARKERS, { code: markAlgo('code'), flowchart: markAlgo('flowchart'), order: markOrder, sql: markSql, shells: markShells, structure: markStructure, lewis: markLewis, circuit: markCircuit, nuclide: markNuclide, transform: markTransform, numberline: markNumberline, venn: markVenn, bars: markBars, construct: markConstruct, rays: markRays, arrows: markArrows, ppc: markPpc, pricecontrol: markPriceControl });
+  Object.assign(M.MARKERS, { code: markAlgo('code'), flowchart: markAlgo('flowchart'), order: markOrder, sql: markSql, shells: markShells, structure: markStructure, lewis: markLewis, circuit: markCircuit, symbol: markSymbol, nuclide: markNuclide, transform: markTransform, numberline: markNumberline, venn: markVenn, bars: markBars, construct: markConstruct, rays: markRays, arrows: markArrows, ppc: markPpc, pricecontrol: markPriceControl });
   M.FEATURE_NAMES = FEATURE_NAMES;
   return M;
 });

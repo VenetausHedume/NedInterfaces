@@ -33,6 +33,7 @@
     <button data-comp="led" title="Light-emitting diode (LED)"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="15" x2="12" y2="15"/><path d="M12 8 L24 15 L12 22 Z"/><line x1="24" y1="8" x2="24" y2="22"/><line x1="24" y1="15" x2="42" y2="15"/><line x1="26" y1="6" x2="32" y2="1"/><line x1="31" y1="9" x2="37" y2="4"/></svg></button>
     <button data-comp="fuse" title="Fuse"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="42" y2="13"/><rect x="10" y="8" width="24" height="10"/></svg></button>
     <button data-comp="heater" title="Heater"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="8" y2="13"/><rect x="8" y="7" width="28" height="12"/><line x1="15" y1="7" x2="15" y2="19"/><line x1="22" y1="7" x2="22" y2="19"/><line x1="29" y1="7" x2="29" y2="19"/><line x1="36" y1="13" x2="42" y2="13"/></svg></button>
+    <button data-comp="ac" title="a.c. power supply"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="13" y2="13"/><circle cx="22" cy="13" r="9"/><path d="M16 13 C17.5 8 20.5 8 22 13 C23.5 18 26.5 18 28 13" stroke-width="1.6"/><line x1="31" y1="13" x2="42" y2="13"/></svg></button>
     <button data-comp="motor" title="Motor"><svg width="44" height="26" viewBox="0 0 44 26" fill="none" stroke="#2b2b2b" stroke-width="2" stroke-linecap="round"><line x1="2" y1="13" x2="9" y2="13"/><circle cx="22" cy="13" r="9"/><line x1="35" y1="13" x2="42" y2="13"/><text x="22" y="17" font-size="11" text-anchor="middle" stroke="none" fill="#2b2b2b" font-weight="bold">M</text></svg></button>
     <span class="sep"></span>
     <button id="del">Delete</button>
@@ -41,14 +42,19 @@
       const statusEl = document.createElement('div'); statusEl.style.cssText='font:13px ui-monospace,Menlo,Consolas,monospace;margin-top:8px;color:#555;';
       container.append(tb, wrap, statusEl);
       container.appendChild(Ned.el('p',{class:'ned-note'},['Click a component to add it. To wire: click one blue terminal, then the terminal to join it to. Select a component to turn it; select a wire to delete it or drag its corner.']));
+      if(question&&question.config&&question.config.names===false) tb.querySelectorAll('[data-comp]').forEach(b=>b.removeAttribute('title'));   // knowing the symbols is part of the question
       tb.querySelectorAll('button').forEach(b=>{ b.style.cssText='padding:4px 7px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;'; });
       tb.querySelectorAll('.sep').forEach(x=>{ x.style.cssText='width:1px;height:24px;background:var(--line);margin:0 4px;'; });
       tb.querySelectorAll('button svg').forEach(sv=>{ sv.style.display='block'; });
 
 
 // wrap & bar provided by scaffold
-const W=Math.min(980,(container.clientWidth||900)-4), H=480;
+const FIG=(question&&question.config&&question.config.circuit)||null;      // the printed circuit to complete
+const W=Math.min(980,(container.clientWidth||900)-4);
+const FW=FIG?Math.max(FIG.width||600,600):900, FH=FIG?(FIG.height||300)+170:480;   // room under the figure for new parts
+const K=FIG?Math.min(1,W/FW):1, H=Math.round(FIG?FH*K:480);
 const stage=new Konva.Stage({container:wrap,width:W,height:H,draggable:true});
+if(K!==1) stage.scale({x:K,y:K});
 const layer=new Konva.Layer(); stage.add(layer);
 // statusEl provided by scaffold
 
@@ -59,10 +65,17 @@ let wires=[];   // {id, a:{x,y,snap}, mid:{x,y}, b:{x,y,snap}}  drawn segments; 
 // ---- component symbols drawn in a group; body length 60, two leads to terminals at x=-40 and x=+40 ----
 const LEAD=40, S='#2b2b2b', SW=2.5;
 function line(pts,extra){ return new Konva.Line(Object.assign({points:pts,stroke:S,strokeWidth:SW,lineCap:'round'},extra||{})); }
-function drawComp(type){
-  const g=new Konva.Group(); const parts=[];
+function drawComp(type,len,kind){
+  const g=new Konva.Group(); const parts=[]; const L=Math.max(len||LEAD,18);
+  if(type==='node'){                                    // a point of a given circuit: junction dot, terminal post, or nothing
+    if(kind==='dot') g.add(new Konva.Circle({radius:3.5,fill:S}));
+    else if(kind==='post') g.add(new Konva.Circle({radius:4.5,fill:'#fffdf7',stroke:S,strokeWidth:1.8}));
+    return g; }
   // leads
-  parts.push(line([-LEAD,0,-18,0])); parts.push(line([18,0,LEAD,0]));
+  parts.push(line([-L,0,-18,0])); parts.push(line([18,0,L,0]));
+  if(type==='ac'){ parts.push(new Konva.Circle({radius:14,stroke:S,strokeWidth:SW}));
+    parts.push(new Konva.Path({data:'M-8 0 C-6 -8 -2 -8 0 0 C2 8 6 8 8 0',stroke:S,strokeWidth:2}));
+    parts.push(line([-18,0,-14,0])); parts.push(line([14,0,18,0])); }
   if(type==='cell'){ // long line + short thick line
     parts.push(line([-6,-14,-6,14])); parts.push(line([6,-7,6,7],{strokeWidth:6}));
     // reconnect leads to plates
@@ -104,16 +117,25 @@ function drawComp(type){
   return g;
 }
 // terminal local positions (two ends)
-function termLocals(){ return [{term:'a',x:-LEAD,y:0},{term:'b',x:LEAD,y:0}]; }
+function termLocals(rec){ if(rec&&rec.type==='node') return [{term:'a',x:0,y:0}];
+  const L=Math.max((rec&&rec.len)||LEAD,18); return [{term:'a',x:-L,y:0},{term:'b',x:L,y:0}]; }
 
-function addComp(type,x,y,fixedId,rot){
+/* opts: { len, label, given, kind }. A given part belongs to the printed figure: it cannot be moved or deleted. */
+function addComp(type,x,y,fixedId,rot,opts){
+  opts=opts||{};
   const id=fixedId||('c'+(uid++));
-  const g=new Konva.Group({x,y,draggable:true});
-  g.add(drawComp(type));
-  const rec={id,type,node:g,rot:rot||0}; if(rot) g.rotation(rot);
+  const g=new Konva.Group({x,y,draggable:!opts.given});
+  g.add(drawComp(type,opts.len,opts.kind));
+  const rec={id,type,node:g,rot:rot||0,len:opts.len||null,given:!!opts.given,kind:opts.kind||null,label:opts.label||null}; if(rot) g.rotation(rot);
+  if(opts.label){ const vert=(rot||0)%180!==0, isNode=type==='node';
+    const t=new Konva.Text({text:opts.label,fontSize:15,fill:S,listening:false});
+    if(isNode) t.position({x:x-t.width()/2-(0),y:y-t.height()-8});
+    else if(vert) t.position({x:x+22,y:y-t.height()/2});
+    else t.position({x:x-t.width()/2,y:y-t.height()-16});
+    layer.add(t); rec.labelNode=t; }
   g.on('dragmove',()=>{ drawTerms(); drawWires(); if(selected===rec) showRot(rec); });
   g.on('dragend',()=>emit());
-  g.on('mousedown touchstart',(e)=>{ if(tool==='select'){ e.cancelBubble=true; select(rec); } });
+  g.on('mousedown touchstart',(e)=>{ if(tool==='select'&&!rec.given){ e.cancelBubble=true; select(rec); } });
   comps.push(rec); layer.add(g); if(!loading){ drawTerms(); layer.batchDraw(); emit(); }
   return rec;
 }
@@ -121,15 +143,16 @@ function addComp(type,x,y,fixedId,rot){
 // ---- terminals (blue dots at both ends, in world coords) ----
 function compTerms(rec){
   const g=rec.node; const rot=(rec.rot||0)*Math.PI/180, cos=Math.cos(rot), sin=Math.sin(rot);
-  return termLocals().map(t=>({ key:rec.id+':'+t.term, id:rec.id, term:t.term,
+  return termLocals(rec).map(t=>({ key:rec.id+':'+t.term, id:rec.id, term:t.term,
     x:g.x()+t.x*cos - t.y*sin, y:g.y()+t.x*sin + t.y*cos }));
 }
-function allTerms(){ let a=[]; comps.forEach(c=>a=a.concat(compTerms(c))); return a; }
-function termByKey(k){ return allTerms().find(t=>t.key===k); }
+function allTerms(){ let a=[]; comps.forEach(c=>{ if(c.type==='node'&&c.kind==='corner') return; a=a.concat(compTerms(c)); }); return a; }
+function anyTerm(k){ let r=null; comps.forEach(c=>compTerms(c).forEach(t=>{ if(t.key===k) r=t; })); return r; }
+function termByKey(k){ return anyTerm(k); }
 let termShapes=[];
 function drawTerms(){
   termShapes.forEach(s=>s.destroy()); termShapes=[];
-  allTerms().forEach(t=>{ const c=new Konva.Circle({x:t.x,y:t.y,radius:5,fill:(wireFrom&&wireFrom.key===t.key)?'#4682b4':'#fff',stroke:'#4682b4',strokeWidth:1.5,hitStrokeWidth:14});
+  allTerms().forEach(t=>{ const c=new Konva.Circle({_key:t.key,x:t.x,y:t.y,radius:5,fill:(wireFrom&&wireFrom.key===t.key)?'#4682b4':'#fff',stroke:'#4682b4',strokeWidth:1.5,hitStrokeWidth:14});
     c.on('mousedown touchstart',(e)=>{ e.cancelBubble=true; onTerm(t); }); layer.add(c); termShapes.push(c); });
   layer.draw();   // drawn at once, so a terminal can be clicked the moment it appears
 }
@@ -164,6 +187,7 @@ function drawWires(){
     layer.add(ln); wireShapes.push(ln);
     // ---- move the whole wire by dragging its body (pointer-delta) ----
     let dragging=false, last=null;
+    if(w.given){ ln.listening(false); return; }
     ln.on('mousedown touchstart',(e)=>{ if(tool!=='select') return; e.cancelBubble=true; selected=w;
       if(w.auto){ clearRot(); drawWires(); return; }          // a terminal-to-terminal wire stays attached: select it to delete it
       dragging=true; last=stage.getPointerPosition();
@@ -262,16 +286,18 @@ function analyzeCircuit(){
 function emit(){
   drawTerms(); drawWires();
   if(loading) return;
-  const cs=comps.map(c=>({id:c.id,type:c.type,rot:c.rot||0,x:Math.round(c.node.x()),y:Math.round(c.node.y())}));
+  const cs=comps.filter(c=>!c.given).map(c=>({id:c.id,type:c.type,rot:c.rot||0,x:Math.round(c.node.x()),y:Math.round(c.node.y())}));
   const A=analyzeCircuit();
-  const wiresOut=wires.map(w=>({a:w.a.snap||null,b:w.b.snap||null,bends:w.auto?[]:(w.pts||[]).map(p=>({x:Math.round(p.x),y:Math.round(p.y)}))}));
-  const empty = cs.length===0 && wires.length===0;
+  const wiresOut=wires.filter(w=>!w.given).map(w=>({a:w.a.snap||null,b:w.b.snap||null,bends:w.auto?[]:(w.pts||[]).map(p=>({x:Math.round(p.x),y:Math.round(p.y)}))}));
+  const empty = cs.length===0 && wiresOut.length===0;
   onChange(empty ? null : {components:cs,wires:wiresOut,
     spans:A.spans.map(s=>({id:s.id,type:s.type,node1:s.n1,node2:s.n2})),
     overall:A.overall, parallelPairs:A.parallelPairs, meters:A.meterReport});
   // status
-  let html='components: '+cs.length+' ['+cs.map(c=>c.type).join(', ')+'], wires: '+wires.length;
-  if(cs.length){
+  let html=FIG?('you added: '+(cs.length?cs.map(c=>c.type).join(', '):'nothing yet')+', wires: '+wiresOut.length)
+    :('components: '+cs.length+' ['+cs.map(c=>c.type).join(', ')+'], wires: '+wires.length);
+  if(FIG) html+='';
+  else if(cs.length){
     html += '<br>circuit: <b>'+A.overall+'</b>' + (A.openN? ' <span style="color:#c0392b">('+A.openN+' open terminal'+(A.openN>1?'s':'')+')</span>':'');
     if(A.parallelPairs.length) html += ' | parallel: '+A.parallelPairs.map(p=>p[0]+'∥'+p[1]).join(', ');
     A.meterReport.forEach(m=>{ html += '<br>'+m.type+': '+(m.correct
@@ -285,21 +311,25 @@ function emit(){
 function setTool(t){ tool=t; tb.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t)); }
 tb.querySelectorAll('[data-tool]').forEach(b=>{ b.onclick=()=>setTool(b.dataset.tool); });
 function freeSlot(){ const taken=(x,y)=>comps.some(c=>Math.abs(c.node.x()-x)<110&&Math.abs(c.node.y()-y)<70);
+  if(FIG){ const y0=(FIG.height||300)+70; for(let r=0;r<3;r++) for(let c=0;c<6;c++){ const x=90+c*140, y=y0+r*90; if(x<FW-60&&!taken(x,y)) return {x,y}; } return {x:120+Math.random()*300,y:y0}; }
   for(let r=0;r<5;r++) for(let c=0;c<5;c++){ const x=120+c*150, y=80+r*95; if(x<W-70&&y<H-40&&!taken(x,y)) return {x,y}; } return {x:130+Math.random()*300,y:120+Math.random()*220}; }
-tb.querySelectorAll('[data-comp]').forEach(b=> b.onclick=()=>{ const p=toWorld(freeSlot()); addComp(b.dataset.comp, p.x, p.y); setTool('select'); });
+tb.querySelectorAll('[data-comp]').forEach(b=> b.onclick=()=>{ const p=FIG?freeSlot():toWorld(freeSlot()); addComp(b.dataset.comp, p.x, p.y); setTool('select'); });
 tb.querySelector('#del').onclick=()=>{ if(!selected) return;
   if(selected.id&&selected.a){ wires=wires.filter(w=>w!==selected); }
-  else if(selected.type){ wires=wires.filter(w=>!(String(w.a.snap||'').startsWith(selected.id+':')||String(w.b.snap||'').startsWith(selected.id+':'))); selected.node.destroy(); comps=comps.filter(c=>c!==selected); clearRot(); }
+  else if(selected.type&&!selected.given){ wires=wires.filter(w=>!(String(w.a.snap||'').startsWith(selected.id+':')||String(w.b.snap||'').startsWith(selected.id+':'))); selected.node.destroy(); comps=comps.filter(c=>c!==selected); clearRot(); }
   selected=null; drawTerms(); drawWires(); emit(); };
-tb.querySelector('#clear').onclick=()=>{ comps.forEach(c=>c.node.destroy()); comps=[];wires=[];wireFrom=null;selected=null;
-  termShapes.forEach(s=>s.destroy()); wireShapes.forEach(s=>s.destroy()); termShapes=[];wireShapes=[]; layer.draw(); emit(); };
+tb.querySelector('#clear').onclick=()=>{ loadValue(null); };
 
 function loadValue(v){
   loading=true;
-  try{ comps.forEach(c=>c.node.destroy()); termShapes.forEach(s=>s.destroy()); wireShapes.forEach(s=>s.destroy()); clearRot(); }catch(e){}
+  try{ comps.forEach(c=>{ c.node.destroy(); if(c.labelNode) c.labelNode.destroy(); }); termShapes.forEach(s=>s.destroy()); wireShapes.forEach(s=>s.destroy()); clearRot(); }catch(e){}
   comps=[];wires=[];termShapes=[];wireShapes=[];wireFrom=null;selected=null; let n=0;
-  ((v&&v.components)||[]).forEach((c,i)=>{ addComp(c.type, c.x!=null?c.x:120+(i%5)*150, c.y!=null?c.y:80+Math.floor(i/5)*95, c.id, c.rot||0); n=Math.max(n,+String(c.id).replace(/\D/g,'')||0); });
-  ((v&&v.wires)||[]).forEach(w=>{ if(!w.a||!w.b) return; const A=termByKey(w.a), B=termByKey(w.b); if(!A||!B) return;
+  const num=id=>+String(id).replace(/\D/g,'')||0;
+  if(FIG){ (FIG.components||[]).forEach(c=>{ addComp(c.type,c.x,c.y,c.id,c.rot||0,{len:c.len,label:c.label,given:true,kind:c.kind}); n=Math.max(n,num(c.id)); });
+    (FIG.wires||[]).forEach(w=>{ const A=termByKey(w.a), B=termByKey(w.b); if(!A||!B) return;
+      wires.push({id:'g'+(++n),given:true,a:{x:A.x,y:A.y,snap:w.a},b:{x:B.x,y:B.y,snap:w.b},pts:(w.bends||[]).map(p=>({x:p.x,y:p.y})),auto:false}); }); }
+  ((v&&v.components)||[]).filter(c=>!c.given).forEach((c,i)=>{ addComp(c.type, c.x!=null?c.x:120+(i%5)*150, c.y!=null?c.y:80+Math.floor(i/5)*95, c.id, c.rot||0); n=Math.max(n,num(c.id)); });
+  ((v&&v.wires)||[]).filter(w=>!w.given).forEach(w=>{ if(!w.a||!w.b) return; const A=termByKey(w.a), B=termByKey(w.b); if(!A||!B) return;
     wires.push({id:'w'+(++n),a:{x:A.x,y:A.y,snap:w.a},b:{x:B.x,y:B.y,snap:w.b},pts:(w.bends||[]).map(p=>({x:p.x,y:p.y})),auto:!(w.bends&&w.bends.length)}); });
   uid=n+1; loading=false; drawTerms(); drawWires(); layer.draw(); emit();
 }
@@ -307,7 +337,7 @@ loadValue(value);
 
       return {
         update: (v) => { loadValue(v); },
-        clear: () => { try{ comps.forEach(c=>c.node.destroy()); }catch(e){} comps=[];wires=[];wireFrom=null;selected=null; try{termShapes.forEach(s=>s.destroy());wireShapes.forEach(s=>s.destroy());clearRot&&clearRot();}catch(e){} termShapes=[];wireShapes=[]; layer.draw(); emit(); },
+        clear: () => { loadValue(null); },
         destroy: () => { try{ stage.destroy(); }catch(e){} container.innerHTML=''; },
       };
     });

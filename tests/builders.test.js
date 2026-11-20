@@ -261,5 +261,30 @@ if (process.argv[2] === '-fb') cases.forEach(([ui, a, v, qq]) => { const questio
   t('self-marked: never above the marks', sc('code', a, { code: 'x', self: 9 }, 4), 4); }
 { const a = { mode: 'trace', columns: { 0: ['1', '2'] }, headers: ['Count'] }, v = { cells: { r1c0: '1', r2c0: '3' } };
   const r = M.mark('table', a, v, { marks: 1 }); t('trace feedback names the column and the right values', M.explain('table', a, v, r, { marks: 1 })[0].text, 'Column Count: should read 1, 2; yours reads 1, 3.'); }
+
+// circuits read again on the server from parts and wires; a printed figure to complete
+{ const fig = { components: [{ id: 'c1', type: 'cell', x: 0, y: 0, rot: 0, given: true }, { id: 'c2', type: 'resistor', label: '4.0 Ω', x: 0, y: 0, rot: 0, given: true },
+    { id: 'n3', type: 'node', label: 'A', given: true }, { id: 'n4', type: 'node', label: 'B', given: true }],
+    wires: [{ a: 'c1:a', b: 'c2:a' }, { a: 'c2:b', b: 'n3:a' }, { a: 'n4:a', b: 'c1:b' }] };
+  const q = { marks: 2, config: { circuit: fig } };
+  const key = { criteria: [{ name: 'ammeter in gap AB', marks: 1, rules: [{ between: { type: 'ammeter', at: ['A', 'B'] } }] },
+    { name: 'voltmeter across 4.0 Ω', marks: 1, rules: [{ across: { meter: 'voltmeter', of: [{ type: 'resistor', label: '4.0 Ω' }] } }] }] };
+  const amm = [{ id: 'c9', type: 'ammeter' }], aw = [{ a: 'c9:a', b: 'n3:a' }, { a: 'c9:b', b: 'n4:a' }];
+  t('circuit: gap and voltmeter right', M.mark('circuit', key, { components: amm.concat([{ id: 'c10', type: 'voltmeter' }]), wires: aw.concat([{ a: 'c10:a', b: 'c2:a' }, { a: 'c10:b', b: 'c2:b' }]) }, q).score, 2);
+  t('circuit: voltmeter across the cell', M.mark('circuit', key, { components: amm.concat([{ id: 'c10', type: 'voltmeter' }]), wires: aw.concat([{ a: 'c10:a', b: 'c1:a' }, { a: 'c10:b', b: 'c1:b' }]) }, q).score, 1);
+  t('circuit: the printed parts cannot be changed by the answer', M.mark('circuit', key, { components: [{ id: 'c2', type: 'voltmeter' }], wires: [] }, q).status, 'marked');
+  t('circuit: nothing added', M.mark('circuit', key, { components: [], wires: [] }, q).status, 'unanswered');
+  const led = { criteria: [{ name: 'series', marks: 1, rules: [{ series: ['source', 'led', 'resistor'] }] }, { name: 'way round', marks: 1, rules: [{ forward: 'led' }] }] };
+  const sc = (a, b) => ({ components: [{ id: 'c1', type: 'cell' }, { id: 'c2', type: 'led' }, { id: 'c3', type: 'resistor' }], wires: [{ a: 'c1:a', b: a }, { a: b, b: 'c3:a' }, { a: 'c3:b', b: 'c1:b' }] });
+  t('circuit: LED forward', M.mark('circuit', led, sc('c2:a', 'c2:b'), { marks: 2 }).score, 2);
+  t('circuit: LED backwards still in series', M.mark('circuit', led, sc('c2:b', 'c2:a'), { marks: 2 }).score, 1);
+  t('circuit: open loop', M.mark('circuit', led, { components: sc('c2:a', 'c2:b').components, wires: sc('c2:a', 'c2:b').wires.slice(0, 2) }, { marks: 2 }).score, 0);
+  const par = { criteria: [{ name: 'parallel', marks: 1, rules: [{ acrossSource: ['lamp', 'lamp'] }] }] };
+  const pv = { components: [{ id: 'c1', type: 'ac' }, { id: 'c2', type: 'lamp' }, { id: 'c3', type: 'lamp' }], wires: [{ a: 'c1:a', b: 'c2:a' }, { a: 'c2:b', b: 'c1:b' }, { a: 'c1:a', b: 'c3:a' }, { a: 'c3:b', b: 'c1:b' }] };
+  t('circuit: lamps across the supply', M.mark('circuit', par, pv, { marks: 1 }).score, 1);
+  t('circuit: lamps in series are not across the supply', M.mark('circuit', par, { components: pv.components, wires: [{ a: 'c1:a', b: 'c2:a' }, { a: 'c2:b', b: 'c3:a' }, { a: 'c3:b', b: 'c1:b' }] }, { marks: 1 }).score, 0); }
+t('symbol: right', M.mark('symbol', { symbol: 'ldr' }, { symbol: 'ldr' }, { marks: 1 }).score, 1);
+t('symbol: thermistor is not an LDR', M.mark('symbol', { symbol: 'ldr' }, { symbol: 'thermistor' }, { marks: 1 }).score, 0);
+t('symbol: name needed too', M.mark('symbol', { symbol: 'variable', names: ['variable resistor'] }, { symbol: 'variable', name: 'resistor' }, { marks: 1 }).score, 0);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
