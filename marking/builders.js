@@ -676,7 +676,12 @@
           info('This was marked by matching key words. If you made one of these points in different words, count it yourself.'); }
         break; }
       case 'prose': {
-        (d.boxes || (d.perBox || []).map(i => (i >= 0 ? [i] : []))).forEach((l, b) => (l.length ? good(`Box ${b + 1}: ${l.map(i => answer.points[i].alts[0]).join('; ')}.`) : bad(`Box ${b + 1}: no mark-scheme point found here${value && value.sides && answer.groups ? ' for this side' : ''}.`)));
+        // name each box by the heading it was written under when the student chose a layout ('Why it might, box 2')
+        const fmt = value && value.format && (cfg.formats || []).find(f => f.id === value.format), seen = {};
+        const boxName = (b) => { const k = fmt && value.sec ? value.sec[b] : null, s = k != null && fmt.sections[k];
+          if (!s) return `Box ${b + 1}`; seen[k] = (seen[k] || 0) + 1; return s.one ? s.title : `${s.title}, box ${seen[k]}`; };
+        (d.boxes || (d.perBox || []).map(i => (i >= 0 ? [i] : []))).forEach((l, b) => { const n = boxName(b);
+          return l.length ? good(`${n}: ${l.map(i => answer.points[i].alts[0]).join('; ')}.`) : bad(`${n}: no mark-scheme point found here${value && value.sides && answer.groups && value.sides[b] >= 0 && answer.groups[value.sides[b]] ? ' for this side' : ''}.`); });
         (d.groups || []).forEach(g => info(`${g.title}: ${g.score} of up to ${g.max}.`));
         const rest = (d.missed || []).map(i => answer.points[i].alts[0]); if (rest.length) info('Points you could add: ' + rest.slice(0, 6).join('; ') + '.');
         info('Written answers are marked on the mark-scheme points they contain. If you made a point in other words and it was not found, compare your answer with the mark scheme.');

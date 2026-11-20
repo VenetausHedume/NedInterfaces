@@ -187,7 +187,9 @@
     // should not take the one only a later box can earn)
     const can = boxes.map((b, bi) => {
       const ctx = context(b, syn, question);
-      const allowed = sideOf && answer.groups[sideOf[bi]] ? answer.groups[sideOf[bi]].points : null;
+      // -2: a definition box — it can earn a definition point, not one of the arguments on either side
+      const allowed = !sideOf ? null : sideOf[bi] === -2 ? pts.map((p, i) => i).filter(i => !answer.groups.some(g => g.points.includes(i)))
+        : answer.groups[sideOf[bi]] ? answer.groups[sideOf[bi]].points : null;
       return pts.map((p, i) => (p.alts || p.require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, p)).map((h, i) => (h ? i : -1)).filter(i => i >= 0);
     });
     // a box can hold more than one mark point when it is written out ('the minimum energy that colliding particles need

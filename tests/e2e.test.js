@@ -158,7 +158,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await page.click('#mount [data-add="0"]');
     await h.type('#mount [data-side="0"] math-field', 'This gives more revenue', 1);
     await h.type('#mount [data-side="1"] math-field', 'But the price may have to be lower');
-    ok('prose: three points under the right headings -> 3/8, provisional', (await h.score()) === '3/8' && (await h.status()) === 'self_check', [await h.score(), await h.status(), await h.value()]);
+    ok('prose: three points under the right headings -> 3/8, provisional', (await h.score()) === '3/8' && (await h.status()) === 'unsure', [await h.score(), await h.status(), await h.value()]);
     ok('prose: saves which heading each point is under', JSON.stringify((await h.value()).sides) === '[0,0,1]', await h.value());
     await page.click('#mount [data-add="1"]');
     await h.type('#mount [data-side="1"] math-field', 'more revenue from sales', 1);
@@ -171,6 +171,25 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     await page.click('#mount button:has-text("+ Add point")');
     await h.type('#mount math-field', 'this increases the surface area', 1);
     ok('prose: plain point list still works -> 2/4', (await h.score()) === '2/4', [await h.score(), await h.value()]);
+    // a chosen layout: Definition → Why it might → Why it might not → Conclusion
+    await h.open('prose', 2);
+    ok('prose layout: the choice is offered, plain points first', await page.locator('#mount [data-format]').count() === 2 && (await page.getAttribute('#mount [data-format="free"]', 'aria-pressed')) === 'true');
+    await h.type('#mount [data-section="free"] math-field', 'Firms can take advantage of economies of scale');
+    await page.click('#mount [data-format="sides"]');
+    ok('prose layout: four headed sections, what was written carried across', await page.locator('#mount [data-section]').count() === 4 && /economies/.test(JSON.stringify(await h.value())), await h.value());
+    await h.type('#mount [data-section="Definition"] math-field', 'Profit is total revenue minus total cost');
+    await page.click('#mount [data-section="Why it might"] button:has-text("+ Add point")');
+    await h.type('#mount [data-section="Why it might"] math-field', 'Higher output gives more sales and so more revenue for the firm', 1);
+    await h.type('#mount [data-section="Why it might not"] math-field', 'The price may have to fall to sell the extra output');
+    await h.type('#mount [data-section="Conclusion"] math-field', 'Overall it depends on whether diseconomies of scale set in');
+    const fv = await h.value();
+    ok('prose layout: saves section and side of each point', fv.format === 'sides' && JSON.stringify(fv.sec) === '[0,1,1,2,3]' && JSON.stringify(fv.sides) === '[-2,0,0,1,-1]', fv);
+    ok('prose layout: marks each section -> 5/8', (await h.score()) === '5/8', [await h.score(), fv]);
+    ok('prose layout: feedback names the sections', /Why it might, box 2/.test(await page.textContent('#mark')) && /Conclusion: /.test(await page.textContent('#mark')), await page.textContent('#mark'));
+    await h.reload();
+    ok('prose layout: survives reload in the same layout', (await h.score()) === '5/8' && (await page.getAttribute('#mount [data-format="sides"]', 'aria-pressed')) === 'true' && await page.locator('#mount [data-section="Why it might"] math-field').count() === 2);
+    await page.click('#mount [data-format="free"]');
+    ok('prose layout: back to plain points keeps the score', (await h.score()) === '5/8', [await h.score(), await h.value()]);
 
     // 1.10 label
     await h.open('label', 0);

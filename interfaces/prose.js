@@ -2,6 +2,8 @@
    Each point is one MathLive field (identical to the text box): type words,
    use the ∑ widget for math. Add / remove / reorder points. Optional
    conclusion (config.conclusion). Saves { points:[latex...], conclusion } or null.
+   With config.formats the student can instead pick a layout (Definition → Why it might → … → Conclusion) and write
+   each point under its heading (see below).
    Marked by NedMark 'prose': each box can earn one mark-scheme point, each point counts once, and a group
    (e.g. "why it might" / "why it might not") never earns more than its cap. The score is a floor, shown as provisional. */
 
@@ -55,6 +57,21 @@
           question: { text: 'Describe how bile helps in the digestion of fat. Write each point in its own box.', marks: 4, config: { conclusion: false } },
           answer: { points: [{ alts: ['emulsification', 'emulsifies fat'] }, { alts: ['increases the surface area of fat'], require: ['surface area'] }, { alts: ['faster digestion', 'faster breakdown by enzymes'], require: [['faster', 'quicker', 'speeds']] },
             { alts: ['by lipase'], require: ['lipase'] }, { alts: ['neutralises stomach acid'], require: [['neutralise', 'neutralize', 'neutralises', 'neutralizes']] }] } },
+        { label: 'Economics, choose a layout (8 marks)',
+          question: { text: 'Discuss whether an increase in output will increase the profits that firms receive.', marks: 8, config: { formats: [
+            { id: 'sides', label: 'Definition → Why it might → Why it might not → Conclusion', sections: [
+              { title: 'Definition', hint: 'define the key term in the question', one: true, group: -2 },
+              { title: 'Why it might', hint: 'one point per box, then explain it', group: 0 },
+              { title: 'Why it might not', hint: 'one point per box, then explain it', group: 1 },
+              { title: 'Conclusion', hint: 'your overall judgement and what it depends on', one: true }] }] } },
+          answer: { points: [
+              { alts: ['higher output may be a response to higher demand', 'more sales'], require: [['demand', 'sales', 'sell']] },
+              { alts: ['raise revenue', 'more revenue'], require: ['revenue'] },
+              { alts: ['take advantage of economies of scale'], require: ['economies of scale'], reject: ['diseconomies'] },
+              { alts: ['price may have to fall to sell the extra output', 'lower price'], require: ['price'] },
+              { alts: ['diseconomies of scale'], require: ['diseconomies'] },
+              { alts: ['costs may rise by more than revenue'] }],
+            groups: [{ title: 'Why it might', max: 5, points: [0, 1, 2] }, { title: 'Why it might not', max: 5, points: [3, 4, 5] }] } },
       ],
     },
     function (container, { question, value, onChange }) {
@@ -86,6 +103,87 @@
           destroy: () => { container.innerHTML = ''; },
         };
       }
+      /* Answer layouts ("formats"): for questions with room for a structure (two sides, advantages / disadvantages,
+         a comparison, an experiment plan, "explain two …") the student can pick a layout, e.g.
+         Definition → Why it might → Why it might not → Conclusion, and write each point in its own box under its
+         heading — or keep writing plain points. config.formats = [{ id, label, sections:[{ title, hint?, one?, group? }] }].
+         Saves { points, sec:[section of each point], sides:[mark-scheme group of each point, -1 = any, -2 = definition], format }. */
+      const formats = (cfg0.formats || []).filter(f => f && f.id && f.sections && f.sections.length);
+      if (formats.length && Ned.field) {
+        const lists = {};                                  // format id -> one array of texts per section; 'free' -> [array]
+        const blank = (id) => { const f = formats.find(x => x.id === id); return f ? f.sections.map(() => []) : [[]]; };
+        let mode = 'free';
+        const load = (v) => {
+          mode = 'free'; lists.free = [[]]; formats.forEach(f => { lists[f.id] = blank(f.id); });
+          const pts = (v && v.points) || [];
+          const f = v && v.format && formats.find(x => x.id === v.format);
+          if (f) { mode = f.id; pts.forEach((p, i) => { const k = (v.sec || [])[i]; (lists[f.id][k] || lists[f.id][0]).push(p); }); }
+          else lists.free[0] = pts.slice().concat(v && v.conclusion ? [v.conclusion] : []);
+        };
+        load(value);
+        const chipsRow = Ned.el('div', { class: 'ned-formats', style: 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;' });
+        const body = Ned.el('div', {});
+        container.appendChild(Ned.el('div', { style: 'font-size:12px;color:var(--muted);margin-bottom:4px;' }, ['How do you want to lay out your answer?']));
+        container.appendChild(chipsRow); container.appendChild(body);
+        const emitF = () => {
+          if (mode === 'free') { const pts = lists.free[0].filter(t => t && t.trim()); onChange(pts.length ? { points: pts } : null); return; }
+          const f = formats.find(x => x.id === mode), pts = [], sec = [], sides = [];
+          f.sections.forEach((s, k) => lists[f.id][k].forEach(t => { if (t && t.trim()) { pts.push(t); sec.push(k); sides.push(s.group == null ? -1 : s.group); } }));
+          onChange(pts.length ? { points: pts, sec, sides, format: f.id } : null);
+        };
+        const sectionEl = (title, hint, arr, one) => {
+          const box = Ned.el('div', { style: 'display:grid;gap:8px;' });
+          const draw = () => {
+            box.innerHTML = '';
+            if (!arr.length) arr.push('');
+            arr.forEach((t, i) => {
+              const f = Ned.field({ multiline: false, label: (title || 'Point') + (one ? '' : ', box ' + (i + 1)), placeholder: hint || 'one point', value: t, onInput: (val) => { arr[i] = val; emitF(); } });
+              const row = Ned.el('div', { style: 'display:flex;gap:6px;align-items:flex-start;' }, [Ned.el('div', { style: 'flex:1;min-width:0;' }, [f.el])]);
+              if (!one && arr.length > 1) row.appendChild(Ned.el('button', { type: 'button', title: 'Delete this box', 'aria-label': 'Delete this box',
+                style: 'width:26px;height:26px;border:1px solid var(--line);border-radius:4px;background:var(--paper);cursor:pointer;font-size:12px;',
+                onclick: () => { arr.splice(i, 1); draw(); emitF(); } }, ['✕']));
+              box.appendChild(row);
+            });
+          };
+          draw();
+          const kids = [];
+          if (title) kids.push(Ned.el('div', { style: 'font-weight:600;' }, [title]), hint ? Ned.el('div', { style: 'font-size:12px;color:var(--muted);margin:-2px 0 6px;' }, [hint]) : null);
+          kids.push(box);
+          if (!one) kids.push(Ned.el('button', { type: 'button', class: 'ned-mode', style: 'margin-top:8px;justify-self:start;', onclick: () => { arr.push(''); draw(); const fs = box.querySelectorAll('math-field,input,textarea'); if (fs.length) fs[fs.length - 1].focus(); } }, ['+ Add point']));
+          return Ned.el('div', { 'data-section': title || 'free', style: title ? 'display:grid;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);margin-bottom:10px;' : 'display:grid;margin-bottom:10px;' }, kids.filter(Boolean));
+        };
+        const render = () => {
+          chipsRow.innerHTML = '';
+          [{ id: 'free', label: 'My own points' }].concat(formats).forEach(f => {
+            const on = f.id === mode;
+            chipsRow.appendChild(Ned.el('button', { type: 'button', 'data-format': f.id, 'aria-pressed': on ? 'true' : 'false',
+              style: 'padding:5px 10px;border-radius:999px;cursor:pointer;font-size:13px;border:1px solid ' + (on ? 'var(--ink,#222)' : 'var(--line)') + ';background:' + (on ? 'var(--ink,#222)' : 'var(--paper)') + ';color:' + (on ? '#fff' : 'inherit') + ';',
+              onclick: () => switchTo(f.id) }, [f.label]));
+          });
+          body.innerHTML = '';
+          if (mode === 'free') { body.appendChild(sectionEl(null, 'one point', lists.free[0], false)); body.appendChild(Ned.el('p', { class: 'ned-note' }, ['Write one point in each box.'])); return; }
+          const f = formats.find(x => x.id === mode);
+          f.sections.forEach((s, k) => body.appendChild(sectionEl(s.title, s.hint, lists[f.id][k], !!s.one)));
+        };
+        const filled = (id) => (lists[id] || []).some(a => a.some(t => t && t.trim()));
+        function switchTo(id) {
+          if (id === mode) return;
+          // carry what was written across when the new layout is still empty
+          const from = mode === 'free' ? lists.free[0].filter(t => t && t.trim()) : [].concat(...lists[mode]).filter(t => t && t.trim());
+          if (from.length && !filled(id)) {
+            if (id === 'free') lists.free[0] = from;
+            else { const f = formats.find(x => x.id === id); const k = Math.max(0, f.sections.findIndex(s => !s.one)); lists[id][k] = from; }
+          }
+          mode = id; render(); emitF();
+        }
+        render();
+        return {
+          update: (v) => { load(v); render(); },
+          clear: () => { load(null); render(); emitF(); },
+          destroy: () => { container.innerHTML = ''; },
+        };
+      }
+
       const cfg = (question && question.config) || {};
       const wantConclusion = !!cfg.conclusion;
 

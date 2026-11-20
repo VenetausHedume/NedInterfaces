@@ -146,6 +146,14 @@ const PRO = { points: [{ alts: ['more sales'], require: [['sales', 'demand']] },
 t('prose sides: points under the right heading', sc('prose', PRO, { points: ['more sales', 'price may be lower'], sides: [0, 1] }, 8), 2);
 t('prose sides: a point under the wrong heading earns nothing', sc('prose', PRO, { points: ['more sales', 'price may be lower'], sides: [1, 0] }, 8), 0);
 t('prose without sides still works', sc('prose', PRO, { points: ['more sales', 'price may be lower'] }, 8), 2);
+// a chosen layout: Definition / for / against / Conclusion. Definition and conclusion boxes (-1) can earn any point.
+{ const FQ = { marks: 8, config: { formats: [{ id: 'sides', label: 'D → for → against → C', sections: [{ title: 'Definition', one: true, group: -2 }, { title: 'For', group: 0 }, { title: 'Against', group: 1 }, { title: 'Conclusion', one: true }] }] } };
+  const V = { points: ['output is the amount produced', 'more sales', 'price may be lower', 'overall it depends on diseconomies of scale'], sec: [0, 1, 2, 3], sides: [-2, 0, 1, -1], format: 'sides' };
+  t('prose layout: each section earns its points, the conclusion can earn any', sc('prose', PRO, V, 8, FQ), 3);
+  t('prose layout: a "for" point under "against" earns nothing', sc('prose', PRO, Object.assign({}, V, { sides: [-2, 1, 0, -1] }), 8, FQ), 1);
+  t('prose layout: a definition box cannot earn an argument point', sc('prose', PRO, { points: ['revenue rises as more sales are made'], sec: [0], sides: [-2], format: 'sides' }, 8, FQ), 0);
+  const fb = M.explain('prose', PRO, V, M.mark('prose', PRO, V, FQ), FQ).map(f => f.text);
+  t('prose layout: feedback names the sections', [fb.some(x => x.startsWith('For, box 1: more sales')), fb.some(x => x.startsWith('Against, box 1: lower price')), fb.some(x => x.startsWith('Definition: no mark-scheme point found here.'))], [true, true, true]); }
 const EL = { shifts: { D: 'left' }, labels: { y: 'Price', x: 'Quantity', down: 'D', up: 'S' } };
 t('econ labels: all right', sc('econ', EL, { shifts: { D: 'left' }, equilibrium: 'D1S', labels: { y: 'Price', x: 'Quantity', down: 'D', up: 'S' } }, 4), 4);
 t('econ labels: axes swapped', sc('econ', EL, { shifts: { D: 'left' }, equilibrium: 'D1S', labels: { y: 'Quantity', x: 'Price', down: 'D', up: 'S' } }, 4), 3);
