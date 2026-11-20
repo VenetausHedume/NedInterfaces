@@ -310,6 +310,18 @@ t('1/3 oe: 0.333 accepted', sc('formula', third, { latex: '0.333' }, 1), 1);
 t('1/3 oe: 0.33 not accepted', sc('formula', third, { latex: '0.33' }, 1), 0);
 t('a time ending in 16 is not hex', sc('table', { cells: { r0c1: { alts: ['08 16', '0816', '08:16'], exact: true } } }, { cells: { r0c1: '08 16' } }, 1), 1);
 
+// ── an answer that says the opposite is not credited for the key words it shares ──
+{ const Z = { points: [{ alts: ['zinc more reactive'] }, { alts: ['zinc corrodes', 'oxidises'] }], need: 2 };
+  t('opposite: "less reactive" does not earn "more reactive"', M.mark('prose', Z, { points: ['Zinc is less reactive than iron.'] }, { marks: 2 }).score, 0);
+  t('opposite: the right way round still earns it', M.mark('prose', Z, { points: ['Zinc is more reactive than iron.', 'So the zinc corrodes.'] }, { marks: 2 }).score, 2);
+  const H = { points: [{ alts: ['line on graph is horizontal', 'gradient is zero'] }], need: 1 };
+  t('opposite: "not horizontal"', M.mark('text', H, 'The line on the graph is not horizontal.', { marks: 1 }).score, 0);
+  t('opposite: "horizontal" still earns it', M.mark('text', H, 'The line on the graph is horizontal.', { marks: 1 }).score, 1);
+  const N = { points: [{ alts: ['cannot directly manipulate the hardware'] }], need: 1 };
+  t('opposite: a point that is itself "cannot …" is not refused', M.mark('text', N, 'It cannot directly manipulate the hardware.', { marks: 1 }).score, 1);
+  const C = { points: [{ alts: ['reduces the time taken to upload'] }], need: 1 };
+  t('opposite: "increases the time" does not earn "reduces the time"', M.mark('text', C, 'It increases the time taken to upload the file.', { marks: 1 }).score, 0); }
+
 // ── general ──
 t('no answer key', M.mark('text', null, { latex: 'x' }, { marks: 1 }).status, 'no_answer_key');
 t('unknown ui', M.mark('zzz', {}, { a: 1 }, { marks: 1 }).status, 'no_marker');

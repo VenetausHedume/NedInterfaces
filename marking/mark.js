@@ -147,6 +147,48 @@
     if (!p.alts || !p.alts.length) return true;                  // a point made only of required words
     return p.alts.some(a => caseMatters(a, p) ? caseHit(ctx.orig, a) || (!!FORMULA[a] && matchAlt(ctx, FORMULA[a])) : matchAlt(ctx, a));
   }
+
+  /* ───────────── "says the opposite" guard ─────────────
+     Key words alone credit 'zinc is LESS reactive' for the point 'zinc is more reactive', and 'the line is NOT
+     horizontal' for 'the line is horizontal'. For a point the key words found, look at the sentence(s) of the answer
+     closest to it: if every one of them says the opposite direction (more/less, increase/decrease, same/different,
+     complete/partial, absorb/reflect …) or puts 'not' in front of the key word, the point is not credited.
+     Only a point with direction words (or a negated key word) can be refused; nothing else changes. */
+  const OPP = {};
+  [['increase', 'decrease'], ['increases', 'decreases'], ['increased', 'decreased'], ['increasing', 'decreasing'], ['rise', 'fall'], ['rises', 'falls'],
+   ['higher', 'lower'], ['more', 'less'], ['more', 'fewer'], ['larger', 'smaller'], ['bigger', 'smaller'], ['strong', 'weak'], ['stronger', 'weaker'],
+   ['same', 'different'], ['completely', 'partially'], ['complete', 'partial'], ['fully', 'partially'], ['absorbs', 'reflects'], ['absorb', 'reflect'],
+   ['absorber', 'reflector'], ['absorbers', 'reflectors'], ['good', 'poor'], ['gain', 'lose'], ['gains', 'loses'], ['positive', 'negative'], ['above', 'below'],
+   ['alternating', 'direct'], ['changing', 'constant'], ['attract', 'repel'], ['conductor', 'insulator'], ['soluble', 'insoluble'], ['faster', 'slower'],
+   ['permanent', 'temporary'], ['permanently', 'temporarily'], ['volatile', 'non-volatile'], ['reduces', 'increases'], ['reduce', 'increase'],
+   ['correct', 'incorrect'], ['certainty', 'uncertainty'], ['surplus', 'shortage'], ['affordable', 'unaffordable']]
+    .forEach(([a, b]) => { (OPP[a] = OPP[a] || []).push(b); (OPP[b] = OPP[b] || []).push(a); });
+  const oWords = s => (String(s).toLowerCase().match(/[a-z][a-z-]*'?[a-z]*/g) || []);
+  const oStem = w => w.replace(/ies$/, 'y').replace(/(?<=[a-z]{3})(es|s)$/, '');
+  const FILLER = /^(that|this|with|from|into|than|they|there|have|will|would|could|their|which|when|then|also)$/;
+  const NEG = /^(not|no|never|cannot|can't|isn't|doesn't|aren't|don't|won't|without|unable|none)$/;
+  function altState(alt, sents, pointNeg) {
+    const aw = oWords(alt), pol = aw.filter(w => OPP[w]);
+    const content = aw.filter(w => w.length > 3 && !OPP[w] && !FILLER.test(w)).map(oStem);
+    if (!content.length) return null;
+    const ov = sents.map(s => { const sw = new Set(oWords(s).map(oStem)); return content.filter(w => sw.has(w)).length; });
+    const best = Math.max(...ov); if (!best) return null;
+    const near = sents.filter((s, i) => ov[i] === best);
+    const altNeg = pointNeg || aw.some(w => NEG.test(w));
+    const flip = s => { const sw = oWords(s), set = new Set(sw), st = sw.map(oStem);
+      if (pol.some(w => !set.has(w) && OPP[w].some(o => set.has(o)))) return true;
+      return !altNeg && content.some(c => { const i = st.indexOf(c); return i > 0 && NEG.test(sw[i - 1]); }); };
+    if (!pol.length && !near.some(flip)) return null;
+    return near.every(flip) ? 'flip' : 'ok';
+  }
+  function saysOpposite(p, text) {
+    if (!p || !p.alts || !p.alts.length) return false;
+    const sents = String(text).split(/(?<=[.!?;])\s+|\n+/).map(x => x.trim()).filter(Boolean);
+    if (!sents.length) return false;
+    const pointNeg = p.alts.some(a => oWords(a).some(w => NEG.test(w)));      // the point itself is about 'not …'
+    const st = p.alts.map(a => altState(a, sents, pointNeg));
+    return st.includes('flip') && !st.includes('ok');
+  }
   function valueText(v) {
     if (v == null) return '';
     if (typeof v === 'string') return latexToText(v);
@@ -163,7 +205,7 @@
     const ctx = context(text, buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms)), question);
     const exclude = new Set((opts && opts.exclude) || []);
     const awarded = [], missed = [];
-    (answer.points || []).forEach((p, i) => { if ((!p.alts && !p.require) || exclude.has(i)) return; (pointHit(ctx, p) ? awarded : missed).push(i); });
+    (answer.points || []).forEach((p, i) => { if ((!p.alts && !p.require) || exclude.has(i)) return; (pointHit(ctx, p) && !saysOpposite(p, text) ? awarded : missed).push(i); });
     const need = Math.min(max, answer.need || max);
     const score = answer.scale ? ladder(awarded.length, max, answer.scale) : Math.min(need, awarded.length);
     return { score, max, status: score >= max ? 'marked' : 'unsure', detail: { awarded, missed } };
@@ -190,7 +232,7 @@
       // -2: a definition box — it can earn a definition point, not one of the arguments on either side
       const allowed = !sideOf ? null : sideOf[bi] === -2 ? pts.map((p, i) => i).filter(i => !answer.groups.some(g => g.points.includes(i)))
         : answer.groups[sideOf[bi]] ? answer.groups[sideOf[bi]].points : null;
-      return pts.map((p, i) => (p.alts || p.require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, p)).map((h, i) => (h ? i : -1)).filter(i => i >= 0);
+      return pts.map((p, i) => (p.alts || p.require) && !taken.has(i) && (!allowed || allowed.includes(i)) && pointHit(ctx, p) && !saysOpposite(p, b)).map((h, i) => (h ? i : -1)).filter(i => i >= 0);
     });
     // a box can hold more than one mark point when it is written out ('the minimum energy that colliding particles need
     // to react' is two points), but not a bare list of keywords: one point per sentence or per 6 words, at least one

@@ -153,7 +153,7 @@ t('prose without sides still works', sc('prose', PRO, { points: ['more sales', '
   t('prose layout: a "for" point under "against" earns nothing', sc('prose', PRO, Object.assign({}, V, { sides: [-2, 1, 0, -1] }), 8, FQ), 1);
   t('prose layout: a definition box cannot earn an argument point', sc('prose', PRO, { points: ['revenue rises as more sales are made'], sec: [0], sides: [-2], format: 'sides' }, 8, FQ), 0);
   const fb = M.explain('prose', PRO, V, M.mark('prose', PRO, V, FQ), FQ).map(f => f.text);
-  t('prose layout: feedback names the sections', [fb.some(x => x.startsWith('For, box 1: more sales')), fb.some(x => x.startsWith('Against, box 1: lower price')), fb.some(x => x.startsWith('Definition: no mark-scheme point found here.'))], [true, true, true]); }
+  t('prose layout: feedback names the sections', [fb.some(x => x.startsWith('For, box 1: more sales')), fb.some(x => x.startsWith('Against, box 1: lower price')), fb.some(x => x.startsWith('Definition: no separate mark'))], [true, true, true]); }
 const EL = { shifts: { D: 'left' }, labels: { y: 'Price', x: 'Quantity', down: 'D', up: 'S' } };
 t('econ labels: all right', sc('econ', EL, { shifts: { D: 'left' }, equilibrium: 'D1S', labels: { y: 'Price', x: 'Quantity', down: 'D', up: 'S' } }, 4), 4);
 t('econ labels: axes swapped', sc('econ', EL, { shifts: { D: 'left' }, equilibrium: 'D1S', labels: { y: 'Quantity', x: 'Price', down: 'D', up: 'S' } }, 4), 3);
