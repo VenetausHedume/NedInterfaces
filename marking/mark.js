@@ -30,7 +30,8 @@
     s = s.replace(/\\(?:text|mathrm|mathit|mathbf|operatorname|textbf|textit|mathsf)\s*\{([^{}]*)\}/g, '$1');
     s = s.replace(/\\[,;:!]/g, ' ').replace(/\\(?:quad|qquad)(?![a-zA-Z])/g, ' ').replace(/\\(?:left|right|displaystyle)(?![a-zA-Z])/g, '');
     s = s.replace(/\\ /g, ' ').replace(/\\placeholder\s*(\{[^{}]*\})?/g, '');
-    s = s.replace(/\\(d|t)?frac\s*(\d)\s*(\d)/g, '\\frac{$2}{$3}');                 // \frac12
+    s = s.replace(/\\(d|t)?frac\s*(\d)\s*(\d)/g, '\\frac{$2}{$3}');
+    s = s.replace(/(\d)\s*(?=\\(?:d|t)?frac\s*\{\d+\}\s*\{\d+\})/g, '$1 ');                         // mixed number 1\frac{1}{3} -> 1 1/3                 // \frac12
     for (let i = 0; i < 6 && /\\(?:d|t)?frac/.test(s); i++) s = s.replace(/\\(?:d|t)?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (m, a, b) => `${wrap(a)}/${/^(\d+(\.\d+)?|[A-Za-z])$/.test(b.trim()) ? b.trim() : '(' + b.trim() + ')'}`);
     for (let i = 0; i < 4 && /\\sqrt/.test(s); i++) s = s.replace(/\\sqrt\s*\{([^{}]*)\}/g, 'sqrt($1)');
     s = s.replace(/\^\s*\{\s*\\circ\s*\}|\^\s*\\circ/g, '°');
