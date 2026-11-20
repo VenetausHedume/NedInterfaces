@@ -296,7 +296,7 @@ t('symbol: name needed too', M.mark('symbol', { symbol: 'variable', names: ['var
     { id: 'a3', element: 'O', slots: sl(['dot', 'dot'], ['dot', 'dot'], [], ['dot', 'dot']) }] };
   t('dot-and-cross: CO2 right', M.mark('lewis', key, right, { marks: 2, config: cfg }).score, 2);
   const single = JSON.parse(JSON.stringify(right)); single.atoms[1].slots = sl([], [], ['cross'], ['cross']); single.atoms[0].slots.left = ['dot']; single.atoms[2].slots.right = ['dot'];
-  t('dot-and-cross: single bonds instead of double', M.mark('lewis', key, single, { marks: 2, config: cfg }).score, 1);
+  t('dot-and-cross: single bonds instead of double (octets not complete either)', M.mark('lewis', key, single, { marks: 2, config: cfg }).score, 0);
   t('dot-and-cross: printed atoms only', M.mark('lewis', key, { atoms: [{ id: 'a1', element: 'O', slots: sl([], [], [], []) }] }, { marks: 2, config: cfg }).status, 'unanswered');
   const ion = { mol: { ionic: true, ions: { Mg: '2+', Cl: '-' }, electrons: { Mg: 8, Cl: 8 }, counts: { Mg: 1, Cl: 2 } },
     criteria: [{ name: 'Mg', marks: 1, rules: [{ shell: 'Mg' }] }, { name: 'Cl', marks: 1, rules: [{ shell: 'Cl' }] }, { name: 'charges', marks: 1, rules: [{ charges: true }] }] };

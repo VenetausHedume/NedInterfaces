@@ -246,8 +246,17 @@
     if (mol.ionic) {
       const want = {}; Object.keys(mol.ions).forEach(k => { want[k.toUpperCase()] = { charge: canon(mol.ions[k]), e: mol.electrons[k], n: (mol.counts || {})[k] || 1 }; });
       const countsOk = Object.keys(want).every(k => atoms.filter(a => E(a) === k).length === want[k].n) && atoms.every(a => want[E(a)]);
+      // the metal ion's electrons are all one symbol; the non-metal ion shows the electrons it gained (as many as its charge) as the other one
+      const es = a => [].concat(...Object.values(sl(a)));
+      const major = a => { const e = es(a), d = e.filter(x => x === 'dot').length; return d * 2 > e.length ? 'dot' : d * 2 < e.length ? 'cross' : null; };
+      const cat = atoms.filter(a => want[E(a)] && /\+$/.test(want[E(a)].charge)), an = atoms.filter(a => want[E(a)] && /-$/.test(want[E(a)].charge));
+      const catSym = cat.length && es(cat[0]).length ? es(cat[0])[0] : null, anSym = an.length ? major(an[0]) : null;
       facts.shell = el => { const w = want[el.toUpperCase()]; const mine = atoms.filter(a => E(a) === el.toUpperCase()); if (!w || !countsOk || !mine.length) return false;
-        return mine.every(a => { const all = [].concat(...Object.values(sl(a))); return all.length === w.e && (!/-$/.test(w.charge) || (all.includes('dot') && all.includes('cross'))); }); };
+        const q = +(w.charge.match(/\d/) || [1])[0];
+        return mine.every(a => { const e = es(a); if (e.length !== w.e) return false;
+          if (/\+$/.test(w.charge)) return e.every(x => x === e[0]) && (!anSym || e[0] !== anSym);
+          const own = major(a); if (!own) return false; const other = e.filter(x => x !== own);
+          return other.length === q && (!catSym || other[0] === catSym); }); };
       facts.charges = countsOk && atoms.every(a => canon(a.charge) === want[E(a)].charge);
     } else {
       const side = (A, B) => (Math.abs(B.x - A.x) >= Math.abs(B.y - A.y) ? (B.x > A.x ? 'right' : 'left') : (B.y > A.y ? 'bottom' : 'top'));
@@ -271,9 +280,14 @@
         const of = b => b.key.split('-').slice(0, 2).join('-');
         const g = got.filter(b => want.has(of(b))), w = wantB.filter(b => want.has(of(b)));
         return w.length > 0 && sameSet(g, w) && g.every(b => b.fair); };
+      // a lone-pair mark also needs the atom's octet (two for H) once the shared electrons are counted
+      const ring = (a, b) => (sl(a)[side(a, b)] || []).length;
+      const shell = a => Object.keys(sl(a)).reduce((t, k) => t + (sl(a)[k] || []).length, 0)
+        + atoms.filter(b => b !== a && (linked ? linked.has([a.id, b.id].sort().join('|')) : Math.hypot(a.x - b.x, a.y - b.y) <= 120)).reduce((t, b) => t + ring(b, a), 0);
+      const full = el => atoms.filter(a => E(a) === el).every(a => shell(a) === (el === 'H' ? 2 : 8));
       const lone = {}; atoms.forEach(a => { const tot = Object.keys(sl(a)).reduce((t, k) => t + (sl(a)[k] || []).length, 0); (lone[E(a)] = lone[E(a)] || []).push(tot - used[a.id]); });
       const wl = {}; Object.keys(mol.lone).forEach(k => { wl[k.toUpperCase()] = mol.lone[k].slice().sort(); });
-      facts.lone = els => (els === 'all' ? Object.keys(wl) : els.map(e => e.toUpperCase())).every(k => JSON.stringify((lone[k] || []).slice().sort()) === JSON.stringify(wl[k] || []))
+      facts.lone = els => (els === 'all' ? Object.keys(wl) : els.map(e => e.toUpperCase())).every(k => JSON.stringify((lone[k] || []).slice().sort()) === JSON.stringify(wl[k] || []) && full(k))
         && Object.keys(lone).every(k => wl[k]);
     }
     let score = 0;
