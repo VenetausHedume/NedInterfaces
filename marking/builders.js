@@ -181,7 +181,39 @@
     return atoms.map(a => lab[a.id]).sort().join('|');
   }
   const VAL = { H: 1, C: 4, O: 2, N: 3, CL: 1, BR: 1, F: 1, I: 1, S: 2 };
+  /* answer.criteria (from a mark scheme): [{ name, marks, rules:[…] }] — rules:
+       { same:true }      the molecule asked for          { name:true }   value.name is one of answer.names
+       { alkene:true }    a hydrocarbon with exactly one C=C, every atom with its full number of bonds
+       { alcohol:true }   an O–H on a carbon with only single bonds      { acid:true }  a C(=O)–O–H group
+       { ester:true }     a C(=O)–O–C link                               { valency:true } every atom has its full number of bonds */
+  function structFacts(v) {
+    const atoms = v.atoms || [], bonds = v.bonds || [], el = {}, nb = {};
+    atoms.forEach(a => { el[a.id] = String(a.element).toUpperCase(); nb[a.id] = []; });
+    bonds.forEach(b => { if (nb[b.from] && nb[b.to] && b.from !== b.to) { nb[b.from].push([b.to, b.order || 1]); nb[b.to].push([b.from, b.order || 1]); } });
+    const deg = id => nb[id].reduce((s, x) => s + x[1], 0);
+    const valency = atoms.length > 0 && atoms.every(a => VAL[el[a.id]] == null || deg(a.id) === VAL[el[a.id]]);
+    const ids = atoms.map(a => a.id);
+    const carbonylC = ids.filter(c => el[c] === 'C' && nb[c].some(([o, k]) => el[o] === 'O' && k === 2));
+    const acid = carbonylC.some(c => nb[c].some(([o, k]) => k === 1 && el[o] === 'O' && nb[o].some(([h]) => el[h] === 'H')));
+    const ester = carbonylC.some(c => nb[c].some(([o, k]) => k === 1 && el[o] === 'O' && nb[o].some(([x]) => x !== c && el[x] === 'C')));
+    const alcohol = ids.some(o => el[o] === 'O' && nb[o].some(([h]) => el[h] === 'H') && nb[o].some(([c, k]) => el[c] === 'C' && k === 1 && nb[c].every(([, kk]) => kk === 1)));
+    const cc2 = bonds.filter(b => (b.order || 1) === 2 && el[b.from] === 'C' && el[b.to] === 'C').length;
+    const alkene = valency && cc2 === 1 && atoms.every(a => el[a.id] === 'C' || el[a.id] === 'H');
+    return { valency, acid, ester, alcohol, alkene };
+  }
   function markStructure(answer, value, max) {
+    if (answer.criteria) {
+      if (!value || (!(value.atoms || []).length && !value.name)) return un(max);
+      const f = structFacts(value);
+      const norm = x => String(x || '').toLowerCase().replace(/[‑–]/g, '-').replace(/\s+/g, ' ').replace(/\s*-\s*/g, '-').trim();
+      let score = 0;
+      const crit = answer.criteria.map(c => { const ok = (c.rules || []).every(r =>
+        r.same ? (value.atoms || []).length > 0 && molSig(value) === molSig(answer.model) :
+        r.name ? (answer.names || []).some(n => norm(n) === norm(value.name)) :
+        r.alkene ? f.alkene : r.alcohol ? f.alcohol : r.acid ? f.acid : r.ester ? f.ester : r.valency ? f.valency : false);
+        if (ok) score += (c.marks == null ? 1 : c.marks); return { name: c.name, ok }; });
+      return { score: Math.min(max, score), max, status: 'marked', detail: { criteria: crit } };
+    }
     if (!value || !(value.atoms || []).length) return un(max);
     const model = answer.model, count = m => { const c = {}; (m.atoms || []).forEach(a => { const e = String(a.element).toUpperCase(); c[e] = (c[e] || 0) + 1; }); return JSON.stringify(Object.keys(c).sort().map(k => [k, c[k]])); };
     const same = molSig(value) === molSig(model), atomsOk = count(value) === count(model);
@@ -194,7 +226,64 @@
   /* ───────── dot-and-cross ─────────  value: { atoms:[{id,element,x,y,slots:{top,bottom,left,right}}] }
      answer: { bonds:[['O','H',2],['O','H',2]], lone:{ O:[4], H:[0,0] }, mixed?:true }
      shared electrons = what sits between two neighbouring atoms (in either atom's facing slot); the rest are non-bonding. */
-  function markLewis(answer, value, max) {
+  /* answer.criteria (from a mark scheme), with answer.mol:
+       covalent  mol:{ bonds:[['P','Cl',2],…], lone:{ P:[2], Cl:[6,6,6] } }
+         rules { bonds:'single'|'double'|'all' } those bonds right, each a dot and a cross from each atom
+               { pairs:[['C','C'],['C','O']] }  the bonds between those kinds of atom right
+               { lone:['P'] | 'all' }        non-bonding electrons right on those atoms
+       ionic     mol:{ ionic:true, ions:{ Mg:'2+', Cl:'-' }, electrons:{ Mg:8, Cl:8 }, counts:{ Mg:1, Cl:2 } }
+         rules { shell:'Cl' }  every Cl ion has its outer shell right (a non-metal ion shows the gained electron as the other symbol)
+               { charges:true }                every ion has its charge
+     question.config.atoms: the atoms printed on the page (they keep their printed places). */
+  function lewisCriteria(answer, value, max, question) {
+    const given = {}; ((question && question.config && question.config.atoms) || []).forEach(a => { given[a.id] = a; });
+    const atoms = ((value && value.atoms) || []).map(a => given[a.id] ? Object.assign({}, a, { element: given[a.id].element, x: given[a.id].x, y: given[a.id].y }) : a);
+    const nE = atoms.reduce((s, a) => s + Object.keys(a.slots || {}).reduce((t, k) => t + (a.slots[k] || []).length, 0), 0);
+    if (!atoms.length || (!nE && !atoms.some(a => a.charge))) return un(max);
+    const mol = answer.mol, E = a => String(a.element).toUpperCase(), sl = a => a.slots || {};
+    const canon = c => String(c || '').replace(/[−–]/g, '-').replace(/^1(?=[+-])/, '');
+    const facts = {};
+    if (mol.ionic) {
+      const want = {}; Object.keys(mol.ions).forEach(k => { want[k.toUpperCase()] = { charge: canon(mol.ions[k]), e: mol.electrons[k], n: (mol.counts || {})[k] || 1 }; });
+      const countsOk = Object.keys(want).every(k => atoms.filter(a => E(a) === k).length === want[k].n) && atoms.every(a => want[E(a)]);
+      facts.shell = el => { const w = want[el.toUpperCase()]; const mine = atoms.filter(a => E(a) === el.toUpperCase()); if (!w || !countsOk || !mine.length) return false;
+        return mine.every(a => { const all = [].concat(...Object.values(sl(a))); return all.length === w.e && (!/-$/.test(w.charge) || (all.includes('dot') && all.includes('cross'))); }); };
+      facts.charges = countsOk && atoms.every(a => canon(a.charge) === want[E(a)].charge);
+    } else {
+      const side = (A, B) => (Math.abs(B.x - A.x) >= Math.abs(B.y - A.y) ? (B.x > A.x ? 'right' : 'left') : (B.y > A.y ? 'bottom' : 'top'));
+      const used = {}; atoms.forEach(a => { used[a.id] = 0; });
+      const got = [];
+      // with printed atoms the bonding regions are the printed ones (mol.links); otherwise any two atoms side by side
+      const linked = mol.links ? new Set(mol.links.map(l => l.slice().sort().join('|'))) : null;
+      for (let i = 0; i < atoms.length; i++) for (let j = i + 1; j < atoms.length; j++) {
+        const A = atoms[i], B = atoms[j];
+        if (linked ? !linked.has([A.id, B.id].sort().join('|')) : Math.hypot(A.x - B.x, A.y - B.y) > 120) continue;
+        const sa = (sl(A)[side(A, B)] || []), sb = (sl(B)[side(B, A)] || []), all = sa.concat(sb); if (!all.length) continue;
+        used[A.id] += sa.length; used[B.id] += sb.length;
+        const fair = all.length % 2 === 0 && all.filter(x => x === 'dot').length === all.length / 2;   // half the shared electrons from each atom
+        got.push({ key: [E(A), E(B)].sort().concat([all.length]).join('-'), n: all.length, fair });
+      }
+      const wantB = mol.bonds.map(b => ({ key: [String(b[0]).toUpperCase(), String(b[1]).toUpperCase()].sort().concat([b[2]]).join('-'), n: b[2] }));
+      const sameSet = (g, w) => JSON.stringify(g.map(b => b.key).sort()) === JSON.stringify(w.map(b => b.key).sort());
+      facts.bonds = kind => { const pick = list => list.filter(b => kind === 'all' || (kind === 'single' ? b.n === 2 : b.n === 4));
+        const g = pick(got), w = pick(wantB); return w.length > 0 && sameSet(g, w) && g.every(b => b.fair) && got.length === wantB.length; };
+      facts.pairs = list => { const want = new Set(list.map(p => p.map(x => x.toUpperCase()).sort().join('-')));
+        const of = b => b.key.split('-').slice(0, 2).join('-');
+        const g = got.filter(b => want.has(of(b))), w = wantB.filter(b => want.has(of(b)));
+        return w.length > 0 && sameSet(g, w) && g.every(b => b.fair); };
+      const lone = {}; atoms.forEach(a => { const tot = Object.keys(sl(a)).reduce((t, k) => t + (sl(a)[k] || []).length, 0); (lone[E(a)] = lone[E(a)] || []).push(tot - used[a.id]); });
+      const wl = {}; Object.keys(mol.lone).forEach(k => { wl[k.toUpperCase()] = mol.lone[k].slice().sort(); });
+      facts.lone = els => (els === 'all' ? Object.keys(wl) : els.map(e => e.toUpperCase())).every(k => JSON.stringify((lone[k] || []).slice().sort()) === JSON.stringify(wl[k] || []))
+        && Object.keys(lone).every(k => wl[k]);
+    }
+    let score = 0;
+    const crit = answer.criteria.map(c => { const ok = (c.rules || []).every(r =>
+      r.bonds ? facts.bonds && facts.bonds(r.bonds) : r.pairs ? facts.pairs && facts.pairs(r.pairs) : r.lone ? facts.lone && facts.lone(r.lone) : r.shell ? facts.shell && facts.shell(r.shell) : r.charges ? !!facts.charges : false);
+      if (ok) score += (c.marks == null ? 1 : c.marks); return { name: c.name, ok }; });
+    return { score: Math.min(max, score), max, status: 'marked', detail: { criteria: crit } };
+  }
+  function markLewis(answer, value, max, opts, question) {
+    if (answer.criteria) return lewisCriteria(answer, value, max, question);
     const atoms = (value && value.atoms) || [];
     if (!atoms.length) return un(max);
     if (answer.ionic) {   // ionic: each ion has the right charge and outer-shell electrons; the gained electron is shown as the other symbol
@@ -674,11 +763,11 @@
         d.shellsOk ? good('Electron arrangement is correct.') : bad(`Not the right arrangement. You placed ${d.total} electrons; this needs ${d.expectedTotal}, arranged ${answer.shells.join(', ')}.`);
         if (d.chargeOk === true) good('Charge is correct.'); if (d.chargeOk === false) bad('Show the charge: ' + answer.charge + '.');
         break; }
-      case 'structure': {
+      case 'structure': if (d.criteria) { d.criteria.forEach(c => (c.ok ? good(c.name[0].toUpperCase() + c.name.slice(1) + ': right.') : bad(c.name[0].toUpperCase() + c.name.slice(1) + ': not right.'))); break; } {
         if (d.same) good('Every atom and bond is right.');
         else { d.atomsOk ? good('You have the right atoms.') : bad('Check the number of each type of atom against the formula.'); if (d.atomsOk) d.valencyOk ? bad('Every atom has the right number of bonds, but they are joined in the wrong arrangement.') : bad('Count the bonds on each atom: carbon makes 4, oxygen 2, hydrogen 1.'); }
         break; }
-      case 'lewis': {
+      case 'lewis': if (d.criteria) { d.criteria.forEach(c => (c.ok ? good(c.name[0].toUpperCase() + c.name.slice(1) + ': right.') : bad(c.name[0].toUpperCase() + c.name.slice(1) + ': not right.'))); break; } {
         if (d.ionic) { d.electronsOk ? good('The outer-shell electrons on each ion are right.') : bad('Check the outer shells: the metal ion has lost its outer electrons, the non-metal ion has a full outer shell.');
           d.chargesOk ? good('The charges on the ions are right.') : bad('Check the charges: select each ion and choose its charge.');
           if (!d.transferOk) bad('Show the electron the non-metal gained as the other symbol (a cross among the dots, or a dot among the crosses).');

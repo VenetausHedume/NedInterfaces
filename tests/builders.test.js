@@ -286,5 +286,30 @@ if (process.argv[2] === '-fb') cases.forEach(([ui, a, v, qq]) => { const questio
 t('symbol: right', M.mark('symbol', { symbol: 'ldr' }, { symbol: 'ldr' }, { marks: 1 }).score, 1);
 t('symbol: thermistor is not an LDR', M.mark('symbol', { symbol: 'ldr' }, { symbol: 'thermistor' }, { marks: 1 }).score, 0);
 t('symbol: name needed too', M.mark('symbol', { symbol: 'variable', names: ['variable resistor'] }, { symbol: 'variable', name: 'resistor' }, { marks: 1 }).score, 0);
+
+// dot-and-cross from a mark scheme: printed atoms, a criterion per line
+{ const cfg = { atoms: [{ id: 'a1', element: 'O', x: 132, y: 60 }, { id: 'a2', element: 'C', x: 60, y: 60 }, { id: 'a3', element: 'O', x: -12, y: 60 }] };
+  const key = { mol: { bonds: [['C', 'O', 4], ['C', 'O', 4]], lone: { C: [0], O: [4, 4] }, links: [['a1', 'a2'], ['a2', 'a3']] },
+    criteria: [{ name: 'double bonds', marks: 1, rules: [{ bonds: 'double' }] }, { name: 'non-bonding', marks: 1, rules: [{ lone: ['C', 'O'] }] }] };
+  const sl = (t, b, l, r) => ({ top: t, bottom: b, left: l, right: r });
+  const right = { atoms: [{ id: 'a1', element: 'O', slots: sl(['dot', 'dot'], ['dot', 'dot'], ['dot', 'dot'], []) }, { id: 'a2', element: 'C', slots: sl([], [], ['cross', 'cross'], ['cross', 'cross']) },
+    { id: 'a3', element: 'O', slots: sl(['dot', 'dot'], ['dot', 'dot'], [], ['dot', 'dot']) }] };
+  t('dot-and-cross: CO2 right', M.mark('lewis', key, right, { marks: 2, config: cfg }).score, 2);
+  const single = JSON.parse(JSON.stringify(right)); single.atoms[1].slots = sl([], [], ['cross'], ['cross']); single.atoms[0].slots.left = ['dot']; single.atoms[2].slots.right = ['dot'];
+  t('dot-and-cross: single bonds instead of double', M.mark('lewis', key, single, { marks: 2, config: cfg }).score, 1);
+  t('dot-and-cross: printed atoms only', M.mark('lewis', key, { atoms: [{ id: 'a1', element: 'O', slots: sl([], [], [], []) }] }, { marks: 2, config: cfg }).status, 'unanswered');
+  const ion = { mol: { ionic: true, ions: { Mg: '2+', Cl: '-' }, electrons: { Mg: 8, Cl: 8 }, counts: { Mg: 1, Cl: 2 } },
+    criteria: [{ name: 'Mg', marks: 1, rules: [{ shell: 'Mg' }] }, { name: 'Cl', marks: 1, rules: [{ shell: 'Cl' }] }, { name: 'charges', marks: 1, rules: [{ charges: true }] }] };
+  const x8 = sl(['cross', 'cross'], ['cross', 'cross'], ['cross', 'cross'], ['cross', 'cross']), cl = sl(['dot', 'dot'], ['dot', 'dot'], ['dot', 'dot'], ['dot', 'cross']);
+  const icfg = { config: { atoms: [{ id: 'a1', element: 'Mg', x: 0, y: 0 }, { id: 'a2', element: 'Cl', x: 170, y: 0 }, { id: 'a3', element: 'Cl', x: 340, y: 0 }] }, marks: 3 };
+  t('ionic: right', M.mark('lewis', ion, { atoms: [{ id: 'a1', element: 'Mg', charge: '2+', slots: x8 }, { id: 'a2', element: 'Cl', charge: '-', slots: cl }, { id: 'a3', element: 'Cl', charge: '−', slots: cl }] }, icfg).score, 3);
+  t('ionic: gained electron not shown', M.mark('lewis', ion, { atoms: [{ id: 'a1', element: 'Mg', charge: '2+', slots: x8 }, { id: 'a2', element: 'Cl', charge: '-', slots: sl(['dot', 'dot'], ['dot', 'dot'], ['dot', 'dot'], ['dot', 'dot']) }, { id: 'a3', element: 'Cl', charge: '-', slots: cl }] }, icfg).score, 2); }
+// displayed formula from a mark scheme
+{ const C = (id, e) => ({ id, element: e }), B = (f, t, o) => ({ from: f, to: t, order: o || 1 });
+  const ethanol = { atoms: [C(1, 'C'), C(2, 'C'), C(3, 'O'), C(4, 'H'), C(5, 'H'), C(6, 'H'), C(7, 'H'), C(8, 'H'), C(9, 'H')], bonds: [B(1, 2), B(2, 3), B(3, 9), B(1, 4), B(1, 5), B(1, 6), B(2, 7), B(2, 8)] };
+  const key = { model: ethanol, names: ['ethanol'], criteria: [{ name: 'name', marks: 1, rules: [{ name: true }] }, { name: 'alcohol group', marks: 1, rules: [{ alcohol: true }] }, { name: 'structure', marks: 1, rules: [{ same: true }] }] };
+  t('structure: all right', M.mark('structure', key, Object.assign({ name: 'Ethanol' }, ethanol), { marks: 3 }).score, 3);
+  const meoch3 = { atoms: ethanol.atoms, bonds: [B(1, 3), B(2, 3), B(1, 4), B(1, 5), B(1, 6), B(2, 7), B(2, 8), B(2, 9)] };
+  t('structure: an ether is not an alcohol', M.mark('structure', key, Object.assign({ name: 'ethanol' }, meoch3), { marks: 3 }).score, 1); }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

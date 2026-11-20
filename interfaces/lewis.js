@@ -35,14 +35,17 @@
       const wrap = document.createElement('div'); wrap.style.cssText='position:relative;width:100%;max-width:900px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fffdf7;touch-action:none;';
       const statusEl = document.createElement('div'); statusEl.style.cssText='font:12.5px ui-monospace,Menlo,Consolas,monospace;margin-top:8px;color:#555;white-space:pre-wrap;';
       container.append(tb, wrap, statusEl);
-      container.appendChild(Ned.el('p',{class:'ned-note'},['Pick an atom and click the board to place it. Then choose Dot or Cross and click one of the four small rings around an atom to add an electron there (two per ring at most). Put atoms next to each other: electrons in the rings between them are the shared pair. For an ion, select the atom and choose its charge: it is drawn in square brackets.']));
+      if(question&&question.config&&question.config.atoms) container.appendChild(Ned.el('p',{class:'ned-note'},['The atoms are drawn for you. Choose Dot or Cross and click one of the four small rings around an atom to add an electron there (two per ring at most). Electrons in the rings between two atoms are shared. For an ion, choose Select, click the ion and pick its charge.']));
+      else container.appendChild(Ned.el('p',{class:'ned-note'},['Pick an atom and click the board to place it. Then choose Dot or Cross and click one of the four small rings around an atom to add an electron there (two per ring at most). Put atoms next to each other: electrons in the rings between them are the shared pair. For an ion, select the atom and choose its charge: it is drawn in square brackets.']));
       tb.querySelectorAll('button').forEach(b=>{ b.style.cssText='padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer;font-size:13px;font-weight:600;'; });
       tb.querySelectorAll('.sep').forEach(x=>{ x.style.cssText='width:1px;height:24px;background:var(--line);margin:0 4px;'; });
+      if(question&&question.config&&question.config.atoms){ tb.querySelectorAll('[data-el],[data-tool="atom"],#del').forEach(b=>b.style.display='none'); const l=tb.querySelector('#el'); if(l&&l.parentNode) l.parentNode.style.display='none'; const f=tb.querySelector('span'); if(f) f.style.display='none'; }
       const elI=tb.querySelector('#el'); if(elI) elI.style.cssText='width:60px;padding:6px;border:1px solid var(--line);border-radius:6px;font-size:14px;text-align:center;';
 
 
 // wrap & bar(tb) provided by scaffold
-const Wd=Math.min(900,(container.clientWidth||860)-4), H=470;
+const PRE=(question&&question.config&&question.config.atoms)||null;   // atoms printed in the question: they stay where they are
+const Wd=Math.min(900,(container.clientWidth||860)-4), H=PRE?Math.max(300,Math.max(...PRE.map(a=>a.y))+90):470;
 const stage=new Konva.Stage({container:wrap,width:Wd,height:H,draggable:true});
 const layer=new Konva.Layer(); stage.add(layer);
 // statusEl provided by scaffold
@@ -67,6 +70,7 @@ function render(){
     const t=new Konva.Text({x:a.x,y:a.y,text:a.el,fontSize:20,fontStyle:'bold',fill:'#2b2b2b'}); t.offsetX(t.width()/2); t.offsetY(t.height()/2); layer.add(t);
     // draggable hit pad
     const pad=new Konva.Circle({x:a.x,y:a.y,radius:16,fill:'rgba(0,0,0,0.001)',draggable:true});
+    if(a.given) pad.draggable(false);
     pad.on('dragmove',()=>{ a.x=pad.x(); a.y=pad.y(); render(); });
     pad.on('dragend',()=>emit());
     pad.on('mousedown touchstart',(e)=>{ if(tool==='select'){ e.cancelBubble=true; selected=a; chargeSel.value=a.charge||''; render(); } });
@@ -129,18 +133,21 @@ stage.on('mousedown touchstart',(e)=>{ if(e.target===stage){
 stage.on('wheel',(e)=>{ e.evt.preventDefault(); const old=stage.scaleX(); const ptr=stage.getPointerPosition();
   const m={x:(ptr.x-stage.x())/old,y:(ptr.y-stage.y())/old}; const dir=e.evt.deltaY>0?-1:1; const f=1.08; const k=Math.max(0.5,Math.min(2.4,dir>0?old*f:old/f));
   stage.scale({x:k,y:k}); stage.position({x:ptr.x-m.x*k,y:ptr.y-m.y*k}); stage.batchDraw(); });
-tb.querySelector('#del').onclick=()=>{ if(selected){ atoms=atoms.filter(a=>a!==selected); selected=null; render(); emit(); } };
-tb.querySelector('#clear').onclick=()=>{ atoms=[]; selected=null; render(); emit(); };
+tb.querySelector('#del').onclick=()=>{ if(selected&&!selected.given){ atoms=atoms.filter(a=>a!==selected); selected=null; render(); emit(); } };
+tb.querySelector('#clear').onclick=()=>{ loadValue(null); };
 
 function loadValue(v){
-  atoms=((v&&v.atoms)||[]).map(a=>({id:a.id,el:a.element,circle:!!a.circle,charge:a.charge||'',x:a.x,y:a.y,slots:{top:(a.slots.top||[]).slice(),bottom:(a.slots.bottom||[]).slice(),left:(a.slots.left||[]).slice(),right:(a.slots.right||[]).slice()}}));
+  const sv=a=>({top:((a.slots||{}).top||[]).slice(),bottom:((a.slots||{}).bottom||[]).slice(),left:((a.slots||{}).left||[]).slice(),right:((a.slots||{}).right||[]).slice()});
+  const mine={}; ((v&&v.atoms)||[]).forEach(a=>{ mine[a.id]=a; });
+  atoms=(PRE||[]).map(p=>{ const m=mine[p.id]||{}; return {id:p.id,el:p.element,given:true,circle:!!(m.circle||p.circle),charge:m.charge||p.charge||'',x:p.x,y:p.y,slots:sv(m)}; })
+    .concat(((v&&v.atoms)||[]).filter(a=>!(PRE||[]).some(p=>p.id===a.id)).map(a=>({id:a.id,el:a.element,circle:!!a.circle,charge:a.charge||'',x:a.x,y:a.y,slots:sv(a)})));
   uid=atoms.reduce((n,a)=>Math.max(n,+String(a.id).replace(/\D/g,'')||0),0)+1; selected=null; render(); emit();
 }
 setTool(tool); loadValue(value);
 
       return {
         update: (v) => { loadValue(v); },
-        clear: () => { atoms=[]; selected=null; render(); emit(); },
+        clear: () => { loadValue(null); },
         destroy: () => { try{ stage.destroy(); }catch(e){} container.innerHTML=''; },
       };
     });

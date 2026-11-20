@@ -29,6 +29,12 @@
     <button id="clear">Clear</button>`;
       const wrap = document.createElement('div'); wrap.style.cssText='position:relative;width:100%;max-width:900px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fffdf7;touch-action:none;';
       const statusEl = document.createElement('div'); statusEl.style.cssText='font:13px ui-monospace,Menlo,Consolas,monospace;margin-top:8px;color:#555;';
+      // 'Name … and draw its displayed formula': a box for the name above the board
+      let nameIn=null;
+      if(question&&question.config&&question.config.askName){ nameIn=Ned.el('input',{type:'text',placeholder:'name',value:(value&&value.name)||'','aria-label':'Name',
+        style:'display:block;margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;width:100%;max-width:340px;'});
+        container.appendChild(Ned.el('label',{style:'display:block;font-size:13px;color:#8a8272;margin-bottom:2px;'},['Name']));
+        container.appendChild(nameIn); }
       container.append(tb, wrap, statusEl);
       container.appendChild(Ned.el('p',{class:'ned-note'},['Pick an atom, then click the board to place it, or click an atom already there to attach a new one to it. + Bond joins two atoms you click; clicking a bond with + Bond changes it to double, then triple. Drag atoms to tidy.']));
       tb.querySelectorAll('button').forEach(b=>{ b.style.cssText='padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);cursor:pointer;font-size:13px;font-weight:600;'; });
@@ -120,8 +126,9 @@ function drawBonds(){
 function emit(){
   drawBonds();
   const empty = atoms.length===0 && bonds.length===0;
-  onChange(empty ? null : { atoms:atoms.map(a=>({id:a.id,element:a.el,x:Math.round(a.node.x()),y:Math.round(a.node.y())})),
-    bonds:bonds.map(b=>({from:b.a,to:b.b,order:b.order})) });
+  const nm=nameIn?nameIn.value.trim():'';
+  onChange(empty && !nm ? null : Object.assign({ atoms:atoms.map(a=>({id:a.id,element:a.el,x:Math.round(a.node.x()),y:Math.round(a.node.y())})),
+    bonds:bonds.map(b=>({from:b.a,to:b.b,order:b.order})) }, nameIn?{name:nm}:{}));
   // formula tally
   const tally={}; atoms.forEach(a=>{ tally[a.el]=(tally[a.el]||0)+1; });
   const formula=Object.keys(tally).sort().map(k=>k+(tally[k]>1?tally[k]:'')).join('');
@@ -157,9 +164,10 @@ function loadValue(v){
   uid=n+1; loading=false; drawBonds(); layer.draw(); emit();
 }
 loadValue(value);
+if(nameIn) nameIn.addEventListener('input',()=>emit());
 
       return {
-        update: (v) => { loadValue(v); },
+        update: (v) => { if(nameIn) nameIn.value=(v&&v.name)||''; loadValue(v); },
         clear: () => { try{ atoms.forEach(a=>a.node.destroy()); }catch(e){} atoms=[];bonds=[];bondFrom=null;selected=null; try{bondShapes.forEach(s=>s.destroy());}catch(e){} bondShapes=[]; layer.draw(); emit(); },
         destroy: () => { try{ stage.destroy(); }catch(e){} container.innerHTML=''; },
       };
