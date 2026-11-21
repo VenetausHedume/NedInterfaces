@@ -56,7 +56,7 @@
       .replace(/[₀-₉]/g, c => SUBS[c])
       .replace(/\s+/g, ' ').trim();
   }
-  const STOP = new Set(('a an the of to in on at for and or is are was be it its this that with by as from into than then so occur occurs happen happens take takes place ' +
+  const STOP = new Set(('a an the of to in on at for and or is are was be it its this that with by as from into than then so between occur occurs happen happens take takes place ' +
     'their there they which when will can may would should has have had do does more most very each other some any because').split(' '));
   function stem(w) {
     if (w.length > 5) w = w.replace(/(isation|ization)$/, 'ise');
@@ -128,7 +128,10 @@
     if (/^\s*(?:and|or|&|also|plus)\s*$/i.test(String(alt))) return false;     // a connector the scheme printed between two points is not a point
     { const a = ionText(alt).replace(/\s+/g, '');
       if (ION.test(a) && a.length > 2) { const esc = a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&'); if (new RegExp('(^|[^A-Za-z0-9])' + esc + '(?![A-Za-z0-9+\\-])').test(ionText(ctx.orig || ''))) return true; }
-      if (/^\s*[AI]\s*$/.test(String(alt)) && ctx.orig != null) return letterHit(ctx, String(alt).trim()); }
+      if (/^\s*[AI]\s*$/.test(String(alt)) && ctx.orig != null) return letterHit(ctx, String(alt).trim());
+      // an equation in the scheme ('P = I 2 R', the ² lost in the PDF) against 'P = I²R', 'p=i^2r', 'P = I2R'
+      if (/=/.test(alt) && ctx.orig != null) { const f = x => ionText(String(x).replace(/[\^{}*×]/g, '')).toLowerCase().replace(/\s+/g, '');
+        const fa = f(alt), fs = f(ctx.orig); if (fa.length >= 4 && fs.includes(fa)) return true; } }
     /* "quoted words" in a mark-scheme alternative must appear together, in that order ("collision rate", not "collide … rate") */
     const quoted = [...String(alt).matchAll(/"([^"]+)"/g)].map(m => tokens(m[1])).filter(t => t.length > 1);
     if (quoted.length) {
@@ -340,8 +343,10 @@
     const listItems = (b) => b.split(/[.;!?\n]+/).reduce((n, sen) => { const it = sen.split(/,|\band\b/).map(x => x.trim()).filter(Boolean);
       return n + (it.length >= 2 && it.slice(1).every(x => x.split(/\s+/).length <= 4) ? it.length : 0); }, 0);
     // only where examiners credit a bare list (sciences, computer science); in economics 'more sales and more revenue' is one undeveloped point
-    const LISTY = /^(0610|0620|0625|0478|0984|0653|0654|0970|0971|0972|0973|0438)/.test(String((question && question.id) || ''));
-    const room = boxes.map(b => Math.max(1, clauses(b) + (b.match(/:\s*\S/g) || []).length, Math.floor(b.trim().split(/\s+/).length / 6), LISTY ? listItems(b) : 0));
+    const LISTY = /^(0610|0620|0625|0478|0984|0653|0654|0970|0971|0972|0973|0438)/.test(String((question && question.id) || ''))
+      || /^\s*(?:state|give|name|identify|list|explain|describe|outline)\s+(?:two|three|four|2|3|4)\b/i.test(String((question && question.text) || ''));
+    const andSplit = (b) => b.split(/[.;!?\n]+/).reduce((n, sen) => n + Math.max(0, sen.split(/,?\s+and\s+/).filter(x => x.trim().split(/\s+/).length >= 3).length - 1), 0);
+    const room = boxes.map(b => Math.max(1, clauses(b) + Math.max(0, andSplit(b)) + (b.match(/:\s*\S/g) || []).length, Math.floor(b.trim().split(/\s+/).length / 6), LISTY ? listItems(b) : 0));
     const owner = {}, load = boxes.map(() => []);
     function place(bi, seen) {
       for (const i of can[bi]) {
