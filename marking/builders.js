@@ -49,6 +49,14 @@
     if (py) return Py ? Py.run(code, input, 1500, t.files, opts) : { ok: false, output: [], error: { message: 'The Python runner did not load.' } };
     return P.run(code, input, 1000000, t.files, opts);        // big programs (sorting 200 records) need more than the Run button's limit
   }
+  // the text messages of the other tests that this test does not expect
+  function otherMsgs(all, t) {
+    const words = x => (x.expect || []).map(w => String(w).toLowerCase().trim()).filter(w => w && isNaN(+w) && /[a-z]{3}/.test(w));
+    const mine = new Set(words(t));
+    return [...new Set(all.filter(o => o !== t).flatMap(words))].filter(w => !mine.has(w) && ![...mine].some(m => m.includes(w) || w.includes(m)));
+  }
+  // a mark point that is only a keyword ('an output', 'an input') is not an algorithm on its own
+  const weakPoint = p => p.code && /^[\s\\b()|]*$/.test(p.code.replace(/OUTPUT|PRINT|INPUT|input|print|\\s\*|\\\(|\(\?:/g, ''));
   function markAlgo(kind) {
     return function (answer, value, max) {
       const code = kind === 'code' ? ((value && value.code) || '') : '';
@@ -61,9 +69,13 @@
         const tries = t.inputs || [t.input || []];
         let best = null;
         if (Date.now() - t0 > BUDGET) return { pass: false, output: [], vars: {}, error: { message: 'not run: the earlier tests took too long' }, input: tries[0], expect: t.expect || [], want: t.vars || null };
-        for (const input of tries) {
+        // Python lists start at 0; a student who keeps the scheme's 1-based positions (range(1, 51)) is right too:
+        // the given arrays are also tried with an empty first place
+        const pad = py && Object.values(t.given || {}).some(Array.isArray);
+        const runs = []; tries.forEach(input => { runs.push([input, t]); if (pad) runs.push([input, Object.assign({}, t, { given: Object.fromEntries(Object.entries(t.given).map(([k, v]) => [k, Array.isArray(v) ? [null].concat(v) : v])) })]); });
+        for (const [input, tRun] of runs) {
           let tt = t;
-          const r = runOne(kind, py, value, code, t, input);
+          const r = runOne(kind, py, value, code, tRun, input);
           const filesOk = !t.expectFiles || (r.ok && Object.keys(t.expectFiles).every(nm => JSON.stringify(((r.files || {})[nm] || []).map(x => String(x).trim())) === JSON.stringify(t.expectFiles[nm].map(x => String(x).trim()))));
           if (t.derive && r.ok && A.ref) {
             // the right result depends on data the program made itself (a random cell, a generated code):
@@ -75,7 +87,10 @@
             else tt = Object.assign({}, t, { expect: (tt.expect || []).concat(expectOfLines(lines)) });
           }
           const varsOk = !tt.vars || (r.ok && Object.keys(tt.vars).every(k => sameVal((r.vars || {})[k], tt.vars[k])));
-          const outOk = r.ok && P.outputMatches(r.output, tt.expect || []);
+          // a message another test expects ('Not found') must not appear in this test's output (where the number was found)
+          const others = otherMsgs(A.tests || [], t0);
+          const rejected = r.ok && others.some(m => (r.output || []).some(l => String(l).toLowerCase().includes(m)));
+          const outOk = r.ok && P.outputMatches(r.output, tt.expect || []) && !rejected;
           // requirement checks on the same run (15-mark programs): a program that stops part-way still earns the checks it reached
           const checks = (tt.checks || []).map(c => ({ req: c.req, ok: (!c.expect || P.outputMatches(r.output, c.expect)) && (!c.vars || Object.keys(c.vars).every(k => sameVal((r.vars || {})[k], c.vars[k]))) }));
           const res = { pass: outOk && filesOk && varsOk && checks.every(c => c.ok), filesOk, varsOk, checks, output: r.output, vars: r.vars || {}, error: r.error || null, input, expect: tt.expect || [], want: t.vars || null };
@@ -84,7 +99,23 @@
         }
         return best;
       });
+      // a test (or a check) that an empty program also passes ('CountUnder7 is still 3 when Age is 7') shows nothing on its own
+      const blank = (A.tests || []).map(t => { if (Date.now() - t0 > BUDGET) return { pass: false, checks: [] }; const tries = t.inputs || [t.input || []];
+        const r = runOne(kind, py, kind === 'code' ? { code: '', lang: value.lang } : { nodes: [], edges: [] }, '', t, tries[0]);
+        const varsOk = !t.vars || (r.ok && Object.keys(t.vars).every(k => sameVal((r.vars || {})[k], t.vars[k])));
+        const outOk = r.ok && P.outputMatches(r.output, t.expect || []);
+        return { pass: !t.derive && outOk && varsOk && !t.expectFiles, checks: (t.checks || []).map(c => r.ok && (!c.expect || P.outputMatches(r.output, c.expect)) && (!c.vars || Object.keys(c.vars).every(k => sameVal((r.vars || {})[k], c.vars[k])))) }; });
+      const passedRaw = tests.filter(t => t.pass).length;
+      // tests give the program data (inputs, or values already stored): a program that never reads any of it
+      // ('OUTPUT "A-rated"', 'OUTPUT 9.99') is not passing them
+      const givenNames = [...new Set((A.tests || []).flatMap(t => Object.keys(t.given || {})))];
+      const hasData = (A.tests || []).some(t => (t.inputs || [t.input || []]).some(x => x.length)) || givenNames.length;
+      const reads = /\bINPUT\b|\bREADFILE\b|\binput\s*\(|\bopen\s*\(/i.test(stripCode(code || (value && value.nodes || []).map(n => n.text || '').join('\n'), py))
+        || givenNames.some(n => new RegExp('\\b' + n + '\\b', 'i').test(stripCode(code || (value && value.nodes || []).map(n => n.text || '').join('\n'), py)));
+      if (hasData && !reads && !(A.tests || []).some(t => t.append)) tests.forEach(t => { t.pass = false; t.ignoresData = true; });
       const passed = tests.filter(t => t.pass).length;
+      const shown = tests.filter((t, i) => t.pass && !(blank[i] && blank[i].pass)).length;     // tests passed that an empty program fails
+      tests.forEach((t, i) => (t.checks || []).forEach((c, k) => { if (c.ok && blank[i] && blank[i].checks[k]) c.trivial = true; }));
       const text = kind === 'code' ? code : (value.nodes || []).map(n => n.text || '').join('\n');
       const f = py && Py ? Py.features(text) : P.features(text);
       if (kind === 'flowchart') f.decision = (value.nodes || []).some(n => n.type === 'decision');
@@ -98,7 +129,7 @@
         // AO2 (techniques, data structures) and AO3 (names, logic, accuracy, requirements met) from how much of each
         // requirement the program gets right when it is run. Comments are not marked.
         const R = A.levels.requirements || [];
-        const per = R.map((q, k) => { const cs = tests.flatMap(t => (t.checks || []).filter(c => c.req === k)); return { text: q.text, weight: q.weight || 1, got: cs.filter(c => c.ok).length, of: cs.length }; });
+        const per = R.map((q, k) => { const cs = tests.flatMap(t => (t.checks || []).filter(c => c.req === k)); return { text: q.text, weight: q.weight || 1, got: cs.filter(c => c.ok && !c.trivial).length, of: cs.filter(c => !c.trivial).length }; });
         const W = per.reduce((a, q) => a + q.weight, 0) || 1;
         const frac = per.reduce((a, q) => a + q.weight * (q.of ? q.got / q.of : 0), 0) / W;
         const ids = [...new Set((plain.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []).filter(w => !/^(IF|THEN|ELSE|ENDIF|FOR|TO|NEXT|WHILE|DO|ENDWHILE|REPEAT|UNTIL|INPUT|OUTPUT|PRINT|AND|OR|NOT|CASE|OF|OTHERWISE|ENDCASE|DECLARE|TRUE|FALSE|DIV|MOD|STEP|RETURN|in|range|int|float|str|len|print|input|def|if|else|elif|for|while|and|or|not|True|False|return|i|j|k)$/i.test(w)))];
@@ -116,11 +147,16 @@
       if (tests.length && passed === tests.length && reqs.every(r => r.ok)) score = max;
       else if (points.length) {
         // mark points earn marks, but a program that gets no test right cannot score more than half (and never full marks)
-        const cap = tests.length && passed === 0 ? Math.ceil(max / 2) : max - 1;
-        score = Math.min(Math.max(0, cap), points.filter(x => x.ok).length);
+        const strong = points.filter((x, k) => x.ok && !weakPoint(A.points[k])).length;
+        const ok = shown || strong ? points.filter(x => x.ok).length : 0;
+        // no test right: at most half, unless nearly every mark point is there (a WHILE rewrite that forgets
+        // 'Counter ← Counter + 1' loops for ever but an examiner still gives the other three marks)
+        const cap = tests.length && shown === 0 ? (ok >= Math.ceil(points.length * 0.75) && ok >= 3 && tests.every(t => t.error) ? max - 1 : Math.ceil(max / 2)) : max - 1;
+        // one keyword on its own ('OUTPUT "hello"' has an OUTPUT) is not an algorithm: with no test right, it takes two points met
+        score = tests.length && shown === 0 && ok < 2 ? 0 : Math.min(Math.max(0, cap), ok);
       }
       else if (feats.length) score = Math.min(Math.max(0, max - 1), feats.filter(x => x.ok).length);
-      else score = tests.length ? Math.floor(Math.max(0, max - 1) * passed / tests.length) : 0;
+      else score = tests.length ? Math.floor(Math.max(0, max - 1) * shown / tests.length) : 0;
       return { score, max, status: 'marked', detail: { tests, passed, features: feats, points, require: reqs, error: (tests.find(t => t.error) || {}).error || null } };
     };
   }

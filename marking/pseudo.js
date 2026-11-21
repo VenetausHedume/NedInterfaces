@@ -23,8 +23,26 @@
   class PErr extends Error { constructor(message, line) { super(message); this.line = line; } }
 
   /* ── tokens ── */
+  /* a statement that runs on to the next line is one statement: a text wrapped mid-quote, an expression ending in an
+     operator or comma ('Total ← Total +' / 'Mark[i]'), a bracket left open, a condition continued with AND / OR,
+     'RETURNS' with the type on the next line */
+  function joinLines(src) {
+    const raw = String(src).replace(/\r/g, '').replace(/[″„«»]/g, '"').split('\n'), out = [];
+    const code = l => l.replace(/"[^"\n]*"|“[^”\n]*”/g, '""').replace(/\/\/.*$/, '');
+    const open = l => { const c = code(l), q = (c.match(/["“”]/g) || []).length;
+      return q % 2 === 1 || (c.match(/\(/g) || []).length > (c.match(/\)/g) || []).length || (c.match(/\[/g) || []).length > (c.match(/\]/g) || []).length
+        || /([+\-*\/&,(←=<>^]|<-|\b(?:AND|OR|NOT|MOD|DIV|RETURNS))\s*$/i.test(c.trim()) && c.trim().length > 0; };
+    const cont = l => /^\s*(?:AND|OR)\b|^\s*[+*\/&]/i.test(l);
+    for (let i = 0; i < raw.length; i++) {
+      let l = raw[i], n = 0;
+      while (i + 1 < raw.length && raw[i + 1].trim() && (open(l) || cont(raw[i + 1])) && n < 6) { l = l.replace(/\s+$/, '') + ' ' + raw[i + 1].trim(); i++; n++; out.push(null); }
+      out.push(l);
+    }
+    // keep the line numbers: a joined line keeps the number of its last part, the parts before it become blank lines
+    return out.map(x => x == null ? '' : x);
+  }
   function lex(src) {
-    const lines = String(src).replace(/\r/g, '').split('\n');
+    const lines = joinLines(src);
     const out = [];
     lines.forEach((text, li) => {
       const toks = []; let i = 0; const s = text;

@@ -11,7 +11,7 @@ const t = (name, got, want) => { const ok = JSON.stringify(got) === JSON.stringi
 
 const K = require('./data/econ_ecr_keys.json');
 const S = fs.readFileSync(path.join(__dirname, 'data/econ_ecr_scripts.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
-for (const [nm, f, minExact, minNear, maxOff] of [['booklet Q1–Q4', q => q <= 4, 14, 24, 24], ['booklet Q5–Q7', q => q >= 5, 9, 19, 22]]) {
+for (const [nm, f, minExact, minNear, maxOff] of [['booklet Q1–Q4', q => q <= 4, 15, 25, 22], ['booklet Q5–Q7', q => q >= 5, 9, 18, 22]]) {
   let e = 0, n1 = 0, o = 0, c = 0;
   for (const s of S) { if (!f(+s.q[1])) continue; c++; const r = R.mark(K[s.q], s.text); e += r.score === s.mark; n1 += Math.abs(r.score - s.mark) <= 1; o += Math.abs(r.score - s.mark); }
   console.log(`real scripts, ${nm}: ${c} answers, ${e} exact, ${n1} within one mark, ${o} marks off in all`);

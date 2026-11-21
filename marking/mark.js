@@ -150,7 +150,10 @@
       const a = norm(alt).replace(/\s+/g, ''); return !!a && ctx.compact.includes(a);
     }
     if (need.length === 1 && need[0].length <= 2) return ctx.raw.has(need[0]);       // single letters / "pH" must be whole words
-    const hits = need.filter(t => hasTok(ctx.set, ctx.text, t, ctx.syn)).length;
+    // a slip in a long word ('melitng', 'aluimnium') is compared with the word as written, before endings are taken off
+    const rawStu = ctx.rawW || (ctx.rawW = rawTokens(ctx.orig || ctx.text));
+    const slip = t => rawTokens(alt).some(w => w.length >= 6 && stem(w) === t && rawStu.some(x => x.length >= 6 && x !== w && lev1(x, w) && !confusable(x, w) && !confusable(stem(x), stem(w))));
+    const hits = need.filter(t => hasTok(ctx.set, ctx.text, t, ctx.syn) || slip(t)).length;
     const frac = hits / need.length;
     return need.length <= 2 ? frac === 1 : need.length <= 4 ? frac >= 0.75 : frac >= 0.6;
   }
@@ -553,8 +556,11 @@
      Chemical formulae (CO2, NaCl, Co vs CO) and genotypes (Tt, tt, XHXh) are compared case-sensitively, so
      "tt" is never accepted for "Tt". A genotype may be written either way round ("tT" = "Tt").
      A spec can force it either way with case:true / case:false. */
+  // computer science: names are not case-sensitive ('CATNO' is the field CatNo, 'DDOS' is DDoS)
+  let CASE_OFF = false;
   function caseMatters(a, spec) {
     if (spec && spec.case != null) return !!spec.case;
+    if (CASE_OFF) return false;
     a = latexToText(String(a)).replace(/[\^{}]/g, '').trim();
     if (!a || /\s/.test(a) || !/[A-Za-z]/.test(a)) return false;
     if (/^ph$/i.test(a)) return false;                           // pH: examiners accept PH, ph
@@ -1065,6 +1071,7 @@
   };
   function mark(ui, answer, value, question, opts) {
     const max = (question && question.marks) || 0;
+    CASE_OFF = /^(0478|0984)/.test(String((question && question.id) || ''));
     if (!answer) return { score: 0, max, status: 'no_answer_key', detail: {} };
     const fn = MARKERS[ui];
     if (!fn) return { score: 0, max, status: 'no_marker', detail: {} };

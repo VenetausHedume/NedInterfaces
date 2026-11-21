@@ -112,7 +112,15 @@ function dirAt(text, c) {
 }
 
 // question: concepts named in the question itself ('GDP', 'poverty') do not tell one link from another
+// one idea in two directions: 'reduces inequality' = 'a more even distribution of income'
+function canon(t) {
+  return String(t)
+    .replace(/\b(?:reduc\w*|lower\w*|narrow\w*|decreas\w*|cut\w*|less(?:en\w*)?)\s+(?:the\s+)?(?:income\s+|wealth\s+)?(?:inequality|inequalities|gap between (?:the\s+)?rich and (?:the\s+)?poor)/gi, 'more even distribution of income')
+    .replace(/\b(?:increas\w*|widen\w*|rais\w*|more|greater|worsen\w*)\s+(?:the\s+)?(?:income\s+|wealth\s+)?(?:inequality|inequalities|gap between (?:the\s+)?rich and (?:the\s+)?poor)/gi, 'less even distribution of income')
+    .replace(/\bmore (?:equal|equitable)\b/gi, 'more even distribution of');
+}
 function same(stmt, link, question) {
+  stmt = canon(stmt); link = canon(link);
   const Q = new Set(question ? concepts(question).map(x => x.c) : []);
   const Lall = concepts(link), S = concepts(stmt);
   // the topic of the question and the subject of the sentence ('firms', often just 'they') do not tell links apart
@@ -234,7 +242,10 @@ function markChainsKey(key, text) {
   // a statement holds one link, or two when it joins two ideas with 'and' ('so they expand and take on more workers')
   const cap = S.map(x => ((x.text.split(/\s+/).length >= 8 && /\b(and|that|so that|in order to)\b|,\s*\w+ing\b/.test(x.text)) || (x.text.split(/\s+/).length >= 4 && /\b(so|because|which|therefore|leading to|resulting in)\b/i.test(x.text)) ? 2 : 1));
   const usedN = S.map(() => 0);
-  const free = (i, at) => usedN[i] + at.filter(a => a === i).length < cap[i];
+  const sideUse = S.map(() => -1);
+  let curSide = -1;
+  // a statement argues one side: once it is credited for one side it cannot also be credited for the other
+  const free = (i, at) => usedN[i] + at.filter(a => a === i).length < cap[i] && (sideUse[i] < 0 || curSide < 0 || sideUse[i] === curSide);
   const all = [];
   key.sides.forEach((side, si) => side.chains.forEach((ch, ci) => all.push({ si, ci, ch,
     hits: ch.links.map(l => S.map((s, i) => ((s.kind !== 'definition' || defQ || /\bmeans?\b|meaning|is defined|refers to/i.test(l)) && onSide(i, si) && says(s.text, l) ? i : -1)).filter(i => i >= 0)) })));
@@ -257,10 +268,11 @@ function markChainsKey(key, text) {
   const sideScore = key.sides.map(() => 0), done = new Set();
   for (;;) {
     let pick = null;
-    all.forEach((c, k) => { if (done.has(k)) return; const b = best(c); const sc = Math.min(c.ch.max, b.got.length);
+    all.forEach((c, k) => { if (done.has(k)) return; curSide = c.si; const b = best(c); curSide = -1;
+      const sc = Math.min(c.ch.max, b.got.length);
       if (sc && (!pick || sc > pick.sc)) pick = { k, c, b, sc }; });
     if (!pick) break;
-    done.add(pick.k); pick.b.at.forEach(i => { used.add(i); usedN[i]++; });
+    done.add(pick.k); pick.b.at.forEach(i => { used.add(i); usedN[i]++; sideUse[i] = pick.c.si; });
     const { c, b, sc } = pick, order = b.got.map((j, n) => [j, b.at[n]]).sort((x, y) => x[0] - y[0]);
     if (b.got.length >= 2) developed++;
     detail.credited.push({ side: key.sides[c.si].title, links: order.map(x => c.ch.links[x[0]]), at: order.map(x => x[1]), marks: sc, developed: b.got.length >= 2 });
@@ -321,12 +333,20 @@ function markEconText(key, text) {
    Level 3 (6–8): both sides developed, at least one side as a chain (depth 2+); a reasoned judgement tops it. */
 const CON = concepts;
 const EVAL = /^(?:however,?\s+|but\s+|so\s+|therefore,?\s+|thus,?\s+)?(?:overall|in conclusion|to conclude|on balance|ultimately|in summary|all in all|to sum up)\b|\b(it depends|depends (?:on|upon)|depend (?:on|upon)|will depend|the extent to which|outweighs?|outweighed|more important than|most important|in the (?:short|long)[- ](?:run|term)\b.{0,80}\b(?:but|however|whereas|while)\b.{0,60}\bin the (?:short|long)[- ](?:run|term)|whether .{0,80}\b(?:depends|will depend))\b/i;
+// content words of a statement: what it says beyond little words and the question's own words
+const LITTLE = new Set(('the a an of to in on at for and or but is are was were be been being it its this that these those they them their there then than so as by with from into will would may might could can should must also more less most very much many some any not no do does did have has had which who what when where why how because if such other others same own each about over under up down out off only just even still well want wants make makes made get gets got').split(' '));
+const words = (t, q) => String(t).toLowerCase().replace(/[^a-z' ]/g, ' ').split(/\s+/).filter(w => w.length >= 4 && !LITTLE.has(w) && !(q && q.has(w))).map(w => w.replace(/(ing|ed|es|s)$/, ''));
 function depthOf(S, i) {
   const seen = new Set(CON(S[i].text).map(c => c.c)); let d = 0;
+  const q = new Set(words(QTEXT));
+  const said = new Set(words(S[i].text, q));
   for (let j = i + 1; j < S.length && continues(S, i, j); j++) {
     const nc = CON(S[j].text).map(c => c.c).filter(c => !seen.has(c));
-    if (nc.length && S[j].text.split(/\s+/).length >= 4) d++;
-    nc.forEach(c => seen.add(c));
+    // a step brings in a new economic idea, or says something new in its own words ('as workers want a union to
+    // protect them and negotiate for them') — not a repeat of the point
+    const nw = words(S[j].text, q).filter(w => !said.has(w));
+    if ((nc.length || nw.length >= 3) && S[j].text.split(/\s+/).length >= 4) d++;
+    nc.forEach(c => seen.add(c)); words(S[j].text, q).forEach(w => said.add(w));
   }
   return d;
 }
@@ -358,7 +378,14 @@ function markLevelsText(key, text) {
     detail: { level, judged, levels: key.levels, points: pts.map(p => ({ side: key.sides[p.side].title, point: p.point, at: p.at, depth: p.depth })), statements: S.map(x => ({ text: x.text, kind: x.kind })) } };
 }
 
+// keys made before the mark-scheme reader stopped at the level descriptors: the descriptor text glued to the last point
+const DESCRIPTOR = /\s*\b(?:Note\s*:|which accurately examines|accurately examines both sides|both sides of the argument|clear and logical analysis|which makes use of economic|no creditable content|Static response)[\s\S]*$/i;
+function tidy(key) {
+  if (key.kind !== 'levels' || !key.sides) return key;
+  return Object.assign({}, key, { sides: key.sides.map(sd => Object.assign({}, sd, { points: sd.points.map(p => Array.isArray(p) ? p.map(x => String(x).replace(DESCRIPTOR, '')) : String(p).replace(DESCRIPTOR, '')) })) });
+}
 function mark(key, text) {
+  key = tidy(key);
   QTEXT = key.q || '';
   const r = key.kind === 'levels' ? markLevelsText(key, text) : markEconText(key, text);
   return r;
