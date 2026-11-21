@@ -113,7 +113,22 @@
     return false;
   }
   /* does the student's text contain this alternative?  all key words for short ones, most for long ones */
+  // ion and formula symbols: 'Na +' in a key (the superscript lost in the PDF) is 'Na+', 'Na⁺' or 'Na +' in an answer
+  const SUPC = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '-' };
+  const ionText = s => String(s).replace(/[₀-₉]/g, c => String(c.charCodeAt(0) - 8320)).replace(/[⁰-⁹⁺⁻¹²³]/g, c => SUPC[c] || c).replace(/[–−]/g, '-').replace(/([A-Za-z0-9)])\s+(?=\d*[+\-](?![A-Za-z0-9]))/g, '$1').replace(/\^\{?(\d*[+\-])\}?/g, '$1');
+  const ION = /^(?:[A-Z][a-z]?\d*|\((?:[A-Z][a-z]?\d*)+\)\d*)+\d*[+\-]$/;
+  // a lone 'I' (iodide) or 'A' (a label) is not the pronoun 'I think …' or the article 'a gas' / 'A solid forms'
+  const LABEL_NEXT = /^(?:is|are|was|were|and|or|has|have|ion|ions|only|then|because|gives|shows|represents|contains)$/;
+  function letterHit(ctx, L) {
+    const ws = String(ctx.orig || '').replace(/[^A-Za-z0-9+\-⁻]+/g, ' ').trim().split(' ');
+    return ws.some((w, i) => { if (w.replace(/[+\-⁻]+$/, '') !== L) return false; if (w !== L) return true;
+      const nx = ws[i + 1]; return !nx || !/^[a-z]/.test(nx) || LABEL_NEXT.test(nx); });
+  }
   function matchAlt(ctx, alt) {
+    if (/^\s*(?:and|or|&|also|plus)\s*$/i.test(String(alt))) return false;     // a connector the scheme printed between two points is not a point
+    { const a = ionText(alt).replace(/\s+/g, '');
+      if (ION.test(a) && a.length > 2) { const esc = a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&'); if (new RegExp('(^|[^A-Za-z0-9])' + esc + '(?![A-Za-z0-9+\\-])').test(ionText(ctx.orig || ''))) return true; }
+      if (/^\s*[AI]\s*$/.test(String(alt)) && ctx.orig != null) return letterHit(ctx, String(alt).trim()); }
     /* "quoted words" in a mark-scheme alternative must appear together, in that order ("collision rate", not "collide … rate") */
     const quoted = [...String(alt).matchAll(/"([^"]+)"/g)].map(m => tokens(m[1])).filter(t => t.length > 1);
     if (quoted.length) {
@@ -321,7 +336,12 @@
     // ('Education: better access … improves earning potential' is a reason and its explanation: a label before a colon counts)
     // a clause is a sentence or part of one joined by ', which', ', so', 'because', 'and so', 'this means' …
     const clauses = (b) => b.split(/[.;!?\n]+|,\s*(?=which|so|and|this|meaning|leading|causing|because|as)\b|\s(?=because|so|this means|which means|and so|therefore|leading to)\b/).filter(x => x && x.trim().split(/\s+/).length >= 2).length;
-    const room = boxes.map(b => Math.max(1, clauses(b) + (b.match(/:\s*\S/g) || []).length, Math.floor(b.trim().split(/\s+/).length / 6)));
+    // a short list in one sentence ('the ions are Na+, Zn2+ and I-') holds one answer per item, as separate boxes would
+    const listItems = (b) => b.split(/[.;!?\n]+/).reduce((n, sen) => { const it = sen.split(/,|\band\b/).map(x => x.trim()).filter(Boolean);
+      return n + (it.length >= 2 && it.slice(1).every(x => x.split(/\s+/).length <= 4) ? it.length : 0); }, 0);
+    // only where examiners credit a bare list (sciences, computer science); in economics 'more sales and more revenue' is one undeveloped point
+    const LISTY = /^(0610|0620|0625|0478|0984|0653|0654|0970|0971|0972|0973|0438)/.test(String((question && question.id) || ''));
+    const room = boxes.map(b => Math.max(1, clauses(b) + (b.match(/:\s*\S/g) || []).length, Math.floor(b.trim().split(/\s+/).length / 6), LISTY ? listItems(b) : 0));
     const owner = {}, load = boxes.map(() => []);
     function place(bi, seen) {
       for (const i of can[bi]) {
