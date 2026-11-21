@@ -151,53 +151,46 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     for (const [k, t] of [['r1c1', '4'], ['r1c2', '1'], ['r2c1', '8'], ['r2c2', '2']]) await h.type(`#mount [data-cell=${k}]`, t);
     ok('table: trace table marks by row -> 1/2', (await h.score()) === '1/2', await h.score());
 
-    // 1.8 long answer, sorted under two headings
-    await h.open('prose', 0);
-    ok('prose: two headed columns', await page.locator('#mount [data-side]').count() === 2);
-    await h.type('#mount [data-side="0"] math-field', 'More output means more sales');
-    await page.click('#mount [data-add="0"]');
-    await h.type('#mount [data-side="0"] math-field', 'This gives more revenue', 1);
-    await h.type('#mount [data-side="1"] math-field', 'But the price may have to be lower');
-    ok('prose: three points under the right headings -> 3/8, provisional', (await h.score()) === '3/8' && (await h.status()) === 'unsure', [await h.score(), await h.status(), await h.value()]);
-    ok('prose: saves which heading each point is under', JSON.stringify((await h.value()).sides) === '[0,0,1]', await h.value());
-    await page.click('#mount [data-add="1"]');
-    await h.type('#mount [data-side="1"] math-field', 'more revenue from sales', 1);
-    ok('prose: a "for" point written under "against" earns nothing', (await h.score()) === '3/8', await h.score());
-    ok('prose: feedback names the points found and points to add', await page.locator('#mark .fb-good').count() === 3 && /Points you could add/.test(await page.textContent('#mark')));
-    await h.reload();
-    ok('prose: survives reload with both columns filled', (await h.score()) === '3/8' && await page.locator('#mount [data-side="0"] math-field').count() === 2 && await page.locator('#mount [data-side="1"] math-field').count() === 2);
+    // 1.8 long answers: one box, written in sentences; a layout (headings) only where the question has room for one
+    const fill = async (sel, t) => { await page.fill(sel, t); await page.waitForTimeout(150); };
     await h.open('prose', 1);
-    await h.type('#mount math-field', 'bile emulsifies fat');
-    await page.click('#mount button:has-text("+ Add point")');
-    await h.type('#mount math-field', 'this increases the surface area', 1);
-    ok('prose: plain point list still works -> 2/4', (await h.score()) === '2/4', [await h.score(), await h.value()]);
+    ok('prose: one answer box, no layout choice, no point boxes', await page.locator('#mount textarea').count() === 1 && await page.locator('#mount [data-format]').count() === 0 && await page.locator('#mount button:has-text("Add point")').count() === 0);
+    await fill('#mount textarea', 'Bile emulsifies fat, which increases the surface area of the fat. This means lipase can digest the fat faster, because lipase has more surface to act on.');
+    const fullV = await h.value();
+    ok('prose: saved as one piece of writing', fullV && fullV.format === 'full' && fullV.points.length === 1, fullV);
+    ok('prose: marked statement by statement -> 4/4', (await h.score()) === '4/4', [await h.score(), fullV]);
+    await fill('#mount textarea', 'Bile emulsifies fat.');
+    ok('prose: a partial answer -> 1/4, provisional', (await h.score()) === '1/4' && (await h.status()) === 'unsure', [await h.score(), await h.status()]);
+    await h.reload();
+    ok('prose: survives reload', (await page.inputValue('#mount textarea')) === 'Bile emulsifies fat.' && (await h.score()) === '1/4');
+    // two headings (older keys with config.sides): one box per heading
+    await h.open('prose', 0);
+    ok('prose sides: full answer first, headings offered', await page.locator('#mount [data-format]').count() === 2 && (await page.getAttribute('#mount [data-format="full"]', 'aria-pressed')) === 'true');
+    await page.click('#mount [data-format="sides"]');
+    await fill('#mount [data-section="Why it might"] textarea', 'More output means more sales. This gives more revenue.');
+    await fill('#mount [data-section="Why it might not"] textarea', 'But the price may have to be lower.');
+    ok('prose sides: three points under the right headings -> 3/8', (await h.score()) === '3/8', [await h.score(), await h.value()]);
+    ok('prose sides: saves the heading of each sentence', JSON.stringify((await h.value()).sides) === '[0,0,1]', await h.value());
+    await fill('#mount [data-section="Why it might not"] textarea', 'But the price may have to be lower. There will be more revenue from sales.');
+    ok('prose sides: a "for" point written under "against" earns nothing', (await h.score()) === '3/8', await h.score());
     // a chosen layout: Definition → Why it might → Why it might not → Conclusion
     await h.open('prose', 2);
-    ok('prose layout: the choice is offered, plain points first', await page.locator('#mount [data-format]').count() === 3 && (await page.getAttribute('#mount [data-format="free"]', 'aria-pressed')) === 'true');
-    await h.type('#mount [data-section="free"] math-field', 'Firms can take advantage of economies of scale');
+    ok('prose layout: one full answer first, the layout offered', await page.locator('#mount [data-format]').count() === 2 && (await page.getAttribute('#mount [data-format="full"]', 'aria-pressed')) === 'true');
+    await fill('#mount [data-section="full"] textarea', 'Firms can take advantage of economies of scale.');
     await page.click('#mount [data-format="sides"]');
-    ok('prose layout: four headed sections, what was written carried across', await page.locator('#mount [data-section]').count() === 4 && /economies/.test(JSON.stringify(await h.value())), await h.value());
-    await h.type('#mount [data-section="Definition"] math-field', 'Profit is total revenue minus total cost');
-    await page.click('#mount [data-section="Why it might"] button:has-text("+ Add point")');
-    await h.type('#mount [data-section="Why it might"] math-field', 'Higher output gives more sales and so more revenue for the firm', 1);
-    await h.type('#mount [data-section="Why it might not"] math-field', 'The price may have to fall to sell the extra output');
-    await h.type('#mount [data-section="Conclusion"] math-field', 'Overall it depends on whether diseconomies of scale set in');
+    ok('prose layout: four headed boxes, what was written carried across', await page.locator('#mount [data-section] textarea').count() === 4 && /economies/.test(JSON.stringify(await h.value())), await h.value());
+    await fill('#mount [data-section="Definition"] textarea', 'Profit is total revenue minus total cost.');
+    await fill('#mount [data-section="Why it might"] textarea', 'Firms can take advantage of economies of scale. Higher output gives more sales and so more revenue for the firm.');
+    await fill('#mount [data-section="Why it might not"] textarea', 'The price may have to fall to sell the extra output.');
+    await fill('#mount [data-section="Conclusion"] textarea', 'Overall it depends on whether diseconomies of scale set in.');
     const fv = await h.value();
-    ok('prose layout: saves section and side of each point', fv.format === 'sides' && JSON.stringify(fv.sec) === '[0,1,1,2,3]' && JSON.stringify(fv.sides) === '[-2,0,0,1,-1]', fv);
+    ok('prose layout: saves section and side of each sentence', fv.format === 'sides' && JSON.stringify(fv.sec) === '[0,1,1,2,3]' && JSON.stringify(fv.sides) === '[-2,0,0,1,-1]', fv);
     ok('prose layout: marks each section -> 5/8', (await h.score()) === '5/8', [await h.score(), fv]);
-    ok('prose layout: feedback names the sections', /Why it might, box 2/.test(await page.textContent('#mark')) && /Conclusion: /.test(await page.textContent('#mark')), await page.textContent('#mark'));
+    ok('prose layout: feedback names the sections', /Why it might, sentence 2/.test(await page.textContent('#mark')) && /Conclusion: /.test(await page.textContent('#mark')), await page.textContent('#mark'));
     await h.reload();
-    ok('prose layout: survives reload in the same layout', (await h.score()) === '5/8' && (await page.getAttribute('#mount [data-format="sides"]', 'aria-pressed')) === 'true' && await page.locator('#mount [data-section="Why it might"] math-field').count() === 2);
-    await page.click('#mount [data-format="free"]');
-    ok('prose layout: back to plain points keeps the score', (await h.score()) === '5/8', [await h.score(), await h.value()]);
-    // one full answer: the whole answer in one box, read statement by statement
-    await h.open('prose', 1);
+    ok('prose layout: survives reload in the same layout', (await h.score()) === '5/8' && (await page.getAttribute('#mount [data-format="sides"]', 'aria-pressed')) === 'true' && /economies/.test(await page.inputValue('#mount [data-section="Why it might"] textarea')));
     await page.click('#mount [data-format="full"]');
-    await page.fill('#mount [data-section="full"] textarea', 'Bile emulsifies fat, which increases the surface area of the fat. This means lipase can digest the fat faster, because lipase has more surface to act on.');
-    await page.waitForTimeout(200);
-    const fullV = await h.value();
-    ok('prose full answer: saved as one piece', fullV && fullV.format === 'full' && fullV.points.length === 1, fullV);
-    ok('prose full answer: marked statement by statement -> 4/4', (await h.score()) === '4/4', [await h.score(), fullV]);
+    ok('prose layout: back to one full answer brings all the writing', /Profit is total revenue.*diseconomies/.test(await page.inputValue('#mount [data-section="full"] textarea')) && (await h.score()) === '5/8', [await h.score(), await h.value()]);
 
     // 1.10 label
     await h.open('label', 0);
@@ -698,7 +691,7 @@ const ok = (name, cond, extra) => { cond ? pass++ : (fail++, fails.push(name)); 
     for (const [k, t] of [['r1c1', '4'], ['r1c2', '1'], ['r2c1', '7'], ['r2c2', '2']]) await page.fill(`#mount [data-cell=${k}]`, t);
     ok('fallback table -> 2/2', (await h.score()) === '2/2', await h.value());
     await h.open('prose', 1);
-    await page.fill('#mount [data-section="free"] input', 'bile emulsifies fat');
+    await page.fill('#mount textarea', 'bile emulsifies fat');
     ok('fallback prose -> 1/4', (await h.score()) === '1/4', await h.value());
   });
 

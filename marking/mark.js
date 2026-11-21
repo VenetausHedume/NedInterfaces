@@ -210,7 +210,9 @@
     if (con && st.includes('both')) return true;
     return st.includes('flip') && !st.includes('ok') && !st.includes('both');
   }
-  const sentencesOf = (t) => String(t).split(/(?<=[.!?;])\s+|\n+/).map(x => x.trim()).filter(Boolean);
+  // a new statement starts after . ! ? ; only when the next word starts a sentence: 'The induced e.m.f. causes …',
+  // 'the p.d. across it', 'e.g. oil' stay in one piece
+  const sentencesOf = (t) => String(t).split(/(?<=[.!?])\s+(?=[A-Z0-9"'(“‘])|(?<=;)\s+|\n+/).map(x => x.trim()).filter(Boolean);
 
   /* ───────────── how examiners apply a mark scheme ─────────────
      (Cambridge 'Generic' and 'Science-Specific Marking Principles', printed at the front of every mark scheme)

@@ -704,7 +704,7 @@
         // name each box by the heading it was written under when the student chose a layout ('Why it might, box 2')
         const fmt = value && value.format && (cfg.formats || []).find(f => f.id === value.format), seen = {};
         const boxName = (b) => { if (value && value.format === 'full') return `Sentence ${b + 1}`; const k = fmt && value.sec ? value.sec[b] : null, s = k != null && fmt.sections[k];
-          if (!s) return `Box ${b + 1}`; seen[k] = (seen[k] || 0) + 1; return s.one ? s.title : `${s.title}, box ${seen[k]}`; };
+          if (!s) return `Box ${b + 1}`; seen[k] = (seen[k] || 0) + 1; return s.one ? s.title : `${s.title}, sentence ${seen[k]}`; };
         const framing = (b) => { const k = fmt && value.sec ? value.sec[b] : null; return k != null && fmt.sections[k] && /^(definition|conclusion)$/i.test(fmt.sections[k].title); };
         (d.boxes || (d.perBox || []).map(i => (i >= 0 ? [i] : []))).forEach((l, b) => { const n = boxName(b);
           if (!l.length && framing(b)) return info(`${n}: no separate mark for this in the scheme, but it frames your answer.`);

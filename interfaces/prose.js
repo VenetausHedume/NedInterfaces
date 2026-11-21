@@ -1,9 +1,6 @@
-/* Structured prose — the SAME text-box field, repeated as an array of points.
-   Each point is one MathLive field (identical to the text box): type words,
-   use the ∑ widget for math. Add / remove / reorder points. Optional
-   conclusion (config.conclusion). Saves { points:[latex...], conclusion } or null.
-   With config.formats the student can instead pick a layout (Definition → Why it might → … → Conclusion) and write
-   each point under its heading (see below).
+/* Written answers — one box, written in sentences as in the exam (see below). With config.formats the student can
+   instead pick a layout (Definition → Why it might → … → Conclusion) and write each part under its heading.
+   (Without the shared text field, Ned.field, it falls back to the older list of point boxes.)
    Marked by NedMark 'prose': each box can earn one mark-scheme point, each point counts once, and a group
    (e.g. "why it might" / "why it might not") never earns more than its cap. The score is a floor, shown as provisional. */
 
@@ -75,118 +72,80 @@
       ],
     },
     function (container, { question, value, onChange }) {
-      /* Two-sided answers ("discuss whether…"): the student sorts their own points under each heading.
-         Saves { points:[…], sides:[0,0,1,…] } — sides[i] says which heading point i was written under. */
+      /* A written answer is written as the student would in the exam: in sentences, in ONE box. It is marked the way an
+         examiner reads a script, statement by statement (NedMark 'prose', format 'full').
+         For questions with room for a structure (two sides, advantages / disadvantages, a comparison, an experiment
+         plan, "explain two …") the student may instead pick a layout — e.g. Definition → Why it might → Why it might not
+         → Conclusion — and write each part in its own box under its heading. config.formats = [{ id, label,
+         sections:[{ title, hint?, one?, group? }] }].
+         Saves { points:[text], format:'full' }  or, with a layout,  { points:[one per sentence], sec:[section of each],
+         sides:[mark-scheme group of each, -1 = any, -2 = definition], format }. */
       const cfg0 = (question && question.config) || {};
-      if (cfg0.sides && cfg0.sides.length && Ned.field) {
-        const sides = cfg0.sides;
-        const lists = sides.map(() => []);
-        const v0 = value || {};
-        (v0.points || []).forEach((p, i) => { const k = (v0.sides || [])[i] || 0; if (lists[k]) lists[k].push(p); });
-        const wrap = Ned.el('div', { style: 'display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;max-width:900px;' });
-        container.appendChild(wrap);
-        const emitS = () => { const pts = [], sd = []; lists.forEach((L, k) => L.forEach(t => { if (t && t.trim()) { pts.push(t); sd.push(k); } })); onChange(pts.length ? { points: pts, sides: sd } : null); };
-        const cols = sides.map((title, k) => {
-          const body = Ned.el('div', { style: 'display:grid;gap:8px;' });
-          const add = Ned.el('button', { type: 'button', class: 'ned-mode', 'data-add': String(k), style: 'margin-top:8px;' }, ['+ Add point']);
-          const col = Ned.el('div', { 'data-side': String(k), style: 'flex:1 1 300px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);' },
-            [Ned.el('div', { style: 'font-weight:600;margin-bottom:8px;' }, [title]), body, add]);
-          const draw = () => { body.innerHTML = ''; if (!lists[k].length) lists[k].push('');
-            lists[k].forEach((t, i) => { const f = Ned.field({ multiline: false, label: title + ', point ' + (i + 1), placeholder: 'one point', value: t, onInput: (val) => { lists[k][i] = val; emitS(); } }); body.appendChild(f.el); }); };
-          add.addEventListener('click', () => { lists[k].push(''); draw(); const fs = body.children; if (fs.length) fs[fs.length - 1].focus(); });
-          wrap.appendChild(col); draw(); return { draw };
-        });
-        container.appendChild(Ned.el('p', { class: 'ned-note' }, ['Write one point in each box, under the heading it supports.']));
-        return {
-          update: (v) => { lists.forEach(L => { L.length = 0; }); ((v && v.points) || []).forEach((p, i) => { const k = ((v && v.sides) || [])[i] || 0; if (lists[k]) lists[k].push(p); }); cols.forEach(c => c.draw()); },
-          clear: () => { lists.forEach(L => { L.length = 0; }); cols.forEach(c => c.draw()); emitS(); },
-          destroy: () => { container.innerHTML = ''; },
-        };
-      }
-      /* Answer layouts ("formats"): for questions with room for a structure (two sides, advantages / disadvantages,
-         a comparison, an experiment plan, "explain two …") the student can pick a layout, e.g.
-         Definition → Why it might → Why it might not → Conclusion, and write each point in its own box under its
-         heading — or keep writing plain points. config.formats = [{ id, label, sections:[{ title, hint?, one?, group? }] }].
-         Saves { points, sec:[section of each point], sides:[mark-scheme group of each point, -1 = any, -2 = definition], format }. */
-      // every written answer can also be given as one piece of prose ('One full answer'): it is read the way an
-      // examiner reads a script, statement by statement ("the response should be read as continuous prose")
-      const formats = (cfg0.formats || []).filter(f => f && f.id && f.sections && f.sections.length)
-        .concat([{ id: 'full', label: 'One full answer', sections: [{ title: null, full: true }] }]);
       if (Ned.field) {
-        const lists = {};                                  // format id -> one array of texts per section; 'free' -> [array]
-        const blank = (id) => { const f = formats.find(x => x.id === id); return f ? f.sections.map(() => []) : [[]]; };
-        let mode = 'free';
+        let layouts = (cfg0.formats || []).filter(f => f && f.id && f.id !== 'full' && f.sections && f.sections.length);
+        if (!layouts.length && cfg0.sides && cfg0.sides.length)      // older keys: two headings, no layout list
+          layouts = [{ id: 'sides', label: cfg0.sides.join(' → '), sections: cfg0.sides.map((t, k) => ({ title: t, group: k })) }];
+        const formats = [{ id: 'full', label: 'One full answer', sections: [{ title: null }] }].concat(layouts);
+        const texts = {};                                  // format id -> one text per section
+        const blank = () => formats.forEach(f => { texts[f.id] = f.sections.map(() => ''); });
+        const sentences = (t) => String(t).split(/(?<=[.!?])\s+(?=[A-Z0-9"'(“‘])|\n+/).map(x => x.trim()).filter(Boolean);
+        let mode = 'full';
         const load = (v) => {
-          mode = 'free'; lists.free = [[]]; formats.forEach(f => { lists[f.id] = blank(f.id); });
+          blank(); mode = 'full';
           const pts = (v && v.points) || [];
           const f = v && v.format && formats.find(x => x.id === v.format);
-          if (f) { mode = f.id; pts.forEach((p, i) => { const k = (v.sec || [])[i]; (lists[f.id][k] || lists[f.id][0]).push(p); }); }
-          else lists.free[0] = pts.slice().concat(v && v.conclusion ? [v.conclusion] : []);
+          if (f && f.id !== 'full') { mode = f.id; pts.forEach((p, i) => { const k = (v.sec || [])[i] || 0; texts[f.id][k] = (texts[f.id][k] ? texts[f.id][k] + ' ' : '') + p; }); }
+          else if (v && v.sides && layouts.length && !v.format) { mode = layouts[0].id; pts.forEach((p, i) => { const k = v.sides[i] || 0; if (k in texts[mode]) texts[mode][k] = (texts[mode][k] ? texts[mode][k] + ' ' : '') + p; }); }
+          else texts.full[0] = pts.map(p => (/[.!?]\s*$/.test(p) ? p : p + '.')).join(' ').concat(v && v.conclusion ? ' ' + v.conclusion : '').replace(/^\.$/, '');   // answers saved as points before
         };
         load(value);
         const chipsRow = Ned.el('div', { class: 'ned-formats', style: 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;' });
         const body = Ned.el('div', {});
-        container.appendChild(Ned.el('div', { style: 'font-size:12px;color:var(--muted);margin-bottom:4px;' }, ['How do you want to write your answer?']));
-        container.appendChild(chipsRow); container.appendChild(body);
+        if (layouts.length) {
+          container.appendChild(Ned.el('div', { style: 'font-size:12px;color:var(--muted);margin-bottom:4px;' }, ['How do you want to write your answer?']));
+          container.appendChild(chipsRow);
+        }
+        container.appendChild(body);
         const emitF = () => {
-          if (mode === 'free') { const pts = lists.free[0].filter(t => t && t.trim()); onChange(pts.length ? { points: pts } : null); return; }
-          if (mode === 'full') { const t = (lists.full[0][0] || '').trim(); onChange(t ? { points: [t], format: 'full' } : null); return; }
+          if (mode === 'full') { const t = (texts.full[0] || '').trim(); onChange(t ? { points: [t], format: 'full' } : null); return; }
           const f = formats.find(x => x.id === mode), pts = [], sec = [], sides = [];
-          f.sections.forEach((s, k) => lists[f.id][k].forEach(t => { if (t && t.trim()) { pts.push(t); sec.push(k); sides.push(s.group == null ? -1 : s.group); } }));
+          f.sections.forEach((s, k) => sentences(texts[f.id][k] || '').forEach(t => { pts.push(t); sec.push(k); sides.push(s.group == null ? -1 : s.group); }));
           onChange(pts.length ? { points: pts, sec, sides, format: f.id } : null);
         };
-        const fullEl = (arr) => {
-          if (!arr.length) arr.push('');
-          const f = Ned.field({ multiline: true, plain: true, label: 'Your full answer', placeholder: 'Write your whole answer here, in sentences, as you would in the exam.', value: arr[0], onInput: (val) => { arr[0] = val; emitF(); } });
-          f.el.rows = 8; f.el.style.minHeight = '11rem';
-          return Ned.el('div', { 'data-section': 'full', style: 'display:grid;gap:6px;margin-bottom:10px;' }, [f.el,
-            Ned.el('p', { class: 'ned-note', style: 'margin:0;' }, ['Marked the way an examiner reads it: each statement is checked against the mark scheme, so explain each point fully.'])]);
-        };
-        const sectionEl = (title, hint, arr, one) => {
-          const box = Ned.el('div', { style: 'display:grid;gap:8px;' });
-          const draw = () => {
-            box.innerHTML = '';
-            if (!arr.length) arr.push('');
-            arr.forEach((t, i) => {
-              const f = Ned.field({ multiline: false, label: (title || 'Point') + (one ? '' : ', box ' + (i + 1)), placeholder: hint || 'one point', value: t, onInput: (val) => { arr[i] = val; emitF(); } });
-              const row = Ned.el('div', { style: 'display:flex;gap:6px;align-items:flex-start;' }, [Ned.el('div', { style: 'flex:1;min-width:0;' }, [f.el])]);
-              if (!one && arr.length > 1) row.appendChild(Ned.el('button', { type: 'button', title: 'Delete this box', 'aria-label': 'Delete this box',
-                style: 'width:26px;height:26px;border:1px solid var(--line);border-radius:4px;background:var(--paper);cursor:pointer;font-size:12px;',
-                onclick: () => { arr.splice(i, 1); draw(); emitF(); } }, ['✕']));
-              box.appendChild(row);
-            });
-          };
-          draw();
-          const kids = [];
-          if (title) kids.push(Ned.el('div', { style: 'font-weight:600;' }, [title]), hint ? Ned.el('div', { style: 'font-size:12px;color:var(--muted);margin:-2px 0 6px;' }, [hint]) : null);
-          kids.push(box);
-          if (!one) kids.push(Ned.el('button', { type: 'button', class: 'ned-mode', style: 'margin-top:8px;justify-self:start;', onclick: () => { arr.push(''); draw(); const fs = box.querySelectorAll('math-field,input,textarea'); if (fs.length) fs[fs.length - 1].focus(); } }, ['+ Add point']));
-          return Ned.el('div', { 'data-section': title || 'free', style: title ? 'display:grid;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);margin-bottom:10px;' : 'display:grid;margin-bottom:10px;' }, kids.filter(Boolean));
+        const box = (fid, k, title, hint, rows) => {
+          const f = Ned.field({ multiline: true, plain: true, label: title || 'Your answer', placeholder: hint || 'Write your answer here, in full sentences, as you would in the exam.',
+            value: texts[fid][k], onInput: (val) => { texts[fid][k] = val; emitF(); } });
+          f.el.rows = rows; f.el.style.minHeight = (rows * 1.4) + 'rem'; f.el.style.width = '100%';
+          return f.el;
         };
         const render = () => {
           chipsRow.innerHTML = '';
-          [{ id: 'free', label: 'Point by point' }].concat(formats).forEach(f => {
+          formats.forEach(f => {
             const on = f.id === mode;
             chipsRow.appendChild(Ned.el('button', { type: 'button', 'data-format': f.id, 'aria-pressed': on ? 'true' : 'false',
               style: 'padding:5px 10px;border-radius:999px;cursor:pointer;font-size:13px;border:1px solid ' + (on ? 'var(--ink,#222)' : 'var(--line)') + ';background:' + (on ? 'var(--ink,#222)' : 'var(--paper)') + ';color:' + (on ? '#fff' : 'inherit') + ';',
               onclick: () => switchTo(f.id) }, [f.label]));
           });
           body.innerHTML = '';
-          if (mode === 'free') { body.appendChild(sectionEl(null, 'one point', lists.free[0], false)); body.appendChild(Ned.el('p', { class: 'ned-note' }, ['Write one point in each box.'])); return; }
+          if (mode === 'full') {
+            const marks = (question && question.marks) || 2;
+            body.appendChild(Ned.el('div', { 'data-section': 'full', style: 'display:grid;gap:6px;margin-bottom:10px;' }, [box('full', 0, null, null, Math.min(14, Math.max(4, marks * 2))),
+              Ned.el('p', { class: 'ned-note', style: 'margin:0;' }, ['Marked the way an examiner reads it: each statement is checked against the mark scheme, so make each point and explain it fully.'])]));
+            return;
+          }
           const f = formats.find(x => x.id === mode);
-          if (f.id === 'full') { body.appendChild(fullEl(lists.full[0])); return; }
-          f.sections.forEach((s, k) => body.appendChild(sectionEl(s.title, s.hint, lists[f.id][k], !!s.one)));
+          f.sections.forEach((s, k) => body.appendChild(Ned.el('div', { 'data-section': s.title, style: 'display:grid;gap:4px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);margin-bottom:10px;' },
+            [Ned.el('div', { style: 'font-weight:600;' }, [s.title]), s.hint ? Ned.el('div', { style: 'font-size:12px;color:var(--muted);' }, [String(s.hint).replace(/one point per box, then explain it/, 'make each point, then explain it')]) : null,
+              box(f.id, k, s.title, 'Write in full sentences.', s.one ? 2 : 4)].filter(Boolean))));
         };
-        const filled = (id) => (lists[id] || []).some(a => a.some(t => t && t.trim()));
+        const filled = (id) => (texts[id] || []).some(t => t && t.trim());
         function switchTo(id) {
           if (id === mode) return;
-          // carry what was written across when the new layout is still empty
-          const from = mode === 'free' ? lists.free[0].filter(t => t && t.trim()) : [].concat(...lists[mode]).filter(t => t && t.trim());
-          if (from.length && !filled(id)) {
-            if (id === 'full') lists.full[0] = [from.join(mode === 'full' ? '' : ' ')];
-            else if (mode === 'full') { const parts = from.join(' ').split(/(?<=[.!?])\s+/).filter(Boolean); if (id === 'free') lists.free[0] = parts; else { const f = formats.find(x => x.id === id); lists[id][Math.max(0, f.sections.findIndex(s => !s.one))] = parts; } }
-            else if (id === 'free') lists.free[0] = from;
-            else { const f = formats.find(x => x.id === id); const k = Math.max(0, f.sections.findIndex(s => !s.one)); lists[id][k] = from; }
+          // what was written is carried across, so the latest writing is never left behind in the other layout
+          if (filled(mode)) {
+            const all = texts[mode].filter(t => t && t.trim()).join(' ');
+            if (id === 'full') texts.full[0] = all;
+            else { const f = formats.find(x => x.id === id); texts[id][Math.max(0, f.sections.findIndex(s => !s.one))] = all; }
           }
           mode = id; render(); emitF();
         }
