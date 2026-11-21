@@ -160,9 +160,19 @@
   const FORMULA = { CO2: 'carbon dioxide', H2O: 'water', O2: 'oxygen', H2: 'hydrogen', N2: 'nitrogen', CO: 'carbon monoxide', SO2: 'sulfur dioxide', CH4: 'methane',
     NaCl: 'sodium chloride', HCl: 'hydrochloric acid', NaOH: 'sodium hydroxide', H2SO4: 'sulfuric acid', NH3: 'ammonia', CaCO3: 'calcium carbonate', Cl2: 'chlorine', CaO: 'calcium oxide',
     C6H12O6: 'glucose', C2H5OH: 'ethanol', HNO3: 'nitric acid', NO2: 'nitrogen dioxide', Fe: 'iron', Cu: 'copper', Zn: 'zinc', Mg: 'magnesium', Na: 'sodium', K: 'potassium', Ca: 'calcium', Al: 'aluminum', Ag: 'silver', Pb: 'lead' };
+  const PHRASE = [
+    [/\b(?:of|per|for|each)\s+(?:1|one|a)\s*(?:kg|kilogram|kilogramme)\b|\bper\s+(?:kg|kilogram)\b|\b(?:of|per)\s+unit\s+of\s+mass\b/i, 'per unit mass'],
+    [/\bby\s+(?:1|one|a)\s*(?:°\s*c|degrees?(?:\s+(?:celsius|centigrade))?|k|kelvin)\b|\bper\s+(?:°\s*c|degree|k\b|kelvin)/i, 'per unit temperature change'],
+    [/\b(?:per|every|each|in\s+(?:1|one|a))\s+(?:second|s)\b/i, 'per unit time'],
+    [/\bper\s+(?:m2|m²|square\s+metre|square\s+meter)\b/i, 'per unit area'],
+    [/\b(?:of|per)\s+(?:1|one|a)\s*(?:m3|m³|cubic\s+metre|cubic\s+meter|cm3|cm³)\b|\bper\s+(?:m3|m³|cm3|cm³)\b/i, 'per unit volume'],
+    [/\bbubbl\w*|\beffervesc\w*/i, 'fizzing'],
+  ];
   function withNames(text) {           // "CO2 and H2O" also reads as "carbon dioxide and water"
     const t = latexToText(text).replace(/[₀-₉]/g, c => SUBS[c]);
     const add = []; t.split(/[^A-Za-z0-9]+/).forEach(w => { if (FORMULA[w] && (/\d/.test(w) || /[A-Z].*[A-Z]|^[A-Z][a-z]$/.test(w))) add.push(FORMULA[w]); });
+    // the same quantity said the everyday way: 'of 1 kg' = per unit mass, 'by 1 °C' = per unit temperature change
+    PHRASE.forEach(([re, say]) => { if (re.test(t)) add.push(say); });
     return add.length ? text + ' ; ' + add.join(' ; ') : text;
   }
   function context(text, syn, question) {
