@@ -10,9 +10,10 @@
    status: 'marked' | 'unsure' (free text below full marks: unusual wording may have been missed)
            | 'self_check' (long writing: keyword score is a floor) | 'unanswered' | 'no_answer_key'            */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(typeof require === 'function' ? (function () { try { return require('./synonyms.js'); } catch (e) { return {}; } })() : {});
-  else root.NedMark = factory(root.NedSynonyms || {});
-})(typeof self !== 'undefined' ? self : this, function (DEFAULT_SYN) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(typeof require === 'function' ? (function () { try { return require('./synonyms.js'); } catch (e) { return {}; } })() : {},
+    typeof require === 'function' ? (function () { try { return require('./reasoning.js'); } catch (e) { return null; } })() : null);
+  else root.NedMark = factory(root.NedSynonyms || {}, root.NedReasoning || null);
+})(typeof self !== 'undefined' ? self : this, function (DEFAULT_SYN, REASONING) {
   'use strict';
 
   /* ───────────── text clean-up ───────────── */
@@ -288,6 +289,13 @@
     const boxes = ((value && value.points) || []).concat(value && value.conclusion ? [value.conclusion] : []).map(latexToText).filter(b => b.trim());
     if (typeof value === 'string' && value.trim()) boxes.push(latexToText(value));
     if (!boxes.length) return { score: 0, max, status: 'unanswered', detail: {} };
+    // economics explain / analyse / discuss: read as an examiner does — statements, chains of reasoning, levels
+    // (marking/reasoning.js). The whole answer is read as one piece of prose, in the order it was written.
+    if (answer.reasoning && REASONING) {
+      const r = REASONING.mark(Object.assign({ marks: max }, answer.reasoning, { marks: Math.min(max, answer.reasoning.marks || max) }), boxes.map(b => (/[.!?]\s*$/.test(b) ? b : b + '.')).join(' '));
+      const score = Math.max(0, Math.min(max, r.score));
+      return { score, max, status: score >= max ? 'marked' : 'unsure', detail: Object.assign({ reasoning: answer.reasoning.kind }, r.detail || {}) };
+    }
     // one full answer: read statement by statement, as an examiner reads a script
     if (value && value.format === 'full') boxes.splice(0, boxes.length, ...sentencesOf(boxes.join(' ')));
     const syn = buildSyn(Object.assign({}, answer.synonyms, opts && opts.synonyms));

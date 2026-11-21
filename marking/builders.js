@@ -676,6 +676,31 @@
           info('This was marked by matching key words. If you made one of these points in different words, count it yourself.'); }
         break; }
       case 'prose': {
+        // read as an examiner reads it (marking/reasoning.js): say which points were made, which were explained,
+        // and what was only stated
+        if (d.reasoning) {
+          const st = d.statements || [];
+          const quote = (i) => (st[i] ? '"' + st[i].text.replace(/[.\s]+$/, '') + '"' : '');
+          if (d.reasoning === 'levels') {
+            const L = (d.levels || []).find(x => x.level === d.level);
+            info(`Level ${d.level}${L ? ` (${L.min}–${L.max} marks)` : ''}.`);
+            (d.points || []).forEach(p => (p.depth >= 2 ? good : p.depth === 1 ? info : bad)(
+              `${p.side}: ${quote(p.at)} — ${p.depth >= 2 ? `developed through ${p.depth} steps of reasoning` : p.depth === 1 ? 'one step of explanation; take it further (why does that happen, and what does it lead to?)' : 'stated, not explained'}.`));
+            if (!(d.points || []).length) bad('None of the points in the mark scheme were found.');
+            const sides = new Set((d.points || []).filter(p => p.depth >= 1).map(p => p.side));
+            if (d.level < 3) info(sides.size < 2 ? 'To reach Level 3 both sides must be argued, each point explained in a chain: point → why it happens → what it leads to.'
+              : 'To reach Level 3 at least one point needs a full chain of reasoning: point → why it happens → what it leads to (two or more steps).');
+            if (d.level === 3 && !d.judged) info('For the top mark, finish with a judgement that says what the answer depends on ("Overall … depends on …").');
+          } else if (d.reasoning === 'chains') {
+            (d.credited || []).forEach(c => (c.developed ? good : info)(`${c.side ? c.side + ': ' : ''}${c.links.join(' → ')} (${c.marks} mark${c.marks === 1 ? '' : 's'})${c.developed ? '' : ' — stated but not explained'}.`));
+            if (d.listCapped) bad('None of your points is explained, so the answer is marked as a list (the mark scheme limits list-like answers).');
+            (d.sides || []).filter(x => x.title).forEach(x => info(`${x.title}: ${x.score} of up to ${x.max}.`));
+            if (!(d.credited || []).length) bad('None of the points in the mark scheme were found.');
+            if (r.score < r.max) info('Each explanation must follow on from its point: "…, so …", "This means …", "… which leads to …". An explanation written as a separate claim does not count.');
+          } else if (r.score < r.max) info('Name each reason and then explain it straight after: "…, which means …".');
+          info('Marked the way an examiner reads an answer: points made, and how far each is explained. If you made a point in other words and it was not found, compare your answer with the mark scheme.');
+          break;
+        }
         // name each box by the heading it was written under when the student chose a layout ('Why it might, box 2')
         const fmt = value && value.format && (cfg.formats || []).find(f => f.id === value.format), seen = {};
         const boxName = (b) => { if (value && value.format === 'full') return `Sentence ${b + 1}`; const k = fmt && value.sec ? value.sec[b] : null, s = k != null && fmt.sections[k];

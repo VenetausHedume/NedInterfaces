@@ -1,0 +1,970 @@
+{
+ "Q1(f)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why it might",
+    "max": 3,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "may generate more tax revenue",
+       "which can be used on spending on benefits",
+       "on measures to reduce poverty in the long run e.g. education and health care"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "high GDP may increase average incomes/living standards",
+       "higher incomes may enable people to spend more on basic necessities",
+       "such spending will reduce absolute poverty"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "higher output will create jobs",
+       "this will reduce unemployment",
+       "with more in work absolute poverty will fall"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why it might not",
+    "max": 3,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "income may be unevenly distributed",
+       "so not every one may benefit from higher incomes",
+       "so relative poverty may rise",
+       "even if absolute poverty falls"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "real GDP may not have increased",
+       "need to adjust for inflation"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "(real) GDP per head may not have increased",
+       "if population has risen by more than GDP"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 3,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 5,
+  "q": "Discuss whether an increase in a country's GDP will reduce poverty in that country."
+ },
+ "Q1(g)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": {
+   "n": 2,
+   "ids": [
+    "lack of capital equipment",
+    "subsistence farming",
+    "lack of education/high degree of illiteracy",
+    "poor health care"
+   ],
+   "expl": [
+    "workers will not be able to produce much if they are working with low amounts of capital",
+    "subsistence farming tends to use poor quality resources",
+    "poor education will mean workers are unable to work with advanced technology/will be less inventive/will lack skills",
+    "poor health care may result in workers being off sick/being tired"
+   ]
+  },
+  "points": [],
+  "marks": 4,
+  "q": "Using information from the extract, explain two reasons why labour productivity is low in Angola."
+ },
+ "Q1(h)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Up to 4 marks why it might",
+    "max": 4,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "a cut in income tax will increase disposable income",
+       "this may increase the incentive to work",
+       "a greater incentive may reduce voluntary/frictional unemployment"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "a cut in corporation tax will increase the profit firms can keep",
+       "this may encourage firms to expand",
+       "so take on more workers"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "a reduction in income tax and indirect taxes will increase purchasing power",
+       "this may increase demand",
+       "so cyclical unemployment may fall"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why it might not",
+    "max": 4,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "firms may not spend extra profits on expansion",
+       "if they lack confidence",
+       "that they will sell the extra output"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "consumers may not spend extra income",
+       "if they lack confidence",
+       "instead they may save the extra income"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "tariffs may be cut",
+       "which may increase imports",
+       "raise unemployment, at least, in the short run"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "government spending may fall",
+       "due to less revenue",
+       "as a result cyclical unemployment may stay unchanged/increase"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "higher demand may cause inflation",
+       "may result in workers pressing for wage rises",
+       "firms may make workers redundant to cut costs"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "a cut in taxes on firms may encourage firms to use more capital-intensive methods",
+       "resulting in lower demand for labour",
+       "causing technological unemployment"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "frictional and structural unemployment may not fall",
+       "if unemployed workers are still occupationally and/or geographically immobile"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 3,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 6,
+  "q": "Discuss whether a cut in taxes will reduce unemployment."
+ },
+ "Q2(d)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why it might",
+    "max": 5,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "likely to improve the health of workers",
+       "this should raise labour productivity",
+       "so increase output/GDP"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "possible reduction in birth rate",
+       "this may increase the labour force",
+       "reduce dependency ratio"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "likely to increase the quality of life/standard of living",
+       "which should increase life expectancy"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "more people are likely to be employed in health care",
+       "this may reduce unemployment"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "may make an economy a more attractive destination for FDI",
+       "which may provide a number of benefits e.g. advances in technology, higher employment"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why it might not",
+    "max": 5,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "if resources are fully employed",
+       "it will involve an opportunity cost",
+       "fewer resources may be devoted to education"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may reduce the death rate",
+       "this may increase dependency ratio",
+       "increase the cost of pensions"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "more health care may be provided but the quality may not rise",
+       "population may increase by more than the extra provision",
+       "inefficiency may rise"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 4,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 8,
+  "q": "Discuss whether an economy would benefit from an increase in the provision of health care."
+ },
+ "Q3(b)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": {
+   "n": 3,
+   "ids": [
+    "rise/fall in income (may be regarded as a normal or an inferior good)",
+    "rise in the price of other forms of transport",
+    "a greater desire to be fit/tastes",
+    "rise in population size",
+    "a successful advertising campaign"
+   ],
+   "expl": [
+    "with higher incomes, people are more able to buy bicycles",
+    "cycling is a substitute for bus travel",
+    "cycling is used both for transport and for leisure",
+    "a larger population will mean there are more people to buy bicycles",
+    "a successful advertising campaign will persuade more people to buy bicycles"
+   ]
+  },
+  "points": [],
+  "marks": 6,
+  "q": "Explain three likely causes of increase in demand for bicycles."
+ },
+ "Q3(c)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 6,
+    "chains": [
+     {
+      "max": 2,
+      "links": [
+       "differences in the closeness of substitutes",
+       "availability of close substitutes will make demand elastic"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "differences in the proportion of income spent on the product",
+       "the higher the proportion, the more elastic demand will be",
+       "note: also accept average income may vary in the two countries with demand being more inelastic in the richer country"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "differences in what are considered to be luxuries and what are considered to be necessities",
+       "if the product is considered to be a luxury, demand is likely to be elastic"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "differences in the price of bicycles",
+       "demand will be more elastic, the higher the price"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 3,
+  "defn": [
+   "PED or elastic demand \u2013 defined or implied."
+  ],
+  "pairs": null,
+  "points": [],
+  "marks": 6,
+  "q": "Analyse why the demand for a product may be more price elastic in one country than in another country."
+ },
+ "Q3(d)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why it should",
+    "max": 4,
+    "chains": [
+     {
+      "max": 4,
+      "links": [
+       "imposing taxes on products with inelastic demand will cause price to rise",
+       "demand will fall by a smaller percentage",
+       "so is a good source of tax revenue",
+       "higher tax revenue can be spent on e.g. education and health care"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "a significant rise in price may be needed to reduce demand",
+       "of harmful products"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why it should not",
+    "max": 4,
+    "chains": [
+     {
+      "max": 6,
+      "links": [
+       "indirect taxes may be imposed on products to discourage their consumption",
+       "will be more successful if demand is price elastic",
+       "demand will fall by more than the rise in price",
+       "a government may want to discourage consumption of demerit goods",
+       "also may want to discourage consumption of imports",
+       "in practice it may be difficult to estimate PED"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "some products with inelastic demand are basic necessities",
+       "so imposing indirect taxes on them will harm the poor",
+       "indirect taxes are often regressive"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 6,
+  "q": "Discuss whether a government should impose indirect taxes only on products with inelastic demand."
+ },
+ "Q4(b)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": {
+   "n": 2,
+   "ids": [
+    "managerial",
+    "financial",
+    "technical",
+    "risk bearing"
+   ],
+   "expl": [
+    "a larger bank may be able to employ specialist workers such as accountants",
+    "a larger bank may be able to sell its shares more easily and/or borrow more easily from other banks",
+    "a larger bank may be able to use advanced technology and large scale capital equipment",
+    "a larger bank may be able to offer a range of financial services so if one is unsuccessful, it will not have a significant impact on profits"
+   ]
+  },
+  "points": [],
+  "marks": 4,
+  "q": "Explain two types of internal economy of scale that a growing bank can enjoy."
+ },
+ "Q4(c)": {
+  "kind": "points",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [
+   "high paid workers are likely to spend more in total",
+   "high paid workers are likely to spend a lower proportion of their income",
+   "high paid workers are likely to spend a higher proportion of their income on luxuries/spend more on luxuries",
+   "high paid workers are likely to spend a lower proportion of their income on necessities/less on necessities"
+  ],
+  "marks": 4,
+  "q": "Analyse how the spending pattern of high paid workers is likely to differ from the spending pattern of low paid workers."
+ },
+ "Q4(d)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why they might earn more",
+    "max": 6,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "some bank workers are skilled workers",
+       "these are in low supply",
+       "high demand"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "bank workers may be difficult to replace",
+       "may be very productive",
+       "so have inelastic demand"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "bank workers may need high qualifications/better trained",
+       "so have inelastic supply"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "bank workers may be in a professional organisation/trade union",
+       "this will give them more bargaining power"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why they might not earn more",
+    "max": 6,
+    "chains": [
+     {
+      "max": 4,
+      "links": [
+       "some workers in banking are low skilled",
+       "cleaners whilst some workers in agriculture are high skilled",
+       "so supply of some bank workers may be higher than some agricultural workers",
+       "demand may be lower"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "some agricultural workers are very experienced",
+       "pay tends to rise over time",
+       "due to promotion"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "agricultural workers in a rich country may earn more than workers in banking in a poor country",
+       "earnings vary between countries"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "agricultural workers in some countries may be more likely to be in a union/labour organisation",
+       "so may have more bargaining power"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 4,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 8,
+  "q": "Discuss whether workers employed in banking are likely to earn more than workers employed in agriculture."
+ },
+ "Q5(b)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 3,
+    "chains": [
+     {
+      "max": 2,
+      "links": [
+       "an MNC may try to increase its size because it will make it more difficult for other firms to buy it",
+       "because the salaries and managers may be linked to size"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "an MNC may try to increase market share to reduce competition",
+       "so gain a monopoly position"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "achieving a high sales revenue may enable a firm to take greater advantage of economies of scale",
+       "so reduce average costs"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "an MNC may wish to keep shareholders happy (profit satisficing)",
+       "to pursue a range of other objectives e.g. improving environmental conditions"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 3,
+  "q": "Explain one goal a multinational company may have other than profit maximisation."
+ },
+ "Q5(c)": {
+  "kind": "points",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [
+   "defining market failure \u2013 where the market forces of demand and supply fail to achieve efficiency",
+   "recognising that pollution is an external cost/harmful impact on third parties",
+   "mentioning that market forces do not take into account external costs",
+   "social costs will exceed private costs",
+   "mentioning that market prices do not reflect social costs/are too low",
+   "output will be too high"
+  ],
+  "marks": 5,
+  "q": "Explain why pollution is an example of market failure."
+ },
+ "Q5(d)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why it might",
+    "max": 7,
+    "chains": [
+     {
+      "max": 4,
+      "links": [
+       "more likely to take into account social costs and benefits",
+       "rather than base decisions on private costs and benefits",
+       "as its main objective may be to benefit society",
+       "rather than maximise profit"
+      ]
+     },
+     {
+      "max": 4,
+      "links": [
+       "may have more funds to invest",
+       "can use tax revenue",
+       "this may enable it to expand production",
+       "so raise employment"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may provide better pay",
+       "working conditions for workers",
+       "shorter working hours"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may charge lower prices to domestic firms",
+       "lower costs of production",
+       "making them more price competitive"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "unlikely to take profits out of the country",
+       "may use some of the profits to spend on e.g. education and health care"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Explaining why it might not",
+    "max": 7,
+    "chains": [
+     {
+      "max": 5,
+      "links": [
+       "may lack competitive pressure to be efficient",
+       "managers of the mine may think the government will not permit the mine to go out of business",
+       "as it would cause unemployment",
+       "so costs may not be kept low",
+       "may be a lack of innovation"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may lack funds to invest",
+       "government may have low tax revenue",
+       "will not be able to sell shares"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may lack expertise",
+       "government intervention may mean that it takes time to make decisions",
+       "decisions may be distorted by political factors"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "may be less likely to bring in new technology than an MNC",
+       "technology may be more advanced in other countries"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 5,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 10,
+  "q": "Discuss whether a mine operated by the government would be more likely to benefit an economy than one operated by a foreign multinational company."
+ },
+ "Q6(b)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": {
+   "n": 2,
+   "ids": [
+    "to promote investment",
+    "to promote international competitiveness",
+    "to avoid lenders, workers with low bargaining power and other groups experiencing a fall in purchasing power",
+    "to protect savers",
+    "to prevent people losing confidence in using the currency as money",
+    "to prevent inflation causing unemployment"
+   ],
+   "expl": [
+    "low and stable inflation creates certainty/makes it easier to plan",
+    "if inflation rate is below that of rival countries, it can increase exports/reduce imports",
+    "if incomes rise by less than inflation, the amount that can be purchased will fall",
+    "savers will lose if inflation rate is higher than interest rate",
+    "may result in people resorting to barter/especially if there is hyperinflation",
+    "inflation can result in a loss in international competitiveness/reduce spending on domestic products"
+   ]
+  },
+  "points": [],
+  "marks": 4,
+  "q": "Explain two reasons why governments aim for low and stable inflation."
+ },
+ "Q6(c)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 6,
+    "chains": [
+     {
+      "max": 2,
+      "links": [
+       "higher demand",
+       "which will encourage firms to expand their output"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "higher government spending on education",
+       "may raise labour productivity",
+       "so increase productive potential"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "higher government spending on investment",
+       "will increase productive potential"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "government subsidies to firms",
+       "reduces costs of production",
+       "encourages firms to produce more"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 2,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 6,
+  "q": "Analyse how an increase in government spending may cause economic growth."
+ },
+ "Q6(d)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why it should",
+    "max": 6,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "a reduction in unemployment is likely to increase output",
+       "higher output should raise living standards",
+       "may reduce poverty"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may improve the current account position",
+       "if the rise in output is due to a rise in exports",
+       "exports rise by more than imports"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "lower unemployment may raise tax revenue",
+       "from income tax",
+       "higher tax revenue can enable a government to spend more on education and health care"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why it might not",
+    "max": 6,
+    "chains": [
+     {
+      "max": 5,
+      "links": [
+       "lower unemployment may cause a shortage of workers",
+       "this shortage may push up wage rates",
+       "higher wages may increase costs of production",
+       "higher costs can cause cost-push inflation",
+       "more likely to occur if the economy is operating close to full employment"
+      ]
+     },
+     {
+      "max": 4,
+      "links": [
+       "lower unemployment may increase total (aggregate) demand",
+       "higher demand may push up prices",
+       "causing demand-pull inflation",
+       "more likely to occur if the economy is operating close to full employment"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "lower unemployment may increase a current account deficit",
+       "higher incomes may increase demand for imports",
+       "higher demand may divert products from the export to the domestic market"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "a reduction in the unemployment rate does not necessarily mean fewer people are unemployed",
+       "unemployment may have risen if the labour force has risen",
+       "by more than employment"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 4,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 8,
+  "q": "Discuss whether a reduction in a country's unemployment rate will always benefit an economy."
+ },
+ "Q7(b)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [
+   "the current account/current account deficit."
+  ],
+  "pairs": {
+   "n": 3,
+   "ids": [
+    "high exchange rate",
+    "inflation",
+    "low productivity",
+    "high costs of production",
+    "low quality of domestically produced products",
+    "low incomes abroad",
+    "high incomes at home",
+    "protectionism abroad",
+    "lack of protectionism at home"
+   ],
+   "expl": [
+    "high exchange rate would mean high export prices and low import prices",
+    "inflation makes domestic products less price competitive",
+    "low productivity of labour will raise wage costs/high prices of domestic products",
+    "high costs of production e.g. raw material costs results in high prices of domestic products",
+    "low quality reduces demand for exports and raises demand for imports",
+    "low incomes abroad may result in low demand for exports",
+    "high incomes at home may lead to high demand for imports",
+    "protectionism abroad e.g. tariffs make it difficult to export",
+    "absence of protectionism at home may result in e.g. dumping"
+   ]
+  },
+  "points": [],
+  "marks": 6,
+  "q": "Analyse three causes of a current account deficit."
+ },
+ "Q7(c)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why it should",
+    "max": 7,
+    "chains": [
+     {
+      "max": 5,
+      "links": [
+       "may indicate a poor economic performance",
+       "low demand for country's products",
+       "may be result of high inflation",
+       "poor quality products",
+       "low productivity"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "will reduce total demand",
+       "so may increase unemployment",
+       "lower GDP"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may lead the country into debt",
+       "interest will have to be paid",
+       "this will involve an opportunity cost"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why it should not",
+    "max": 7,
+    "chains": [
+     {
+      "max": 5,
+      "links": [
+       "may move later to a surplus",
+       "if imports are of raw materials",
+       "capital goods",
+       "may be used to produce products to replace imports",
+       "to be exported"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may be short term",
+       "especially if caused by falling incomes abroad",
+       "will be reduced when incomes rise"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "may be a relatively small deficit",
+       "and/or may last for a short time"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "there may be more serious macroeconomic problems",
+       "rising unemployment"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 5,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "marks": 10,
+  "q": "Discuss whether a government should always be concerned about a growing current account deficit."
+ }
+}
