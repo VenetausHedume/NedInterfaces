@@ -73,7 +73,7 @@ const GROUPS = [
   ['inelastic', 'price inelastic', 'unresponsive'],
   ['substitutes', 'substitute', 'alternatives', 'alternative', 'other products', 'switch'],
   ['luxury', 'luxuries'],
-  ['necessity', 'necessities', 'basic', 'essential', 'essentials', 'needs', 'basic necessities', 'daily necessities'],
+  ['necessity', 'necessities', 'necessary', 'basic', 'essential', 'essentials', 'needs', 'basic necessities', 'daily necessities'],
   ['regressive', 'poor pay a higher proportion', 'harm the poor'],
   ['demerit', 'harmful', 'cigarettes', 'alcohol', 'drugs'],
   ['innovation', 'innovations', 'new ideas', 'new technology', 'advanced technology', 'research and development'],
@@ -82,7 +82,7 @@ const GROUPS = [
   ['abroad', 'other countries', 'foreign', 'overseas', 'home country'],
 ];
 const UP = /\b(high|increase[sd]?|increasing|rise[sn]?|rising|rose|raise[sd]?|raising|higher|more|greater|grow[sn]?|growing|boost[sed]*|improve[sd]?|improving|expand[sed]*|gain[sed]*|up|larger|bigger|extra|additional|encourage[sd]?|stimulat\w*)\b/;
-const DOWN = /\b(low|decrease[sd]?|decreasing|fall[sn]?|falling|fell|reduce[sd]?|reducing|reduction|lower|less|fewer|cut[s]?|drop[sp]?\w*|decline[sd]?|declining|worse|worsen\w*|smaller|lose|loses|loss|discourage[sd]?|harm\w*|damage\w*|weaken\w*)\b/;
+const DOWN = /\b(low|fallen|lowered|lowering|decrease[sd]?|decreasing|fall[sn]?|falling|fell|reduce[sd]?|reducing|reduction|lower|less|fewer|cut[s]?|drop[sp]?\w*|decline[sd]?|declining|worse|worsen\w*|smaller|lose|loses|loss|discourage[sd]?|harm\w*|damage\w*|weaken\w*)\b/;
 const NEG = /\b(not|no|never|cannot|can't|won't|doesn't|don't|isn't|aren't|without|unable|nor)\b/;
 const HEDGE = new Set('may might will would could can should likely possibly probably perhaps so this that these those which it they there then also e g eg i e to the a an of in on at by for with as and or be is are was were been being has have had its their his her up from into than such some any if when while e.g. i.e.'.split(' '));
 
@@ -120,7 +120,10 @@ function same(stmt, link, question) {
   if (L.some(l => !SUBJECT.has(l.c))) L = L.filter(l => !SUBJECT.has(l.c));
   const qr = new Set(question ? rest(question) : []);
   const lr = rest(link).filter(w => !qr.has(w)), sr = new Set(rest(stmt));
-  if (!L.length && !lr.length) return false;
+  if (!L.length && !lr.length) {        // a link that is only a direction ('has fallen'): the same direction said
+    const d = t => (UP.test(norm(t)) ? 1 : 0) - (DOWN.test(norm(t)) ? 1 : 0);
+    return d(link) !== 0 && d(stmt) === d(link);
+  }
   const have = L.filter(l => S.some(s => s.c === l.c));
   for (const l of Lall.filter(l => S.some(s => s.c === l.c))) {
     const s = S.find(x => x.c === l.c), dl = dirAt(link, l), ds = dirAt(stmt, s);
@@ -136,7 +139,7 @@ function same(stmt, link, question) {
 const _concepts = concepts;
 const SUBJECT = new Set(GROUPS.map((g, i) => (g[0] === 'firm' ? i : -1)).filter(i => i >= 0));
 const CONNECT = /^(as|raising|reducing|increasing|lowering|allowing|enabling|creating|giving|helping|so|so that|therefore|thus|hence|as a result|consequently|this|these|that|which|leading to|resulting in|meaning|causing|because|since|as|due to|then|in turn|and so|and this|and therefore|which means|this means|this leads|this will|this would|this could|this may|this can|making)\b/i;
-const SPLIT = /\s*(?:;|\s(?=(?:which|if|unless)\s)|,\s*(?=(?:as|raising|reducing|increasing|lowering|allowing|enabling|creating|giving|helping)\b)|,\s*(?=(?:so|which|therefore|thus|hence|leading|resulting|meaning|causing|making|this|as a result|and so|and this|because)\b)|\s(?=(?:so that|so|therefore|thus|hence|because|as a result|which means|this means|leading to|resulting in|and so|and therefore|and this)\b\s))/i;
+const SPLIT = /\s*(?:;|\s(?=(?:which|if|unless)\s)|\s(?=as (?:it|they|there|the|a|an|this|these|people|firms|workers)\s)|,\s*(?=(?:as|raising|reducing|increasing|lowering|allowing|enabling|creating|giving|helping)\b)|,\s*(?=(?:so|which|therefore|thus|hence|leading|resulting|meaning|causing|making|this|as a result|and so|and this|because)\b)|\s(?=(?:so that|so|therefore|thus|hence|because|as a result|which means|this means|leading to|resulting in|and so|and therefore|and this)\b\s))/i;
 const COUNTER = /^(however|on the other hand|but|although|though|whereas|in contrast|nevertheless|yet|alternatively|despite|on the contrary)\b|\b(may not|might not|could not|would not|will not|does not|do not|doesn't|won't|wouldn't|not necessarily|not always)\b/i;
 const JUDGE = /^(overall|in conclusion|to conclude|all in all|on balance|in summary|therefore,? (?:it|whether)|whether .* depends|it depends)\b|\b(depends on|it depends|the extent|to some extent|more likely|less likely|in the (?:short|long)[- ](?:run|term))\b/i;
 const EXAMPLE = /\b(e\.g|for example|for instance|such as|like)\b/i;
@@ -222,29 +225,48 @@ function markChainsKey(key, text) {
     }
   }
   const onSide = (i, si) => true || sideOfBlock[block[i]] === -1 || sideOfBlock[block[i]] === si || S[i].kind === 'judgement';
-  for (const [si, side] of key.sides.entries()) {
-    let sideScore = 0;
-    for (const ch of side.chains) {
-      // a definition earns only a definition link ('Price-elastic means …'), never an argument
-      const hits = ch.links.map(l => S.map((s, i) => ((s.kind !== 'definition' || /\bmeans?\b|meaning|is defined|refers to/i.test(l)) && onSide(i, si) && says(s.text, l) ? i : -1)).filter(i => i >= 0));
-      // the point: earliest statement saying any link of the chain counts as its start
-      let got = [], at = [];
-      for (let j = 0; j < ch.links.length; j++) {
-        const cand = hits[j].filter(i => !used.has(i));
-        if (!cand.length) continue;
-        if (!got.length) { got.push(j); at.push(cand[0]); continue; }
-        // a later link must continue a statement that earned an earlier link of this chain
-        const ok = cand.find(i => at.some(a => continues(S, a, i) || i === a));
-        if (ok != null) { got.push(j); at.push(ok); }
+  // Every chain is matched against the answer: its links may be written in any order, each statement earns at most
+  // one link, and the links credited must be joined together (one statement carrying on from another). Chains
+  // that the answer supports best take their statements first, so a weak match cannot steal a statement that
+  // belongs to a fuller chain.
+  const defQ = /^\s*(define|state what is meant|what is meant|explain what is meant|explain the meaning)\b/i.test(QTEXT);
+  const joinedTo = (a, b) => a === b || continues(S, Math.min(a, b), Math.max(a, b));
+  // a statement holds one link, or two when it joins two ideas with 'and' ('so they expand and take on more workers')
+  const cap = S.map(x => ((x.text.split(/\s+/).length >= 8 && /\b(and|that|so that|in order to)\b|,\s*\w+ing\b/.test(x.text)) || (x.text.split(/\s+/).length >= 4 && /\b(so|because|which|therefore|leading to|resulting in)\b/i.test(x.text)) ? 2 : 1));
+  const usedN = S.map(() => 0);
+  const free = (i, at) => usedN[i] + at.filter(a => a === i).length < cap[i];
+  const all = [];
+  key.sides.forEach((side, si) => side.chains.forEach((ch, ci) => all.push({ si, ci, ch,
+    hits: ch.links.map(l => S.map((s, i) => ((s.kind !== 'definition' || defQ || /\bmeans?\b|meaning|is defined|refers to/i.test(l)) && onSide(i, si) && says(s.text, l) ? i : -1)).filter(i => i >= 0)) })));
+  function best(c) {
+    let top = { got: [], at: [] };
+    c.hits.forEach((h0, j0) => h0.filter(i => free(i, [])).forEach(a0 => {
+      const got = [j0], at = [a0];
+      for (let grew = true; grew;) {
+        grew = false;
+        for (let j = 0; j < c.ch.links.length; j++) {
+          if (got.includes(j)) continue;
+          const ok = c.hits[j].find(i => free(i, at) && at.some(a => joinedTo(a, i)));
+          if (ok != null) { got.push(j); at.push(ok); grew = true; }
+        }
       }
-      at.forEach(i => used.add(i));
-      const sc = Math.min(ch.max, got.length);
-      if (got.length >= 2) developed++;
-      if (sc) detail.credited.push({ side: side.title, links: got.map(j => ch.links[j]), at: at.slice(), marks: sc, developed: got.length >= 2 });
-      sideScore += sc;
-    }
-    sideScores.push(Math.min(side.max, sideScore));
+      if (got.length > top.got.length) top = { got, at };
+    }));
+    return top;
   }
+  const sideScore = key.sides.map(() => 0), done = new Set();
+  for (;;) {
+    let pick = null;
+    all.forEach((c, k) => { if (done.has(k)) return; const b = best(c); const sc = Math.min(c.ch.max, b.got.length);
+      if (sc && (!pick || sc > pick.sc)) pick = { k, c, b, sc }; });
+    if (!pick) break;
+    done.add(pick.k); pick.b.at.forEach(i => { used.add(i); usedN[i]++; });
+    const { c, b, sc } = pick, order = b.got.map((j, n) => [j, b.at[n]]).sort((x, y) => x[0] - y[0]);
+    if (b.got.length >= 2) developed++;
+    detail.credited.push({ side: key.sides[c.si].title, links: order.map(x => c.ch.links[x[0]]), at: order.map(x => x[1]), marks: sc, developed: b.got.length >= 2 });
+    sideScore[c.si] += sc;
+  }
+  key.sides.forEach((side, si) => sideScores.push(Math.min(side.max, sideScore[si])));
   total = sideScores.reduce((a, b) => a + b, 0);
   if (key.defn && key.defn.length && S.some(s => s.kind === 'definition')) total += 1;
   total = Math.min(key.marks, total);
@@ -298,6 +320,7 @@ function markEconText(key, text) {
    Level 1 (1–2): points stated only. Level 2 (3–5): some development, or only one side developed in depth.
    Level 3 (6–8): both sides developed, at least one side as a chain (depth 2+); a reasoned judgement tops it. */
 const CON = concepts;
+const EVAL = /^(?:however,?\s+|but\s+|so\s+|therefore,?\s+|thus,?\s+)?(?:overall|in conclusion|to conclude|on balance|ultimately|in summary|all in all|to sum up)\b|\b(it depends|depends (?:on|upon)|depend (?:on|upon)|will depend|the extent to which|outweighs?|outweighed|more important than|most important|in the (?:short|long)[- ](?:run|term)\b.{0,80}\b(?:but|however|whereas|while)\b.{0,60}\bin the (?:short|long)[- ](?:run|term)|whether .{0,80}\b(?:depends|will depend))\b/i;
 function depthOf(S, i) {
   const seen = new Set(CON(S[i].text).map(c => c.c)); let d = 0;
   for (let j = i + 1; j < S.length && continues(S, i, j); j++) {
@@ -318,13 +341,19 @@ function markLevelsText(key, text) {
   }));
   const dev = pts.filter(p => p.depth >= 1), deep = pts.filter(p => p.depth >= 2);
   const sidesDev = new Set(dev.map(p => p.side)), sidesDeep = new Set(deep.map(p => p.side));
-  const judged = S.some(s => /\b(depends on|depend on|it depends|whether .{0,60} depends|more likely if|only if|as long as|provided that)\b/i.test(s.text));
+  // evaluation: a weighing of the two sides or a judgement on what the outcome depends on. Conditions inside the
+  // analysis ('especially if demand is inelastic') are not evaluation: examiners hold such answers at Level 2.
+  const judged = S.some(s => EVAL.test(s.text));
   let level = 0, score = 0;
   if (!pts.length) level = 0;
   else if (!dev.length) { level = 1; score = pts.length >= 2 ? 2 : 1; }
-  else if (key.sides.length >= 2 && sidesDev.size >= 2 && sidesDeep.size >= 1) {
-    level = 3; score = 6 + (sidesDeep.size >= 2 ? 1 : 0) + (judged ? 1 : 0);
-  } else { level = 2; score = 3 + (dev.length >= 2 ? 1 : 0) + (deep.length >= 1 && dev.length >= 2 ? 1 : 0); }
+  else if (key.sides.length >= 2 && sidesDev.size >= 2 && sidesDeep.size >= 1 && judged) {
+    level = 3; score = 6 + (sidesDeep.size >= 2 ? 1 : 0) + (deep.length >= 3 ? 1 : 0);
+  } else {
+    // Level 2: 3 for some explanation; 4 when both sides are explained or one side in depth; 5 needs both sides
+    // developed in chains AND a judgement that falls short of Level 3
+    level = 2; score = 3 + ((sidesDev.size >= 2 || deep.length >= 1) && dev.length >= 2 ? 1 : 0) + (judged && sidesDeep.size >= 1 && sidesDev.size >= 2 ? 1 : 0);
+  }
   return { score: Math.min(key.marks, score), level, points: pts, judged, statements: S,
     detail: { level, judged, levels: key.levels, points: pts.map(p => ({ side: key.sides[p.side].title, point: p.point, at: p.at, depth: p.depth })), statements: S.map(x => ({ text: x.text, kind: x.kind })) } };
 }

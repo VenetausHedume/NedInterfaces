@@ -1,0 +1,1063 @@
+{
+ "1(a)": {
+  "kind": "points",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Calculate Kuwait\u2019s current account surplus as a percentage of its GDP.",
+  "marks": 4
+ },
+ "1(b)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 2,
+    "chains": [
+     {
+      "max": 1,
+      "links": [
+       "(Ship) insurance"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Financial advice/services",
+       "2 If more than two items are given, consider the first three"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Identify two items that appear in Kuwait\u2019s trade in services.",
+  "marks": 2
+ },
+ "1(c)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 2,
+    "chains": [
+     {
+      "max": 1,
+      "links": [
+       "is given up"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Explain the opportunity cost of exporting products. The opportunity to consume the products at home/in Kuwait",
+  "marks": 2
+ },
+ "1(d)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": {
+   "n": 2,
+   "ids": [
+    "High income",
+    "Good quality education",
+    "Good quality healthcare",
+    "US)",
+    "Low unemployment rate (2023)"
+   ],
+   "expl": [
+    "able to purchase many/good quality goods and services",
+    "high wages/good job opportunities/range of interests",
+    "long life expectancy",
+    "low cost of living/access more/better quality products",
+    "most individuals earn a regular income"
+   ],
+   "eg": true
+  },
+  "points": [],
+  "q": "Explain two reasons why living standards may be high in Kuwait.",
+  "marks": 4
+ },
+ "1(e)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 4,
+    "chains": [
+     {
+      "max": 1,
+      "links": [
+       "Original demand and supply curves correctly labelled"
+      ]
+     },
+     {
+      "max": 1,
+      "links": [
+       "arrow"
+      ]
+     },
+     {
+      "max": 1,
+      "links": [
+       "equilibrium points marked as E1 and E2"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Draw a demand and supply diagram to show how an increase in the indirect tax on jeans will affect the",
+  "marks": 4
+ },
+ "1(f)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 5,
+    "chains": [
+     {
+      "max": 2,
+      "links": [
+       "Direct relationship/positive relationship",
+       "the higher the unemployment rate, the higher the youth unemployment rate"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Evidence",
+    "max": 2,
+    "chains": [
+     {
+      "max": 4,
+      "links": [
+       "youth unemployment rate",
+       "second highest youth unemployment rate",
+       "compared to 30.0%)",
+       "also have the lowest youth unemployment rate"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Explanation",
+    "max": 2,
+    "chains": [
+     {
+      "max": 2,
+      "links": [
+       "country",
+       "youth unemployment is included in the unemployment rate"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Exception",
+    "max": 2,
+    "chains": [
+     {
+      "max": 2,
+      "links": [
+       "Australia/Kuwait",
+       "Kuwait had a lower unemployment rate than Australia but a higher youth unemployment rate"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Explanation of exception",
+    "max": 1,
+    "chains": [
+     {
+      "max": 1,
+      "links": [
+       "younger workers"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Analyse the relationship between the unemployment rate and the youth unemployment rate.",
+  "marks": 5
+ },
+ "1(g)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why it might",
+    "max": 4,
+    "chains": [
+     {
+      "max": 4,
+      "links": [
+       "wages may be higher in the private sector",
+       "due to productivity/skills rewarded",
+       "may be opportunity to earn bonuses/fringe benefits in the private sector",
+       "higher living standards"
+      ]
+     },
+     {
+      "max": 1,
+      "links": [
+       "private sector jobs may be nearer to home"
+      ]
+     },
+     {
+      "max": 4,
+      "links": [
+       "better working conditions",
+       "comfortable offices/factories",
+       "due to profit/motivation",
+       "may have better relationships at work"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "More training in the private sector",
+       "to develop skills/raise productivity"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why it might not,",
+    "max": 4,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "wages may be higher in the public sector",
+       "due to formal labour markets/defined career structures",
+       "higher living standards"
+      ]
+     },
+     {
+      "max": 4,
+      "links": [
+       "working conditions may not be so good",
+       "private sector may be less concerned about health and safety",
+       "may have longer working hours/greater stress",
+       "more concerned about cost/spending reductions"
+      ]
+     },
+     {
+      "max": 5,
+      "links": [
+       "job security may be less",
+       "more likely to be made redundant due to lack of profit",
+       "private sector may not be concerned about the overall unemployment rate",
+       "operate short term/zero hour/day labour contracts",
+       "less concerned about equality"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "pensions may be lower",
+       "increasing risk of poverty/low standard of living in old age"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "may have less opportunity to join a trade union",
+       "reducing the ability to benefit from collective bargaining",
+       "6 Higher wages, better working conditions and more training opportunities can be awarded on either side as described in the guidance below"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "more training in the public sector",
+       "to provide ongoing professional development"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Discuss whether or not workers would benefit from moving from the public sector to the private sector.",
+  "marks": 6
+ },
+ "1(h)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": "Why it might",
+    "max": 4,
+    "chains": [
+     {
+      "max": 6,
+      "links": [
+       "increase investment/attract MNC",
+       "increase tourism",
+       "may create jobs/reduce unemployment",
+       "increase total demand",
+       "increase output/cause economic growth",
+       "raise incomes/standard of living"
+      ]
+     },
+     {
+      "max": 4,
+      "links": [
+       "lower cost of sea transport",
+       "lower cost of imports/exports/ increase international competitiveness",
+       "increase exports/export revenue",
+       "improves the current account position"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "increase imports",
+       "increase consumer choices"
+      ]
+     }
+    ]
+   },
+   {
+    "title": "Why it might not,",
+    "max": 4,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "cause pollution",
+       "negative externality/social cost/negatively affect health/standard of living",
+       "reduce biodiversity/negatively affect wildlife"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "reduce tourism",
+       "increase imports",
+       "worsen the current account position"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "cause (structural) unemployment",
+       "lower incomes/standard of living"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "opportunity cost",
+       "resources could be used e.g. to build hotels/conservation area/education/healthcare"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Discuss whether or not a new port will benefit an economy.",
+  "marks": 6
+ },
+ "2(a)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 2,
+    "chains": [
+     {
+      "max": 1,
+      "links": [
+       "danger/hard work/health/safety issues"
+      ]
+     },
+     {
+      "max": 1,
+      "links": [
+       "poor/difficult working conditions"
+      ]
+     },
+     {
+      "max": 1,
+      "links": [
+       "low pay"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Identify two disadvantages of working as a miner. \u2022",
+  "marks": 2
+ },
+ "2(b)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 4,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "workers who are working informally but claiming unemployment benefits",
+       "who are not actively looking for work",
+       "may not include workers who are unemployed but not entitled to benefits"
+      ]
+     },
+     {
+      "max": 6,
+      "links": [
+       "The Labour Force Survey (LFS)",
+       "may have sampling errors/bias",
+       "may not pick a representative sample",
+       "answers may be misinterpreted",
+       "respondents may not provide accurate data",
+       "time (lag) between the survey and publication"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Underemployment",
+       "people working less hours than desired/working in jobs below their skill level"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Explain why government measurement of unemployment may be inaccurate.",
+  "marks": 4
+ },
+ "2(c)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 6,
+    "chains": [
+     {
+      "max": 3,
+      "links": [
+       "Reduction in demand",
+       "greater competition from other mines",
+       "loss of revenue/profit"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "Rise in costs of production",
+       "wages/indirect taxation",
+       "reduce profit (relative to in other countries)"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Mineral deposits may run out",
+       "no incentive/product to sell"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Corporate income tax may increase",
+       "reducing profit/incentive to produce"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "Laws/regulations may be passed/pressure groups",
+       "requiring improved working conditions/NMW/reduce pollution/increased trade union power",
+       "may result in the mine becoming unprofitable/facing legal action"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Political instability",
+       "closure/disruption to mining operations"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Climate change/adverse weather",
+       "the mine cannot be used"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Population decline/labour shortage",
+       "the mine cannot be staffed/output cannot be produced"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "Appreciation of host country\u2019s exchange rate",
+       "discourages exports",
+       "MNC become less internationally competitive"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 3,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Analyse why an MNC may close a mine in a host country.",
+  "marks": 6
+ },
+ "2(d)": {
+  "kind": "levels",
+  "sides": [
+   {
+    "title": "Why it might increase economic development",
+    "points": [
+     "Many highly skilled and highly paid jobs are in services",
+     "may raise GDP/employment",
+     "may have good working conditions",
+     "may mean greater provision of education and healthcare",
+     "may increase HDI"
+    ]
+   },
+   {
+    "title": "Why it might not increase economic development",
+    "points": [
+     "some tertiary sector jobs e.g. in hospitality may be low paid",
+     "poor working conditions in some tertiary jobs e.g. refuse collectors",
+     "low productivity jobs can dominate (retail, hospitality, basic services)",
+     "uneven development/inequality, growth in services often benefit urban areas/ those with service sector skills",
+     "relatively small primary sector industries that can earn high incomes e.g. oil",
+     "relatively small secondary sector to make products/take more advantage of economies of scale",
+     "some tertiary industries may create external costs e.g tourism/transport/plastics 8 Description 3 A reasoned discussion which accurately examines both sides of the economic argument, making use of economic information and clear and logical analysis to evaluate economic issues and situations. One side of the argument may have more depth than the other, but overall both sides of the argument are considered and developed. There is thoughtful evaluation of economic concepts, terminology, information and/or data appropriate to the question. The discussion may also point out the possible uncertainties of alternative decisions and outcomes 6\u20138 2 A reasoned discussion which makes use of economic information and clear analysis to evaluate economic issues and situations. The answer may lack some depth and development may be one-sided. There is relevant use of economic concepts, terminology, information and data appropriate to the question 3\u20135 1 There is a simple attempt at using economic definitions and terminology Some reference may be made to economic theory, with occasional understanding 1\u20132 Description 0 A mark of zero should be awarded for no creditable content 0"
+    ]
+   }
+  ],
+  "levels": [
+   {
+    "level": 3,
+    "min": 6,
+    "max": 8
+   },
+   {
+    "level": 2,
+    "min": 3,
+    "max": 5
+   },
+   {
+    "level": 1,
+    "min": 1,
+    "max": 2
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Discuss whether or not a larger tertiary sector will increase a country\u2019s economic development.",
+  "marks": 8
+ },
+ "3(a)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 2,
+    "chains": [
+     {
+      "max": 2,
+      "links": [
+       "The rate of increase in the (general) price level/prices",
+       "has fallen"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "State what is meant by a fall in the inflation rate. The rate of increase in the (general) price level/prices (1)",
+  "marks": 2
+ },
+ "3(b)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": {
+   "n": 2,
+   "ids": [
+    "A commercial bank pays interest",
+    "A commercial bank may be seen as a safe place to keep savings",
+    "To build up funds",
+    "A commercial bank advertises/markets"
+   ],
+   "expl": [
+    "grow an investment/increase income",
+    "reduce risk of theft/loss",
+    "to pay later for education/healthcare/a home/ guard against shock/when confidence is low",
+    "raise awareness of benefits"
+   ],
+   "eg": true
+  },
+  "points": [],
+  "q": "Explain two reasons why households may save their money in a commercial bank.",
+  "marks": 4
+ },
+ "3(c)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 6,
+    "chains": [
+     {
+      "max": 5,
+      "links": [
+       "Reduce export prices",
+       "may increase demand for exports / net exports/export revenue increases",
+       "increase total (aggregate) demand",
+       "cause demand- pull inflation",
+       "if total supply cannot increase/remains unchanged"
+      ]
+     },
+     {
+      "max": 6,
+      "links": [
+       "Raise import prices",
+       "increase demand for domestic goods/ decrease demand for imports",
+       "increase cost of imported raw materials",
+       "increase price of imported capital goods",
+       "reduce pressure on domestic firms to keep costs low",
+       "cause cost-push inflation"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 3,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Analyse how a fall in a country's foreign exchange rate can cause inflation.",
+  "marks": 6
+ },
+ "3(d)": {
+  "kind": "levels",
+  "sides": [
+   {
+    "title": "Why it might harm an economy",
+    "points": [
+     "firms that need to borrow to cover costs may go out of business",
+     "firms that want to expand may not be able to gain funds",
+     "reduce total demand",
+     "output and employment may fall",
+     "households may not be able to borrow to spend on education and healthcare",
+     "productivity may fall",
+     "governments cannot borrow to fund deficit/spending"
+    ]
+   },
+   {
+    "title": "Why it might not harm an economy",
+    "points": [
+     "may reduce demand for imports",
+     "may improve the current account balance",
+     "may reduce demand-pull inflation",
+     "may prevent firms and households getting into debt 8 Description 3 A reasoned discussion which accurately examines both sides of the economic argument, making use of economic information and clear and logical analysis to evaluate economic issues and situations. One side of the argument may have more depth than the other, but overall both sides of the argument are considered and developed. There is thoughtful evaluation of economic concepts, terminology, information and/or data appropriate to the question. The discussion may also point out the possible uncertainties of alternative decisions and outcomes 6\u20138 2 A reasoned discussion which makes use of economic information and clear analysis to evaluate economic issues and situations. The answer may lack some depth and development may be one-sided. There is relevant use of economic concepts, terminology, information and data appropriate to the question 3\u20135 1 There is a simple attempt at using economic definitions and terminology Some reference may be made to economic theory, with occasional understanding 1\u20132 Description 0 A mark of zero should be awarded for no creditable content 0"
+    ]
+   }
+  ],
+  "levels": [
+   {
+    "level": 3,
+    "min": 6,
+    "max": 8
+   },
+   {
+    "level": 2,
+    "min": 3,
+    "max": 5
+   },
+   {
+    "level": 1,
+    "min": 1,
+    "max": 2
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Discuss whether or not a reduction in bank lending will harm an economy.",
+  "marks": 8
+ },
+ "4(a)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 2,
+    "chains": [
+     {
+      "max": 1,
+      "links": [
+       "uses (scarce) resources to produce it"
+      ]
+     },
+     {
+      "max": 1,
+      "links": [
+       "has an opportunity cost"
+      ]
+     },
+     {
+      "max": 1,
+      "links": [
+       "scarcity (relative to demand)"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Identify two characteristics of an economic good. \u2022",
+  "marks": 2
+ },
+ "4(b)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": {
+   "n": 2,
+   "ids": [
+    "Rise in incomes",
+    "Rise in the price of a substitute / e.g",
+    "An advertising/marketing campaign",
+    "A fall in the price of a complement / e.g",
+    "An increase in population/change to younger population",
+    "A change in tastes and preferences/a celebration/healthier cakes/better quality cakes"
+   ],
+   "expl": [
+    "increase purchasing power",
+    "makes cakes appear relatively cheaper",
+    "that persuades people to eat more cakes",
+    "makes joint purchase appear relatively cheaper",
+    "more people who eat/consume cakes",
+    "incentivising cake consumption"
+   ],
+   "eg": true
+  },
+  "points": [],
+  "q": "Explain two reasons why demand for cakes may increase.",
+  "marks": 4
+ },
+ "4(c)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 6,
+    "chains": [
+     {
+      "max": 5,
+      "links": [
+       "increase the price of private sector education",
+       "reduce demand for private sector education/school fees are less affordable",
+       "some children will now not attend school at all/attend school less",
+       "cause some private sector schools to close/reduce supply",
+       "reduce employment in the private sector"
+      ]
+     },
+     {
+      "max": 1,
+      "links": [
+       "Less to spend on other goods (if keep private education)"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "Increase demand for state (public sector) education",
+       "increase employment in state education",
+       "increase government spending on public sector schools"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Raise tax revenue",
+       "which can reduce a budget deficit/could be used to spend on e.g. healthcare"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 3,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Analyse the effects of taxing private sector school fees. Coherent analysis which might include:",
+  "marks": 6
+ },
+ "4(d)": {
+  "kind": "levels",
+  "sides": [
+   {
+    "title": "Why they should encourage a merger",
+    "points": [
+     "may prevent the output of clothes being reduced",
+     "may prevent closure/unemployment",
+     "may enable the new firm to take advantage of economies of scale",
+     "may lower costs of production",
+     "may lower prices",
+     "may increase exports",
+     "may increase government tax revenue"
+    ]
+   },
+   {
+    "title": "Why they should not encourage a merger",
+    "points": [
+     "may cause new firm to experience diseconomies of scale",
+     "may give the new firm monopoly power",
+     "may raise prices",
+     "may reduce quality",
+     "may lower choice",
+     "rationalisation may increase unemployment",
+     "Additional production may create externalities 8 Description 3 A reasoned discussion which accurately examines both sides of the economic argument, making use of economic information and clear and logical analysis to evaluate economic issues and situations. One side of the argument may have more depth than the other, but overall both sides of the argument are considered and developed. There is thoughtful evaluation of economic concepts, terminology, information and/or data appropriate to the question. The discussion may also point out the possible uncertainties of alternative decisions and outcomes 6\u20138 2 A reasoned discussion which makes use of economic information and clear analysis to evaluate economic issues and situations. The answer may lack some depth and development may be one-sided. There is relevant use of economic concepts, terminology, information and data appropriate to the question 3\u20135 1 There is a simple attempt at using economic definitions and terminology Some reference may be made to economic theory, with occasional understanding 1\u20132 Description 0 A mark of zero should be awarded for no creditable content 0 Max L2 if no reference to context of question clothing firms, is enough)"
+    ]
+   }
+  ],
+  "levels": [
+   {
+    "level": 3,
+    "min": 6,
+    "max": 8
+   },
+   {
+    "level": 2,
+    "min": 3,
+    "max": 5
+   },
+   {
+    "level": 1,
+    "min": 1,
+    "max": 2
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Discuss whether or not a government should encourage clothes firms to merge.",
+  "marks": 8
+ },
+ "5(a)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 2,
+    "chains": [
+     {
+      "max": 2,
+      "links": [
+       "Number of (live) births",
+       "per 1000 of the population"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Define \u2018birth rate\u2019. Number of (live) births (1) per 1000 of the population (1).",
+  "marks": 2
+ },
+ "5(b)": {
+  "kind": "pairs",
+  "sides": [],
+  "listMax": null,
+  "defn": [],
+  "pairs": {
+   "n": 2,
+   "ids": [
+    "Increase in the size of the labour force (in the future)",
+    "Increase size of (child related) markets/consumption/total demand",
+    "Move country towards optimum population"
+   ],
+   "expl": [
+    "increase output/economic growth",
+    "encourage firms to expand output/GDP / enable firms to take advantage of economies of scale",
+    "raise efficiency/ (future) real GDP per head"
+   ],
+   "eg": true
+  },
+  "points": [],
+  "q": "Explain two possible benefits of an increase in a country\u2019s birth rate.",
+  "marks": 4
+ },
+ "5(c)": {
+  "kind": "chains",
+  "sides": [
+   {
+    "title": null,
+    "max": 6,
+    "chains": [
+     {
+      "max": 6,
+      "links": [
+       "Advertising/marketing",
+       "information provision",
+       "packaging/ branding",
+       "to make the product seem special/superior",
+       "making demand seem addictive",
+       "necessary"
+      ]
+     },
+     {
+      "max": 3,
+      "links": [
+       "Eliminate substitutes/competition",
+       "by merging",
+       "less willing to switch/product becomes unique"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Reduce the price of a complement",
+       "consumers use the two goods together"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Make the product better quality",
+       "customers are less likely to switch"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "Create limited time to respond",
+       "consumers cannot delay their purchase/look for alternatives"
+      ]
+     },
+     {
+      "max": 2,
+      "links": [
+       "If the price of the product is reduced",
+       "the purchase becomes a smaller proportion of income"
+      ]
+     }
+    ]
+   }
+  ],
+  "listMax": 3,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Analyse how a firm could make demand for its product more price-inelastic.",
+  "marks": 6
+ },
+ "5(d)": {
+  "kind": "levels",
+  "sides": [
+   {
+    "title": "Why it should prevent workers from joining trade unions",
+    "points": [
+     "may avoid industrial action",
+     "may stop production being disrupted",
+     "may reduce large wage rises",
+     "may reduce costs/cost-push inflation",
+     "may maintain employment levels",
+     "may increase international price competitiveness",
+     "may improve the current account balance",
+     "may make it easier to introduce new methods of production",
+     "may attract MNCs"
+    ]
+   },
+   {
+    "title": "Why it should not prevent workers from joining trade unions",
+    "points": [
+     "will increase workers\u2019 ability to engage in collective bargaining",
+     "may raise workers\u2019 living standards",
+     "may improve working conditions",
+     "may increase job security",
+     "may make communication/negotiation between workers and employers easier/cheaper",
+     "may improve motivation/raise productivity/output 8 Description 3 A reasoned discussion which accurately examines both sides of the economic argument, making use of economic information and clear and logical analysis to evaluate economic issues and situations. One side of the argument may have more depth than the other, but overall both sides of the argument are considered and developed. There is thoughtful evaluation of economic concepts, terminology, information and/or data appropriate to the question. The discussion may also point out the possible uncertainties of alternative decisions and outcomes 6\u20138 2 A reasoned discussion which makes use of economic information and clear analysis to evaluate economic issues and situations. The answer may lack some depth and development may be one-sided. There is relevant use of economic concepts, terminology, information and data appropriate to the question 3\u20135 1 There is a simple attempt at using economic definitions and terminology Some reference may be made to economic theory, with occasional understanding 1\u20132 Description 0 A mark of zero should be awarded for no creditable content 0 Max L2 if no reference to context of question"
+    ]
+   }
+  ],
+  "levels": [
+   {
+    "level": 3,
+    "min": 6,
+    "max": 8
+   },
+   {
+    "level": 2,
+    "min": 3,
+    "max": 5
+   },
+   {
+    "level": 1,
+    "min": 1,
+    "max": 2
+   }
+  ],
+  "listMax": null,
+  "defn": [],
+  "pairs": null,
+  "points": [],
+  "q": "Discuss whether or not governments should prevent workers from joining trade unions.",
+  "marks": 8
+ }
+}
